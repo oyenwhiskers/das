@@ -10,6 +10,9 @@ use App\Models\Customer;
 use App\Models\CustomerIdentification;
 use App\Models\CustomerPepAssociation;
 use App\Models\CustomerRelationship;
+use App\Models\DocumentScan;
+use App\Models\ExtractedProfile;
+use App\Models\ExtractedProfileMerge;
 use App\Models\User;
 use App\Services\CustomerReferenceGenerator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -133,12 +136,42 @@ class CustomerManagementTest extends TestCase
 
         Livewire::actingAs($user)
             ->test(Index::class)
+            ->assertSet('sort', 'name_asc')
             ->set('search', 'Ahmad')
             ->assertSee('Ahmad Bin Ali')
             ->assertDontSee('Siti Aminah')
             ->set('search', '')
             ->assertSee('Ahmad Bin Ali')
             ->assertSee('Siti Aminah');
+    }
+
+    public function test_customer_list_defaults_to_name_ascending(): void
+    {
+        $user = User::factory()->staff()->create();
+        Customer::factory()->for($user, 'creator')->create(['full_legal_name' => 'Zainal Abidin']);
+        Customer::factory()->for($user, 'creator')->create(['full_legal_name' => 'Ahmad Bin Ali']);
+
+        $html = Livewire::actingAs($user)->test(Index::class)->html();
+        $this->assertLessThan(
+            strpos($html, 'Zainal Abidin'),
+            strpos($html, 'Ahmad Bin Ali'),
+        );
+    }
+
+    public function test_customer_list_name_header_toggles_alphabetical_sort(): void
+    {
+        $user = User::factory()->staff()->create();
+        Customer::factory()->for($user, 'creator')->create(['full_legal_name' => 'Zainal Abidin']);
+        Customer::factory()->for($user, 'creator')->create(['full_legal_name' => 'Ahmad Bin Ali']);
+
+        $component = Livewire::actingAs($user)->test(Index::class)->assertSet('sort', 'name_asc');
+        $asc = $component->html();
+        $this->assertLessThan(strpos($asc, 'Zainal Abidin'), strpos($asc, 'Ahmad Bin Ali'));
+
+        $desc = $component->call('sortByName')->assertSet('sort', 'name_desc')->html();
+        $this->assertLessThan(strpos($desc, 'Ahmad Bin Ali'), strpos($desc, 'Zainal Abidin'));
+
+        $component->call('sortByName')->assertSet('sort', 'name_asc');
     }
 
     public function test_profile_personal_section_can_be_updated(): void
@@ -348,6 +381,72 @@ class CustomerManagementTest extends TestCase
         $this->assertModelMissing($association);
     }
 
+    public function test_deleting_a_customer_clears_a_profile_merge_and_their_own_form(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($user, 'creator')->create();
+        $scan = DocumentScan::factory()->for($user, 'uploader')->create();
+        $profile = ExtractedProfile::query()->create([
+            'document_scan_id' => $scan->id,
+            'record_ref' => 'R1',
+            'source_pages' => [1],
+            'field_schema_hash' => str_repeat('a', 64),
+            'field_schema_version' => '1',
+            'contract_version' => '1',
+            'original_projection' => [],
+            'reviewed_projection' => [],
+        ]);
+        $merge = ExtractedProfileMerge::query()->create([
+            'submission_key' => 'delete-customer',
+            'extracted_profile_id' => $profile->id,
+            'customer_id' => $customer->id,
+            'reviewer_revision' => 0,
+            'strategy' => 'fill_empty',
+            'changes' => [],
+            'merged_by' => $user->id,
+            'created_at' => now(),
+        ]);
+        $customer->bimbsecApplications()->create([
+            'choices' => [],
+            'created_by' => $user->id,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(Show::class, ['customer' => $customer])
+            ->call('delete')
+            ->assertRedirect(route('customers.index'));
+
+        $this->assertModelMissing($customer);
+        $this->assertModelMissing($merge);
+        $this->assertModelExists($profile);
+    }
+
+    public function test_invalid_ic_shows_a_format_error(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($user, 'creator')->create([
+            'full_legal_name' => 'Bad Ic Customer',
+            'primary_identification_number' => '7704036259',
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(Show::class, ['customer' => $customer])
+            ->assertSee('7704036259')
+            ->assertSee('NRIC must be 12 digits (with or without dashes).');
+
+        $customer->update([
+            'primary_identification_type' => IdentificationType::Nric,
+            'primary_identification_number' => '900101121234',
+        ]);
+        $this->assertNull($customer->fresh()->identificationFormatError());
+
+        $customer->update([
+            'primary_identification_type' => IdentificationType::Passport,
+            'primary_identification_number' => 'A12345',
+        ]);
+        $this->assertNull($customer->fresh()->identificationFormatError());
+    }
+
     public function test_customer_list_shows_identification_numbers(): void
     {
         $user = User::factory()->staff()->create();
@@ -359,5 +458,88 @@ class CustomerManagementTest extends TestCase
         Livewire::actingAs($user)
             ->test(Index::class)
             ->assertSee('001212120333');
+    }
+
+    public function test_customer_list_uses_a_row_count_and_profile_completion(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($user, 'creator')->create([
+            'full_legal_name' => 'Numbered Customer',
+        ]);
+
+        $html = Livewire::actingAs($user)
+            ->test(Index::class)
+            ->assertSee('Numbered Customer')
+            ->assertSee('29%')
+            ->html();
+
+        $this->assertMatchesRegularExpression('/<th[^>]*>#<\/th>/', $html);
+        $this->assertDoesNotMatchRegularExpression('/>\s*'.preg_quote($customer->reference, '/').'\s*</', $html);
+    }
+
+    public function test_profile_completion_percent_rises_as_sections_are_filled(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($user, 'creator')->create([
+            'full_legal_name' => 'Sparse Customer',
+            'nationality' => null,
+            'primary_email' => null,
+            'primary_mobile' => null,
+        ]);
+
+        $this->assertSame(12, $customer->profileCompletionPercent());
+        $this->assertSame(11, $customer->profileSectionCompletion()['personal']);
+        $this->assertSame(0, $customer->profileSectionCompletion()['relationships']);
+
+        Livewire::actingAs($user)
+            ->test(Show::class, ['customer' => $customer])
+            ->assertSee('11%')
+            ->assertSee('0%')
+            ->assertSee('Still needs to be filled', false);
+
+        $customer->update([
+            'primary_identification_number' => '900101121234',
+            'date_of_birth' => '1990-01-01',
+            'gender' => 'male',
+            'nationality' => 'Malaysian',
+            'marital_status' => 'Single',
+            'primary_mobile' => '0123456789',
+            'primary_email' => 'sparse@example.com',
+            'employment_status' => 'employed',
+        ]);
+        $customer->addresses()->create([
+            'type' => 'residential',
+            'line_1' => '1 Jalan Test',
+        ]);
+
+        $fresh = $customer->fresh();
+        $this->assertSame(65, $fresh->profileCompletionPercent());
+        $this->assertSame(100, $fresh->profileSectionCompletion()['personal']);
+        $this->assertSame(50, $fresh->profileSectionCompletion()['work']);
+
+        Livewire::actingAs($user)
+            ->test(Show::class, ['customer' => $fresh])
+            ->assertDontSee('Still needs to be filled', false);
+    }
+
+    public function test_selected_customers_can_be_deleted_from_the_list(): void
+    {
+        $user = User::factory()->staff()->create();
+        $keep = Customer::factory()->for($user, 'creator')->create(['full_legal_name' => 'Keep Customer']);
+        $remove = Customer::factory()->for($user, 'creator')->create(['full_legal_name' => 'Remove Customer']);
+        $other = Customer::factory()->for($user, 'creator')->create();
+        $relationship = CustomerRelationship::factory()->for($other)->linkedToCustomer($remove)->create();
+
+        Livewire::actingAs($user)
+            ->test(Index::class)
+            ->call('toggle', $remove->id)
+            ->call('deleteSelected')
+            ->assertSee('Keep Customer')
+            ->assertDontSee('Remove Customer');
+
+        $this->assertModelMissing($remove);
+        $this->assertModelExists($keep);
+        $this->assertModelExists($other);
+        $this->assertDatabaseMissing('customer_relationships', ['id' => $relationship->id]);
     }
 }

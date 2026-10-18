@@ -10,14 +10,11 @@ use App\Enums\IdentificationType;
 use App\Livewire\Concerns\NotifiesBrowser;
 use App\Models\Customer;
 use App\Models\CustomerContact;
-use App\Models\CustomerPepAssociation;
-use App\Models\CustomerRelationship;
 use App\Services\CustomerActivityLogger;
 use App\Services\CustomerDuplicateChecker;
 use App\Services\CustomerProfileWrites;
 use App\Services\NricParser;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Title;
@@ -260,17 +257,7 @@ class Show extends Component
     public function delete(): void
     {
         $this->authorize('delete', $this->customer);
-
-        DB::transaction(function (): void {
-            $relationshipIds = CustomerRelationship::withTrashed()
-                ->where('customer_id', $this->customer->id)
-                ->orWhere('related_customer_id', $this->customer->id)
-                ->pluck('id');
-
-            CustomerPepAssociation::query()->whereIn('customer_relationship_id', $relationshipIds)->delete();
-            CustomerRelationship::withTrashed()->whereIn('id', $relationshipIds)->forceDelete();
-            $this->customer->delete();
-        });
+        $this->customer->deleteWithDependents();
 
         session()->flash('status', 'Customer deleted.');
         $this->redirect(route('customers.index'), navigate: true);

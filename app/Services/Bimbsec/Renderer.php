@@ -45,6 +45,24 @@ class Renderer
     }
 
     /**
+     * Overflow checks from the current field values without writing the PDF.
+     *
+     * @param  list<array{field: array<string, mixed>, kind: string, text: ?string, on: bool, choice: ?string, rows: list<string>}>  $draws
+     * @return list<array{level: string, label: string, message: string, field_id: ?string}>
+     */
+    public function inspect(array $draws): array
+    {
+        $pdf = new Fpdi('P', 'pt');
+        $pdf->AddPage('P', [612, 792]);
+        $warnings = [];
+        foreach ($draws as $draw) {
+            $warnings = array_merge($warnings, $this->draw($pdf, $draw));
+        }
+
+        return $warnings;
+    }
+
+    /**
      * @param  list<array{field: array<string, mixed>, kind: string, text: ?string, on: bool, choice: ?string, rows: list<string>}>  $draws
      * @return array{bytes: string, pages: int, warnings: list<array{level: string, label: string, message: string, field_id: ?string}>}
      */

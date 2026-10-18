@@ -16,7 +16,7 @@ class BatchRunner
     public function __construct(private Generator $generator) {}
 
     /** @param  list<int>  $customerIds */
-    public function start(array $customerIds, User $user): BimbsecBatch
+    public function open(array $customerIds, User $user): BimbsecBatch
     {
         $ids = [];
         foreach ($customerIds as $id) {
@@ -42,21 +42,37 @@ class BatchRunner
             'user_id' => $user->id,
             'status' => 'queued',
             'application_ids' => $applicationIds,
+            'summary' => [],
             'complete' => false,
         ]);
-        if (count($applicationIds) <= max(1, (int) config('bimbsec.chunk_size'))) {
+        if (count($applicationIds) !== count($ids)) {
+            $batch->update([
+                'status' => 'incomplete',
+                'complete' => false,
+                'storage_path' => null,
+                'summary' => [[
+                    'ok' => false,
+                    'reference' => '',
+                    'name' => 'Selected customer',
+                    'reason' => 'A selected customer could not be opened and was not included.',
+                ]],
+            ]);
+        }
+
+        return $batch->refresh();
+    }
+
+    /** @param  list<int>  $customerIds */
+    public function start(array $customerIds, User $user): BimbsecBatch
+    {
+        $batch = $this->open($customerIds, $user);
+        if ($batch->status === 'incomplete') {
+            return $batch;
+        }
+        if (count($batch->application_ids ?? []) <= max(1, (int) config('bimbsec.chunk_size'))) {
             $this->process($batch);
         } else {
             GenerateBimbsecBatch::dispatch($batch->id);
-        }
-        $batch->refresh();
-        if (count($applicationIds) !== count($ids)) {
-            if (is_string($batch->storage_path) && $batch->storage_path !== '') {
-                Storage::disk('local')->delete($batch->storage_path);
-            }
-            $summary = $batch->summary ?? [];
-            $summary[] = ['ok' => false, 'reference' => '', 'name' => 'Selected customer', 'reason' => 'A selected customer could not be opened and was not included.'];
-            $batch->update(['status' => 'incomplete', 'complete' => false, 'storage_path' => null, 'summary' => $summary]);
         }
 
         return $batch->refresh();
@@ -64,37 +80,72 @@ class BatchRunner
 
     public function process(BimbsecBatch $batch): void
     {
-        $batch->update(['status' => 'running']);
-        $summary = [];
-        $paths = [];
-        $chunk = max(1, (int) config('bimbsec.chunk_size'));
+        $batch->refresh();
+        while (in_array($batch->status, ['queued', 'running'], true)) {
+            $this->processNext($batch);
+            $batch->refresh();
+        }
+    }
+
+    public function processNext(BimbsecBatch $batch): void
+    {
+        $batch->refresh();
+        if (in_array($batch->status, ['ready', 'incomplete'], true)) {
+            return;
+        }
         $ids = array_values($batch->application_ids ?? []);
-        foreach (array_chunk($ids, $chunk) as $group) {
-            foreach ($group as $applicationId) {
-                $application = BimbsecApplication::query()->with('customer')->find($applicationId);
-                $reference = $application?->customer?->reference ?? 'unknown';
-                $name = $application?->customer?->full_legal_name ?? 'Unknown customer';
-                if ($application === null) {
-                    $summary[] = ['ok' => false, 'reference' => $reference, 'name' => $name, 'reason' => 'Application was not found.'];
+        if ($ids === []) {
+            $batch->update(['status' => 'incomplete', 'complete' => false, 'summary' => []]);
 
-                    continue;
-                }
-                try {
-                    $document = $this->generator->generate($application, $batch->user);
-                    $application->refresh();
-                    if (! $document->allowsPrint()) {
-                        $summary[] = ['ok' => false, 'reference' => $reference, 'name' => $name, 'reason' => 'A name, identification number, address or bank account does not fit the form. Shorten it on the application, then generate again.'];
+            return;
+        }
+        $summary = array_values($batch->summary ?? []);
+        if ($batch->status === 'queued') {
+            $summary = [];
+            $batch->update(['status' => 'running', 'summary' => []]);
+        }
+        $done = count($summary);
+        if ($done >= count($ids)) {
+            $this->finish($batch, $summary);
 
-                        continue;
-                    }
-                    $summary[] = ['ok' => true, 'reference' => $reference, 'name' => $name, 'reason' => null];
-                    $paths[] = $document->storage_path;
-                } catch (Throwable $exception) {
-                    report($exception);
-                    $summary[] = ['ok' => false, 'reference' => $reference, 'name' => $name, 'reason' => 'PDF generation failed.'];
+            return;
+        }
+        $application = BimbsecApplication::query()->with('customer')->find($ids[$done]);
+        $reference = $application?->customer?->reference ?? 'unknown';
+        $name = $application?->customer?->full_legal_name ?? 'Unknown customer';
+        if ($application === null) {
+            $summary[] = ['ok' => false, 'reference' => $reference, 'name' => $name, 'reason' => 'Application was not found.', 'path' => null];
+        } else {
+            try {
+                $document = $this->generator->generate($application, $batch->user);
+                $application->refresh();
+                if (! $document->allowsPrint()) {
+                    $summary[] = [
+                        'ok' => false,
+                        'reference' => $reference,
+                        'name' => $name,
+                        'reason' => 'A name, identification number, address or bank account does not fit the form. Shorten it on the application, then generate again.',
+                        'path' => null,
+                    ];
+                } else {
+                    $summary[] = ['ok' => true, 'reference' => $reference, 'name' => $name, 'reason' => null, 'path' => $document->storage_path];
                 }
+            } catch (Throwable $exception) {
+                report($exception);
+                $summary[] = ['ok' => false, 'reference' => $reference, 'name' => $name, 'reason' => 'PDF generation failed.', 'path' => null];
             }
         }
+        $batch->update(['summary' => $summary]);
+        if (count($summary) >= count($ids)) {
+            $this->finish($batch, $summary);
+        }
+    }
+
+    /** @param  list<array<string, mixed>>  $summary */
+    private function finish(BimbsecBatch $batch, array $summary): void
+    {
+        $paths = collect($summary)->where('ok', true)->pluck('path')->filter()->values()->all();
+        $ids = array_values($batch->application_ids ?? []);
         $failed = collect($summary)->contains(fn (array $row): bool => ! $row['ok']);
         if ($failed || $paths === [] || count($paths) !== count($ids)) {
             $batch->update(['status' => 'incomplete', 'summary' => $summary, 'complete' => false, 'storage_path' => null]);

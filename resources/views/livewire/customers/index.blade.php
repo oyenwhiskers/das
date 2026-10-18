@@ -63,16 +63,26 @@
                         id="sort"
                         class="w-full rounded-md border-slate-300 py-2 text-sm shadow-sm focus:border-navy-500 focus:ring-navy-500"
                     >
-                        <option value="updated">Recently Updated</option>
-                        <option value="added">Recently Added</option>
                         <option value="name_asc">Customer Name A–Z</option>
                         <option value="name_desc">Customer Name Z–A</option>
+                        <option value="updated">Recently Updated</option>
+                        <option value="added">Recently Added</option>
                     </select>
                 </div>
             </div>
         </div>
 
         <p class="sr-only" wire:loading.delay wire:target="search,status,sort" aria-live="polite">Updating…</p>
+
+        @if ($selected !== [])
+            <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3">
+                <p class="text-sm text-slate-700">{{ count($selected) }} {{ count($selected) === 1 ? 'customer' : 'customers' }} selected</p>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" wire:click="clearSelection" class="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Clear</button>
+                    <button type="button" x-on:click.prevent="if (await confirmAction({ title: 'Delete selected customers?', text: 'Selected customers, their records, and links from other customers will be permanently deleted. This cannot be undone.', confirmButtonText: 'Delete', confirmButtonColor: '#b91c1c' })) $wire.deleteSelected()" class="rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50">Delete selected</button>
+                </div>
+            </div>
+        @endif
 
         {{-- Results --}}
         <div class="relative rounded-lg border border-slate-200 bg-white shadow-sm" wire:loading.class="opacity-70" wire:target="search,status,sort">
@@ -97,12 +107,21 @@
                     <table class="min-w-full divide-y divide-slate-200 text-sm font-normal">
                         <thead class="bg-slate-50">
                             <tr>
-                                <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">No.</th>
-                                <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Name</th>
+                                <th scope="col" class="px-4 py-2.5 text-left">
+                                    <input type="checkbox" @checked($pageSelected) wire:click="togglePage(@js($pageIds))" aria-label="Select all customers on this page" class="rounded border-slate-300 text-navy-800 focus:ring-navy-500" />
+                                </th>
+                                <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">#</th>
+                                <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500" aria-sort="{{ $sort === 'name_asc' ? 'ascending' : ($sort === 'name_desc' ? 'descending' : 'none') }}">
+                                    <button type="button" wire:click="sortByName" class="inline-flex items-center gap-1 hover:text-navy-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-500 rounded">
+                                        Name
+                                        <span class="text-[10px] tabular-nums" aria-hidden="true">{{ $sort === 'name_asc' ? '↑' : ($sort === 'name_desc' ? '↓' : '') }}</span>
+                                    </button>
+                                </th>
                                 <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Identification</th>
                                 <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Mobile</th>
                                 <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Email</th>
                                 <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Last Updated</th>
+                                <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Profile</th>
                                 <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
                             </tr>
                         </thead>
@@ -117,8 +136,11 @@
                                     x-on:keydown.enter.prevent="Livewire.navigate(@js(route('customers.show', $customer)))"
                                     x-on:keydown.space.prevent="Livewire.navigate(@js(route('customers.show', $customer)))"
                                 >
-                                    <td class="px-4 py-3 align-middle whitespace-nowrap">
-                                        {{ $customer->reference }}
+                                    <td class="px-4 py-3 align-middle" @click.stop @keydown.stop>
+                                        <input type="checkbox" @checked(in_array($customer->id, $selected, true)) wire:click="toggle({{ $customer->id }})" aria-label="Select {{ $customer->full_legal_name }}" class="rounded border-slate-300 text-navy-800 focus:ring-navy-500" />
+                                    </td>
+                                    <td class="px-4 py-3 align-middle whitespace-nowrap text-slate-500">
+                                        {{ $customers->firstItem() + $loop->index }}
                                     </td>
                                     <td class="px-4 py-3 align-middle">
                                         {{ $customer->full_legal_name }}
@@ -137,6 +159,9 @@
                                     <td class="px-4 py-3 align-middle whitespace-nowrap">
                                         {{ $customer->updated_at?->timezone(config('app.timezone'))->format('d/m/Y, h:i A') ?: '—' }}
                                     </td>
+                                    <td class="px-4 py-3 align-middle">
+                                        <x-profile-completion :percent="$customer->profileCompletionPercent()" />
+                                    </td>
                                     <td class="px-4 py-3 align-middle whitespace-nowrap">
                                         <span @class([
                                             'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
@@ -153,15 +178,21 @@
                 </div>
 
                 {{-- Mobile cards --}}
+                <div class="flex items-center gap-2 border-b border-slate-100 px-4 py-2 md:hidden">
+                    <input type="checkbox" @checked($pageSelected) wire:click="togglePage(@js($pageIds))" aria-label="Select all customers on this page" class="rounded border-slate-300 text-navy-800 focus:ring-navy-500" />
+                    <span class="text-sm text-slate-600">Select page</span>
+                </div>
                 <ul class="divide-y divide-slate-100 md:hidden" role="list">
                     @foreach ($customers as $customer)
-                        <li>
+                        <li class="flex items-start gap-3 px-4 py-3">
+                            <input type="checkbox" @checked(in_array($customer->id, $selected, true)) wire:click="toggle({{ $customer->id }})" aria-label="Select {{ $customer->full_legal_name }}" class="mt-1 rounded border-slate-300 text-navy-800 focus:ring-navy-500" />
                             <a
                                 href="{{ route('customers.show', $customer) }}"
                                 wire:navigate
-                                class="block px-4 py-3 hover:bg-slate-50/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-navy-500"
+                                class="block min-w-0 flex-1 hover:bg-slate-50/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-navy-500"
                             >
                                 <div class="flex flex-wrap items-center gap-2 text-sm text-slate-800">
+                                    <span class="text-slate-500">{{ $customers->firstItem() + $loop->index }}</span>
                                     <span>{{ $customer->full_legal_name }}</span>
                                     <span @class([
                                         'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
@@ -171,7 +202,9 @@
                                         {{ $customer->status->label() }}
                                     </span>
                                 </div>
-                                <p class="mt-1 text-sm text-slate-800">{{ $customer->reference }}</p>
+                                <div class="mt-2">
+                                    <x-profile-completion :percent="$customer->profileCompletionPercent()" />
+                                </div>
                                 <p class="mt-1 text-sm text-slate-800">{{ $customer->primary_identification_number ?: '—' }}</p>
                                 <p class="mt-1 text-sm text-slate-800">{{ $customer->primary_mobile ?: '—' }}</p>
                                 <p class="mt-1 text-sm text-slate-800 truncate">{{ $customer->primary_email ?: '—' }}</p>

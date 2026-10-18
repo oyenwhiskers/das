@@ -30,8 +30,8 @@
 
         @if ($batch->complete)
             <div class="flex gap-2">
-                <a href="{{ route('bimbsec.batches.file', [$batch, 'download' => 1]) }}" class="rounded-md border border-slate-300 px-3 py-1.5 text-sm">Download</a>
-                <a href="{{ route('bimbsec.batches.print', $batch) }}" target="_blank" class="rounded-md bg-navy-800 px-3 py-1.5 text-sm font-medium text-white">Print</a>
+                <a href="{{ route('bimbsec.batches.file', [$batch, 'download' => 1]) }}" class="rounded-md border border-slate-300 px-3 py-1.5 text-sm">Download all</a>
+                <button type="button" x-on:click="printPdf(@js(route('bimbsec.batches.print', $batch)))" class="rounded-md bg-navy-800 px-3 py-1.5 text-sm font-medium text-white">Print all</button>
             </div>
             <iframe title="Combined BIMBSEC preview" src="{{ route('bimbsec.batches.file', $batch) }}" class="h-[75vh] w-full rounded-lg border border-slate-200 bg-white"></iframe>
         @endif

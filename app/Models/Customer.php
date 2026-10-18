@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\DB;
 
 class Customer extends Model
 {
@@ -32,6 +33,19 @@ class Customer extends Model
             if (blank($customer->salutation) || ($driverChanged && $automatic)) {
                 $customer->salutation = $defaultSalutation;
             }
+        });
+
+        static::created(function (Customer $customer): void {
+            $customer->fatcaDeclarations()->create([
+                'current_customer_key' => $customer->id,
+                'us_person_for_tax' => false,
+                'us_green_card_holder' => false,
+                'us_resident' => false,
+                'selected_classification' => 'non_us_person',
+                'declared_on' => ($customer->created_at ?? now())->toDateString(),
+                'source' => 'system_default',
+                'recorded_by' => $customer->created_by,
+            ]);
         });
     }
 
@@ -212,6 +226,134 @@ class Customer extends Model
     public function fatcaDeclarations(): HasMany
     {
         return $this->hasMany(CustomerFatcaDeclaration::class);
+    }
+
+    public function deleteWithDependents(): void
+    {
+        DB::transaction(function (): void {
+            $customerId = $this->id;
+            $relationshipIds = CustomerRelationship::withTrashed()
+                ->where(function ($query) use ($customerId): void {
+                    $query->where('customer_id', $customerId)
+                        ->orWhere('related_customer_id', $customerId);
+                })
+                ->pluck('id');
+
+            CustomerPepAssociation::query()
+                ->where(function ($query) use ($customerId, $relationshipIds): void {
+                    $query->where('customer_id', $customerId);
+                    if ($relationshipIds->isNotEmpty()) {
+                        $query->orWhereIn('customer_relationship_id', $relationshipIds);
+                    }
+                })
+                ->delete();
+            CustomerRelationship::withTrashed()->whereIn('id', $relationshipIds)->forceDelete();
+            ExtractedProfileMerge::query()->where('customer_id', $customerId)->delete();
+            $this->delete();
+        });
+    }
+
+    /**
+     * @param  Builder<Customer>  $query
+     * @return Builder<Customer>
+     */
+    public function scopeWithProfileCompletion(Builder $query): Builder
+    {
+        return $query->withExists($this->profileCompletionExists());
+    }
+
+    /** Share of profile fields staff fill. Optional blanks such as social accounts, home telephone, and old NRIC are excluded. */
+    public function profileCompletionPercent(): int
+    {
+        return $this->completionPercent(array_merge(...array_values($this->profileCompletionChecks())));
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    public function profileSectionCompletion(): array
+    {
+        return array_map($this->completionPercent(...), $this->profileCompletionChecks());
+    }
+
+    /**
+     * @param  list<bool>  $checks
+     */
+    private function completionPercent(array $checks): int
+    {
+        return (int) round(count(array_filter($checks)) / count($checks) * 100);
+    }
+
+    /**
+     * @return array<string, list<bool>>
+     */
+    private function profileCompletionChecks(): array
+    {
+        if (! array_key_exists('has_residential_address', $this->attributes)) {
+            $this->loadExists($this->profileCompletionExists());
+        }
+
+        return [
+            'personal' => [
+                filled($this->full_legal_name),
+                filled($this->primary_identification_number),
+                $this->date_of_birth !== null,
+                filled($this->gender),
+                filled($this->nationality),
+                filled($this->marital_status),
+                filled($this->primary_mobile),
+                filled($this->primary_email),
+                (bool) $this->has_residential_address,
+            ],
+            'relationships' => [(bool) $this->has_relationship],
+            'work' => [filled($this->employment_status), (bool) $this->has_employment],
+            'financial' => [(bool) $this->has_bank_account, (bool) $this->has_financial],
+            'investment' => [(bool) $this->has_investment],
+            'tax' => [(bool) $this->has_tax_identification || (bool) $this->has_tax_residency || (bool) $this->has_fatca],
+            'compliance' => [(bool) $this->has_compliance],
+        ];
+    }
+
+    /**
+     * @return array<string, \Closure(Builder<mixed>): void|string>
+     */
+    private function profileCompletionExists(): array
+    {
+        return [
+            'addresses as has_residential_address' => fn (Builder $query) => $query->where('type', 'residential')->where('line_1', '!=', ''),
+            'employments as has_employment',
+            'relationships as has_relationship',
+            'bankAccounts as has_bank_account',
+            'financialDeclarations as has_financial',
+            'investmentProfiles as has_investment',
+            'taxIdentification as has_tax_identification',
+            'taxResidencies as has_tax_residency',
+            'fatcaDeclarations as has_fatca',
+            'complianceDeclarations as has_compliance',
+        ];
+    }
+
+    public function identificationFormatError(): ?string
+    {
+        if (blank($this->primary_identification_number)) {
+            return null;
+        }
+
+        $type = $this->primary_identification_type;
+        if ($type !== null && $type !== IdentificationType::Nric) {
+            return null;
+        }
+
+        $normalized = CustomerIdentification::normalizeNumber($this->primary_identification_number) ?? '';
+        if ($type === null && ! preg_match('/^\d+$/', $normalized)) {
+            return null;
+        }
+
+        if (! preg_match('/^\d{12}$/', $normalized)) {
+            return 'NRIC must be 12 digits (with or without dashes).';
+        }
+
+        return null;
     }
 
     public function isArchived(): bool

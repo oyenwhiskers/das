@@ -1,7 +1,7 @@
 <div class="py-6">
     <div class="w-full px-4 sm:px-6 lg:px-8 xl:px-10 space-y-5">
         <div>
-            <h1 class="text-xl sm:text-2xl font-semibold text-navy-900">AI Document Reader</h1>
+            <h1 class="text-xl sm:text-2xl font-semibold text-navy-900">Scan Document</h1>
             <p class="mt-1 text-sm text-slate-500">Upload a document to extract customer profile fields. Customer records are not changed.</p>
         </div>
 

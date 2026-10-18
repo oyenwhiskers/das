@@ -120,8 +120,8 @@ class TaxResidency extends Component
                 $this->fatca[$field] = $current->{$field} === null ? '' : ($current->{$field} ? 'yes' : 'no');
             }
             $this->fatca['declared_on'] = $current->declared_on->toDateString();
-            $this->fatca['source'] = $current->source;
-            $this->fatca['selected_classification'] = $current->selected_classification ?? '';
+            $this->fatca['source'] = $current->source === 'system_default' ? 'staff_entry' : $current->source;
+            $this->fatca['selected_classification'] = $current->selected_classification ?? 'non_us_person';
         }
         $this->editing = 'fatca';
     }
@@ -149,7 +149,7 @@ class TaxResidency extends Component
     {
         $this->malaysianTin = '';
         $this->residency = ['jurisdiction' => '', 'foreign_tin' => '', 'missing_tin_reason' => '', 'missing_tin_explanation' => '', 'effective_date' => today()->toDateString()];
-        $this->fatca = ['us_person_for_tax' => '', 'us_green_card_holder' => '', 'us_resident' => '', 'selected_classification' => '', 'declared_on' => today()->toDateString(), 'source' => 'staff_entry'];
+        $this->fatca = ['us_person_for_tax' => 'no', 'us_green_card_holder' => 'no', 'us_resident' => 'no', 'selected_classification' => 'non_us_person', 'declared_on' => today()->toDateString(), 'source' => 'staff_entry'];
         $this->endDate = today()->toDateString();
     }
 

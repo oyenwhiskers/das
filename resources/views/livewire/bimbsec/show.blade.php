@@ -9,7 +9,7 @@
         </div>
 
         <form wire:submit="saveForm" class="space-y-3">
-            <details open class="rounded-lg border border-slate-200 bg-white px-4 py-3">
+            <details class="rounded-lg border border-slate-200 bg-white px-4 py-3">
                 <summary class="cursor-pointer text-sm font-semibold text-navy-900">Choices</summary>
                 <div class="mt-3 grid gap-3 sm:grid-cols-2">
                     <div>
@@ -77,7 +77,7 @@
                 </div>
             </details>
 
-            <details open class="rounded-lg border border-slate-200 bg-white px-4 py-3">
+            <details class="rounded-lg border border-slate-200 bg-white px-4 py-3">
                 <summary class="cursor-pointer text-sm font-semibold text-navy-900">Applicant details</summary>
                 <div class="mt-3 grid gap-3 sm:grid-cols-2">
                     <div>
@@ -96,7 +96,7 @@
                 </div>
             </details>
 
-            <details open class="rounded-lg border border-slate-200 bg-white px-4 py-3">
+            <details class="rounded-lg border border-slate-200 bg-white px-4 py-3">
                 <summary class="cursor-pointer text-sm font-semibold text-navy-900">Employment</summary>
                 <div class="mt-3 grid gap-3 sm:grid-cols-2">
                     <div>
@@ -159,7 +159,7 @@
                 </div>
             </details>
 
-            <details open class="rounded-lg border border-slate-200 bg-white px-4 py-3">
+            <details class="rounded-lg border border-slate-200 bg-white px-4 py-3">
                 <summary class="cursor-pointer text-sm font-semibold text-navy-900">Financial</summary>
                 <div class="mt-3 grid gap-3 sm:grid-cols-2">
                     <div>
@@ -221,7 +221,7 @@
                 </div>
             </details>
 
-            <details open class="rounded-lg border border-slate-200 bg-white px-4 py-3">
+            <details class="rounded-lg border border-slate-200 bg-white px-4 py-3">
                 <summary class="cursor-pointer text-sm font-semibold text-navy-900">Spouse or next of kin</summary>
                 @if ($kin_linked)
                     <p class="mt-3 text-sm text-slate-600">This person is another customer. Edit their occupation and contact on that customer profile.</p>
@@ -284,17 +284,17 @@
             @endif
         @endforeach
 
-        @if ($document?->print_blocked)
-            <section class="rounded-lg border border-slate-200 bg-white shadow-sm">
-                <div class="border-b border-slate-200 px-4 py-3">
+        @if ($blocked && $blocking !== [])
+            <section class="rounded-lg border border-amber-200 bg-amber-50 shadow-sm">
+                <div class="border-b border-amber-200 px-4 py-3">
                     <h2 class="text-sm font-semibold text-slate-900">Fix these before printing</h2>
                     <p class="mt-1 text-sm text-slate-600">Shorten each box so it fits the form. Saving updates the customer profile.</p>
                 </div>
                 <form wire:submit="saveOverflow" class="space-y-4 px-4 py-4">
                     @foreach ($blocking as $field)
-                        <div>
+                        <div class="rounded-md bg-amber-50">
                             <label class="text-sm font-medium text-slate-800" for="overflow_{{ $field['key'] }}">{{ $field['label'] }}</label>
-                            <textarea id="overflow_{{ $field['key'] }}" wire:model="overflow_values.{{ $field['key'] }}" rows="2" class="mt-1.5 w-full rounded-md border-slate-300 bg-white text-sm text-slate-900 shadow-sm focus:border-navy-500 focus:ring-navy-500"></textarea>
+                            <textarea id="overflow_{{ $field['key'] }}" wire:model="overflow_values.{{ $field['key'] }}" rows="2" class="mt-1.5 w-full rounded-md border-amber-300 bg-amber-50 text-sm text-slate-900 shadow-sm focus:border-amber-500 focus:ring-amber-500"></textarea>
                             <p class="mt-1.5 text-xs leading-5 text-amber-800">{{ $field['message'] }}</p>
                             @error('overflow_values.'.$field['key']) <p class="mt-1 text-xs text-red-700">{{ $message }}</p> @enderror
                         </div>
@@ -306,11 +306,11 @@
 
         @if ($document)
             <div class="flex flex-wrap gap-2">
-                <a href="{{ route('bimbsec.file', [$customer, $application, 'download' => 1]) }}" class="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700">{{ $document->allowsPrint() ? 'Download' : 'Download review copy' }}</a>
-                @if ($document->allowsPrint())
-                    <a href="{{ route('bimbsec.print', [$customer, $application]) }}" target="_blank" class="rounded-md bg-navy-800 px-3 py-1.5 text-sm font-medium text-white">Print</a>
-                @else
+                <a href="{{ route('bimbsec.file', [$customer, $application, 'download' => 1]) }}" class="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700">{{ $blocked ? 'Download review copy' : 'Download' }}</a>
+                @if ($blocked)
                     <span class="rounded-md bg-slate-200 px-3 py-1.5 text-sm text-slate-500">Print locked</span>
+                @else
+                    <button type="button" x-on:click="printPdf(@js(route('bimbsec.print', [$customer, $application])))" class="rounded-md bg-navy-800 px-3 py-1.5 text-sm font-medium text-white">Print</button>
                 @endif
             </div>
             <iframe title="BIMBSEC preview" src="{{ route('bimbsec.file', [$customer, $application]) }}" class="h-[75vh] w-full rounded-lg border border-slate-200 bg-white"></iframe>

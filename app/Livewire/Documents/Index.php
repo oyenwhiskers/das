@@ -15,7 +15,7 @@ use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 use Throwable;
 
-#[Title('AI Document Reader — DAS')]
+#[Title('Scan Document — DAS')]
 class Index extends Component
 {
     use AuthorizesRequests;

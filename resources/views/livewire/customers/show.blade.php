@@ -64,6 +64,7 @@
                                     {{ $customer->status->label() }}
                                 </span>
                             </div>
+                            <x-profile-completion :percent="$customer->profileCompletionPercent()" wide class="mt-2" />
                             <dl class="mt-1.5 flex flex-wrap gap-x-5 gap-y-1 text-sm">
                                 <div class="flex flex-wrap gap-x-2">
                                     <dt class="text-slate-500">DAS Reference:</dt>
@@ -123,10 +124,36 @@
                 </div>
             </div>
 
+            @php
+                $sectionCompletion = $customer->profileSectionCompletion();
+            @endphp
             <div class="border-b border-slate-200" role="tablist" aria-label="Customer profile sections" x-on:keydown.arrow-right.prevent="moveTab(1)" x-on:keydown.arrow-left.prevent="moveTab(-1)">
                 <div class="flex flex-wrap gap-1">
                     @foreach (['personal' => 'Personal', 'relationships' => 'Relationships', 'work' => 'Work Information', 'financial' => 'Financial Information', 'investment' => 'Investment', 'tax' => 'Tax & Residency', 'compliance' => 'Compliance'] as $tab => $label)
-                        <button type="button" x-ref="{{ $tab }}Tab" id="tab-{{ $tab }}" role="tab" aria-controls="panel-{{ $tab }}" :aria-selected="activeTab === '{{ $tab }}'" :tabindex="activeTab === '{{ $tab }}' ? 0 : -1" @click="switchTab('{{ $tab }}')" class="border-b-2 px-4 py-3 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-500" :class="activeTab === '{{ $tab }}' ? 'border-navy-700 text-navy-900' : 'border-transparent text-slate-600 hover:text-navy-900'">{{ $label }}</button>
+                        @php
+                            $sectionPercent = $sectionCompletion[$tab];
+                        @endphp
+                        <button type="button" x-ref="{{ $tab }}Tab" id="tab-{{ $tab }}" role="tab" aria-controls="panel-{{ $tab }}" :aria-selected="activeTab === '{{ $tab }}'" :tabindex="activeTab === '{{ $tab }}' ? 0 : -1" @click="switchTab('{{ $tab }}')" class="inline-flex items-center gap-1.5 border-b-2 px-3 py-3 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-500" :class="activeTab === '{{ $tab }}' ? 'border-navy-700 text-navy-900' : 'border-transparent text-slate-600 hover:text-navy-900'">
+                            <span>{{ $label }}</span>
+                            @if ($sectionPercent >= 100)
+                                <svg class="h-3.5 w-3.5 text-emerald-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg>
+                                <span class="sr-only">complete</span>
+                            @else
+                                <span @class([
+                                    'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums',
+                                    'bg-rose-50 text-rose-700' => $sectionPercent < 50,
+                                    'bg-amber-50 text-amber-700' => $sectionPercent >= 50,
+                                ])>
+                                    <span @class([
+                                        'h-1.5 w-1.5 rounded-full',
+                                        'bg-rose-500' => $sectionPercent < 50,
+                                        'bg-amber-500' => $sectionPercent >= 50,
+                                    ]) aria-hidden="true"></span>
+                                    {{ $sectionPercent }}%
+                                    <span class="sr-only">complete</span>
+                                </span>
+                            @endif
+                        </button>
                     @endforeach
                 </div>
             </div>
@@ -234,30 +261,33 @@
                                     </div>
                                 </form>
                             @else
+                                @php
+                                    $icError = $customer->identificationFormatError();
+                                @endphp
                                 <dl class="grid gap-x-6 gap-y-2 text-sm lg:grid-cols-2 [&>div]:grid [&>div]:gap-x-3 sm:[&>div]:grid-cols-[9rem_minmax(0,1fr)] [&_dd]:min-w-0 [&_dd]:break-words [&_dd]:!mt-0">
-                                    <div><dt class="text-slate-500">Salutation</dt><dd class="mt-1 text-slate-900">{{ $customer->salutation ?: 'Not provided' }}</dd></div>
-                                    <div><dt class="text-slate-500">Full Legal Name</dt><dd class="mt-1 text-slate-900">{{ $customer->full_legal_name }}</dd></div>
-                                    <div><dt class="text-slate-500">Identification Type</dt><dd class="mt-1 text-slate-900">{{ $customer->primary_identification_type?->label() ?: 'Not provided' }}</dd></div>
-                                    <div><dt class="text-slate-500">Identification Number</dt><dd class="mt-1 text-slate-900">{{ $customer->primary_identification_number ?: 'Not provided' }}</dd></div>
-                                    <div><dt class="text-slate-500">Issuing Jurisdiction</dt><dd class="mt-1 text-slate-900">{{ $customer->identifications->firstWhere('is_primary', true)?->issuing_jurisdiction ?: 'Not provided' }}</dd></div>
+                                    <div><dt class="text-slate-500">Salutation</dt><dd class="mt-1 text-slate-900"><x-missing-field :value="$customer->salutation" optional /></dd></div>
+                                    <div><dt class="inline-flex flex-wrap items-center gap-1 text-slate-500">Full Legal Name @if (blank($customer->full_legal_name))<x-missing-field mark />@endif</dt><dd class="mt-1 text-slate-900"><x-missing-field :value="$customer->full_legal_name" /></dd></div>
+                                    <div><dt class="text-slate-500">Identification Type</dt><dd class="mt-1 text-slate-900"><x-missing-field :value="$customer->primary_identification_type?->label()" optional /></dd></div>
+                                    <div><dt class="inline-flex flex-wrap items-center gap-1 text-slate-500">Identification Number @if (blank($customer->primary_identification_number))<x-missing-field mark />@endif</dt><dd class="mt-1 text-slate-900"><x-missing-field :value="$customer->primary_identification_number" :error="$icError" /></dd></div>
+                                    <div><dt class="text-slate-500">Issuing Jurisdiction</dt><dd class="mt-1 text-slate-900"><x-missing-field :value="$customer->identifications->firstWhere('is_primary', true)?->issuing_jurisdiction" optional /></dd></div>
                                     @php $oldNric = $customer->identifications->firstWhere('is_primary', true)?->old_nric; @endphp
-                                    <div><dt class="text-slate-500">Old NRIC</dt><dd class="mt-1 text-slate-900">{{ $oldNric ?: 'Not provided' }}</dd></div>
+                                    <div><dt class="text-slate-500">Old NRIC</dt><dd class="mt-1 text-slate-900"><x-missing-field :value="$oldNric" optional /></dd></div>
                                     <div>
-                                        <dt class="text-slate-500">Date of Birth</dt>
+                                        <dt class="inline-flex flex-wrap items-center gap-1 text-slate-500">Date of Birth @unless ($customer->date_of_birth)<x-missing-field mark />@endunless</dt>
                                         <dd class="mt-1 text-slate-900">
                                             @if ($customer->date_of_birth)
                                                 {{ $customer->date_of_birth->format('d M Y') }}
                                                 <span class="text-slate-500">({{ $customer->date_of_birth->age }} years)</span>
                                             @else
-                                                Not provided
+                                                <x-missing-field />
                                             @endif
                                         </dd>
                                     </div>
-                                    <div><dt class="text-slate-500">Gender</dt><dd class="mt-1 text-slate-900">{{ $customer->gender ?: 'Not provided' }}</dd></div>
-                                    <div><dt class="text-slate-500">Nationality</dt><dd class="mt-1 text-slate-900">{{ $customer->nationality ?: 'Not provided' }}</dd></div>
-                                    <div><dt class="text-slate-500">Country of Residence</dt><dd class="mt-1 text-slate-900">{{ $customer->country_of_residence ?: 'Not provided' }}</dd></div>
-                                    <div><dt class="text-slate-500">Race</dt><dd class="mt-1 text-slate-900">{{ $customer->race ?: 'Not provided' }}</dd></div>
-                                    <div><dt class="text-slate-500">Marital Status</dt><dd class="mt-1 text-slate-900">{{ $customer->marital_status ?: 'Not provided' }}</dd></div>
+                                    <div><dt class="inline-flex flex-wrap items-center gap-1 text-slate-500">Gender @if (blank($customer->gender))<x-missing-field mark />@endif</dt><dd class="mt-1 text-slate-900"><x-missing-field :value="$customer->gender" /></dd></div>
+                                    <div><dt class="inline-flex flex-wrap items-center gap-1 text-slate-500">Nationality @if (blank($customer->nationality))<x-missing-field mark />@endif</dt><dd class="mt-1 text-slate-900"><x-missing-field :value="$customer->nationality" /></dd></div>
+                                    <div><dt class="text-slate-500">Country of Residence</dt><dd class="mt-1 text-slate-900"><x-missing-field :value="$customer->country_of_residence" optional /></dd></div>
+                                    <div><dt class="text-slate-500">Race</dt><dd class="mt-1 text-slate-900"><x-missing-field :value="$customer->race" optional /></dd></div>
+                                    <div><dt class="inline-flex flex-wrap items-center gap-1 text-slate-500">Marital Status @if (blank($customer->marital_status))<x-missing-field mark />@endif</dt><dd class="mt-1 text-slate-900"><x-missing-field :value="$customer->marital_status" /></dd></div>
                                 </dl>
                             @endif
                         </div>
@@ -309,12 +339,12 @@
                                 </div>
                             @else
                                 <dl class="grid gap-x-6 gap-y-2 text-sm lg:grid-cols-2 [&>div]:grid [&>div]:gap-x-3 sm:[&>div]:grid-cols-[9rem_minmax(0,1fr)] [&_dd]:min-w-0 [&_dd]:break-words [&_dd]:!mt-0">
-                                    <div><dt class="text-slate-500">Mobile Number</dt><dd class="mt-1 text-slate-900">{{ $customer->primary_mobile ?: 'Not provided' }}</dd></div>
-                                    <div><dt class="text-slate-500">Home Telephone</dt><dd class="mt-1 text-slate-900">{{ $customer->contacts->firstWhere('type', \App\Enums\ContactType::Home)?->value ?: 'Not provided' }}</dd></div>
-                                    <div><dt class="text-slate-500">Email Address</dt><dd class="mt-1 text-slate-900">{{ $customer->primary_email ?: 'Not provided' }}</dd></div>
+                                    <div><dt class="inline-flex flex-wrap items-center gap-1 text-slate-500">Mobile Number @if (blank($customer->primary_mobile))<x-missing-field mark />@endif</dt><dd class="mt-1 text-slate-900"><x-missing-field :value="$customer->primary_mobile" /></dd></div>
+                                    <div><dt class="text-slate-500">Home Telephone</dt><dd class="mt-1 text-slate-900"><x-missing-field :value="$customer->contacts->firstWhere('type', \App\Enums\ContactType::Home)?->value" optional /></dd></div>
+                                    <div><dt class="inline-flex flex-wrap items-center gap-1 text-slate-500">Email Address @if (blank($customer->primary_email))<x-missing-field mark />@endif</dt><dd class="mt-1 text-slate-900"><x-missing-field :value="$customer->primary_email" /></dd></div>
                                     @if ($customer->contacts->first(fn ($contact) => $contact->type === \App\Enums\ContactType::Social && $contact->platform === null))<div><dt class="text-slate-500">Legacy social contact (platform unknown)</dt><dd class="mt-1 text-slate-900">{{ $customer->contacts->first(fn ($contact) => $contact->type === \App\Enums\ContactType::Social && $contact->platform === null)?->value }}</dd></div>@endif
                                     @foreach (['facebook' => 'Facebook', 'instagram' => 'Instagram', 'twitter' => 'Twitter / X'] as $platform => $label)
-                                        <div><dt class="text-slate-500">{{ $label }}</dt><dd class="mt-1 text-slate-900">{{ $customer->contacts->first(fn ($contact) => $contact->type === \App\Enums\ContactType::Social && $contact->platform === $platform)?->value ?: 'Not provided' }}</dd></div>
+                                        <div><dt class="text-slate-500">{{ $label }}</dt><dd class="mt-1 text-slate-900"><x-missing-field :value="$customer->contacts->first(fn ($contact) => $contact->type === \App\Enums\ContactType::Social && $contact->platform === $platform)?->value" optional /></dd></div>
                                     @endforeach
                                 </dl>
                             @endif
@@ -426,12 +456,12 @@
                             @else
                                 <div class="grid gap-4 text-sm sm:grid-cols-2">
                                     <div>
-                                        <h3 class="font-medium text-slate-800 mb-2">Residential Address</h3>
+                                        <h3 class="mb-2 inline-flex flex-wrap items-center gap-1 font-medium text-slate-800">Residential Address @unless ($residential && ! $residential->isEmpty())<x-missing-field mark />@endunless</h3>
                                         @if ($residential && ! $residential->isEmpty())
                                             <p class="text-slate-900 whitespace-pre-line">{{ collect([$residential->line_1, $residential->line_2, collect([$residential->postcode, $residential->city])->filter()->implode(' '), $residential->state, $residential->country])->filter()->implode("\n") }}</p>
-                                            <p class="mt-2 text-slate-500">Property Occupancy: {{ $residential->occupancy_status?->label() ?: 'Not provided' }}{{ $residential->occupancy_status === \App\Enums\OccupancyStatus::Other && $residential->occupancy_other ? ': '.$residential->occupancy_other : '' }}</p>
+                                            <p class="mt-2 text-slate-500">Property Occupancy: @if ($residential->occupancy_status){{ $residential->occupancy_status->label() }}{{ $residential->occupancy_status === \App\Enums\OccupancyStatus::Other && $residential->occupancy_other ? ': '.$residential->occupancy_other : '' }}@else<x-missing-field optional />@endif</p>
                                         @else
-                                            <p class="text-slate-500">Not provided</p>
+                                            <x-missing-field />
                                         @endif
                                     </div>
                                     <div>
@@ -441,7 +471,7 @@
                                         @elseif ($mailing && ! $mailing->isEmpty())
                                             <p class="text-slate-900 whitespace-pre-line">{{ collect([$mailing->line_1, $mailing->line_2, collect([$mailing->postcode, $mailing->city])->filter()->implode(' '), $mailing->state, $mailing->country])->filter()->implode("\n") }}</p>
                                         @else
-                                            <p class="text-slate-500">Not provided</p>
+                                            <x-missing-field optional />
                                         @endif
                                     </div>
                                 </div>

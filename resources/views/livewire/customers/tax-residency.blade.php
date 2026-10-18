@@ -66,7 +66,20 @@
                 <div><dt class="text-slate-500">Explicitly selected classification</dt><dd class="font-medium text-slate-900">{{ match ($currentFatca?->selected_classification) { 'us_person' => 'US Person', 'non_us_person' => 'Non US Person', default => 'Not Declared' } }}</dd></div>
                 <div><dt class="text-slate-500">Completeness</dt><dd class="font-medium text-slate-900">{{ $currentFatca?->isComplete() ? 'Complete' : 'Incomplete' }}</dd></div>
                 <div><dt class="text-slate-500">Declaration date</dt><dd class="font-medium text-slate-900">{{ $currentFatca?->declared_on?->format('d M Y') ?? 'Not Provided' }}</dd></div>
-                @if ($currentFatca)<div class="sm:col-span-2 lg:col-span-3"><dt class="text-slate-500">Source and recorder</dt><dd class="text-slate-900">{{ $currentFatca->source === 'customer_attestation' ? 'Customer attestation' : 'Staff data entry' }} · Recorded by {{ $currentFatca->recorder?->name ?? 'Former user' }}</dd></div>@endif
+                @if ($currentFatca)
+                    <div class="sm:col-span-2 lg:col-span-3">
+                        <dt class="text-slate-500">Source</dt>
+                        <dd class="text-slate-900">
+                            @if ($currentFatca->source === 'system_default')
+                                System default
+                            @elseif ($currentFatca->source === 'customer_attestation')
+                                Customer attestation · Recorded by {{ $currentFatca->recorder?->name ?? 'Former user' }}
+                            @else
+                                Staff data entry · Recorded by {{ $currentFatca->recorder?->name ?? 'Former user' }}
+                            @endif
+                        </dd>
+                    </div>
+                @endif
             </dl>
             @if ($currentFatca?->classification() === 'US Person')<p class="mt-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">W-9 may be required. W-9 processing is handled separately.</p>@endif
             @if ($editing === 'fatca')

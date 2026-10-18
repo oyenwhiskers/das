@@ -206,11 +206,15 @@ class BimbsecModuleTest extends TestCase
             'choices' => BimbsecApplication::normalizeChoices([]),
             'created_by' => $user->id,
         ]);
-        $document = app(Generator::class)->generate($application, $user);
-        $this->assertTrue($document->print_blocked);
+        $this->assertTrue(app(Generator::class)->assess($customer->fresh(), [])['blocked']);
+
+        Livewire::actingAs($user)->test(Index::class)
+            ->assertSee('bg-amber-50')
+            ->assertSee('Resident address is too long for the form.');
 
         Livewire::actingAs($user)->test(Show::class, ['customer' => $customer->fresh(), 'application' => $application])
             ->assertSee('Fix these before printing')
+            ->assertSee('bg-amber-50')
             ->assertSee('Resident address is too long for the form.')
             ->assertDontSee('address_lines has')
             ->assertSeeInOrder(['JALAN PANJANG', 'Resident address is too long for the form.'])
@@ -221,7 +225,43 @@ class BimbsecModuleTest extends TestCase
         $address = $customer->residentialAddress()->first();
         $this->assertSame('1 Jalan Damai', $address->line_1);
         $this->assertNull($address->line_2);
+        $this->assertFalse(app(Generator::class)->assess($customer->fresh(), [])['blocked']);
         $this->assertFalse($application->fresh()->document->print_blocked);
+    }
+
+    public function test_mailing_that_mirrors_residential_is_not_a_separate_fix_field(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = $this->customer($user, 'ALI BIN ABU', '900101011234');
+        $long = str_repeat('JALAN PANJANG ', 8).'TAMAN';
+        $customer->residentialAddress->update(['line_1' => $long, 'line_2' => null, 'state' => 'W.P.KUALA LUMPUR']);
+        $customer->addresses()->create([
+            'type' => 'mailing',
+            'same_as_residential' => true,
+            'line_1' => null,
+        ]);
+        $application = $customer->bimbsecApplications()->create([
+            'choices' => BimbsecApplication::normalizeChoices([]),
+            'created_by' => $user->id,
+        ]);
+
+        $messages = collect(app(Generator::class)->assess($customer->fresh(), [])['warnings'])
+            ->where('level', 'blocking')
+            ->pluck('message');
+        $this->assertTrue($messages->contains(fn (string $message): bool => str_contains($message, 'Resident address')));
+        $this->assertFalse($messages->contains(fn (string $message): bool => str_contains($message, 'Mailing address')));
+
+        Livewire::actingAs($user)->test(Show::class, ['customer' => $customer->fresh(), 'application' => $application])
+            ->assertSee('Resident address is too long for the form.')
+            ->assertDontSee('Mailing address is too long for the form.')
+            ->set('overflow_values.addresses_residential__address_lines', '1 Jalan Damai')
+            ->set('overflow_values.addresses_residential__state', 'WP KL')
+            ->call('saveOverflow')
+            ->assertHasNoErrors();
+
+        $this->assertSame('1 Jalan Damai', $customer->fresh()->residentialAddress->line_1);
+        $this->assertTrue((bool) $customer->fresh()->mailingAddress->same_as_residential);
+        $this->assertFalse(app(Generator::class)->assess($customer->fresh(), [])['blocked']);
     }
 
     public function test_opening_the_pdf_stamps_the_date_without_rewriting_the_file(): void
@@ -255,7 +295,9 @@ class BimbsecModuleTest extends TestCase
 
         Livewire::actingAs($user)->test(Show::class, ['customer' => $customer, 'application' => $application])
             ->assertDontSee('New application')
-            ->assertSee('Choices');
+            ->assertSee('Choices')
+            ->assertSee('<details class="rounded-lg border border-slate-200 bg-white px-4 py-3">', false)
+            ->assertDontSee('<details open class="rounded-lg border border-slate-200 bg-white px-4 py-3">', false);
 
         $this->expectException(QueryException::class);
         $customer->bimbsecApplications()->create([
@@ -301,6 +343,49 @@ class BimbsecModuleTest extends TestCase
         $this->assertFalse($again->complete);
         $this->assertNull($again->storage_path);
         $this->assertSame('PDF generation failed.', collect($again->summary)->firstWhere('reference', $second->reference)['reason']);
+    }
+
+    public function test_print_all_and_download_all_open_the_combined_pdf(): void
+    {
+        $user = User::factory()->staff()->create();
+        $first = $this->customer($user, 'ALI BIN ABU', '900101011234');
+        $second = $this->customer($user, 'SITI BINTI OMAR', '910202021111');
+
+        $download = Livewire::actingAs($user)
+            ->test(Index::class)
+            ->assertDontSee('Download all')
+            ->call('toggle', $first->id)
+            ->assertSee('Download all')
+            ->assertSee('Print all')
+            ->assertSee('Clear')
+            ->call('toggle', $second->id)
+            ->call('downloadAll')
+            ->assertReturned(fn (array $data): bool => $data['ok'] === true
+                && $data['pending'] === true
+                && ($data['total'] ?? 0) === 2);
+
+        $batch = BimbsecBatch::query()->where('user_id', $user->id)->first();
+        $this->assertNotNull($batch);
+        $download->call('batchAdvance', $batch->id, 'download')
+            ->assertReturned(fn (array $data): bool => $data['ok'] === true && $data['pending'] === true && ($data['done'] ?? 0) === 1);
+        $download->call('batchAdvance', $batch->id, 'download')
+            ->assertReturned(fn (array $data): bool => $data['ok'] === true
+                && $data['pending'] === false
+                && str_contains($data['url'] ?? '', 'download=1'));
+        $this->assertTrue($batch->fresh()->complete);
+
+        $print = Livewire::actingAs($user)
+            ->test(Index::class)
+            ->call('toggle', $first->id)
+            ->call('toggle', $second->id)
+            ->call('printAll');
+        $printBatch = BimbsecBatch::query()->where('user_id', $user->id)->latest('id')->first();
+        $print->call('batchAdvance', $printBatch->id, 'print')
+            ->call('batchAdvance', $printBatch->id, 'print')
+            ->assertReturned(fn (array $data): bool => $data['ok'] === true
+                && $data['pending'] === false
+                && str_contains($data['url'] ?? '', '/print')
+                && ! str_contains($data['url'] ?? '', 'download=1'));
     }
 
     public function test_another_staff_member_cannot_open_a_batch_file(): void

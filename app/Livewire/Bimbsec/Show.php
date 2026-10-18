@@ -191,7 +191,7 @@ class Show extends Component
     {
         $this->authorize('update', $this->application);
         $customer = $this->customer->fresh(['primaryIdentification', 'residentialAddress', 'mailingAddress', 'bankAccounts', 'employments', 'relationships.relatedPerson', 'relationships.relatedCustomer', 'taxIdentification']);
-        $fields = $this->blockingFields($this->application->document?->warnings ?? [], $customer);
+        $fields = $this->blockingFields($generator->assess($customer, $this->application->choices ?? [])['warnings'], $customer);
         if ($fields === []) {
             return;
         }
@@ -219,11 +219,12 @@ class Show extends Component
     {
         $this->authorize('view', $this->application);
         $this->customer->load(['relationships.relatedPerson', 'relationships.relatedCustomer', 'bankAccounts']);
-        $document = $generator->refresh($this->application, auth()->user());
+        $generator->refresh($this->application, auth()->user());
         $this->application->unsetRelation('document');
+        $assessment = $generator->assess($this->customer->fresh(), $this->application->choices ?? []);
         $warnings = array_map(
             fn (array $warning): array => $this->plainWarning($warning),
-            $document?->warnings ?? $resolver->resolve($this->customer->fresh(), $this->application->choices ?? [])['warnings'],
+            $assessment['warnings'],
         );
         $blocking = $this->blockingFields($warnings);
         $this->rememberOverflow($blocking);
@@ -239,6 +240,7 @@ class Show extends Component
             'portfolioOptions' => CustomerProfileSchema::PORTFOLIO,
             'wealthOptions' => CustomerProfileSchema::WEALTH_SOURCES,
             'blocking' => $blocking,
+            'blocked' => $assessment['blocked'],
         ])->layout('layouts.app');
     }
 
@@ -790,20 +792,30 @@ class Show extends Component
 
     private function writeOverflowAddress(CustomerActivityLogger $activity, Customer $customer, User $user, bool $mailing, string $item, string $value): void
     {
-        $address = $mailing ? $customer->mailingAddress : $customer->residentialAddress;
-        if ($mailing && $address?->same_as_residential) {
-            $address = null;
+        $generator = app(Generator::class);
+        $mirror = $generator->mailingMirrorsResidential($customer, $item !== '' ? $item : null);
+        if ($mailing && $mirror) {
+            $mailing = false;
         }
+        $address = $mailing ? $customer->mailingAddress : $customer->residentialAddress;
         if ($address === null) {
             $address = $customer->addresses()->create([
                 'type' => $mailing ? \App\Enums\AddressType::Mailing : \App\Enums\AddressType::Residential,
                 'same_as_residential' => false,
             ]);
         }
-        if ($item === 'address_lines') {
-            $address->update(['line_1' => $value === '' ? null : $value, 'line_2' => null, 'same_as_residential' => false]);
-        } else {
-            $address->update([$item => $value === '' ? null : $value]);
+        $payload = $item === 'address_lines'
+            ? ['line_1' => $value === '' ? null : $value, 'line_2' => null]
+            : [$item => $value === '' ? null : $value];
+        if ($mailing) {
+            $payload['same_as_residential'] = false;
+        }
+        $address->update($payload);
+        if (! $mailing) {
+            $mail = $customer->mailingAddress;
+            if ($mail !== null && $mail->same_as_residential !== true && $mirror) {
+                $mail->update($payload + ['same_as_residential' => false]);
+            }
         }
         $activity->log($customer, CustomerActivityAction::Updated, $user, ($mailing ? 'Mailing' : 'Residential').' address corrected from BIMBSEC');
     }

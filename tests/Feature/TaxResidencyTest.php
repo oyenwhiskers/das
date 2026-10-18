@@ -35,14 +35,21 @@ class TaxResidencyTest extends TestCase
         $customer = Customer::factory()->create();
         $staff = User::factory()->staff()->create();
         $this->actingAs($staff)->get(route('customers.show', $customer).'?tab=tax')
-            ->assertOk()->assertSee('Tax &amp; Residency', false)->assertSee('FATCA Self-Certification');
+            ->assertOk()->assertSee('Tax &amp; Residency', false)->assertSee('FATCA Self-Certification')
+            ->assertSee('System default')->assertDontSee('@else', false);
         Livewire::actingAs($staff)->test(TaxResidency::class, ['customer' => $customer])
             ->call('editTin')->set('malaysianTin', '001234567890')->call('saveTin')->assertHasNoErrors()
             ->assertSee('********7890')->assertDontSee('001234567890');
 
         $this->assertSame('001234567890', $customer->taxIdentification->malaysian_tin);
         $this->assertNotSame('001234567890', DB::table('customer_tax_identifications')->value('malaysian_tin'));
-        $this->assertSame(0, $customer->fatcaDeclarations()->count());
+        $fatca = $customer->fatcaDeclarations()->where('current_customer_key', $customer->id)->firstOrFail();
+        $this->assertFalse($fatca->us_person_for_tax);
+        $this->assertFalse($fatca->us_green_card_holder);
+        $this->assertFalse($fatca->us_resident);
+        $this->assertSame('non_us_person', $fatca->selected_classification);
+        $this->assertSame('Non-US Person', $fatca->classification());
+        $this->assertTrue($fatca->isComplete());
         $this->assertSame(0, $customer->taxResidencies()->count());
         $this->assertTrue($customer->activities()->where('action', 'malaysian_tin_added')->exists());
         $this->assertFalse($customer->activities()->get()->pluck('description')->contains(fn ($description) => str_contains($description, '001234567890')));
@@ -96,8 +103,9 @@ class TaxResidencyTest extends TestCase
         $customer = Customer::factory()->create();
         $staff = User::factory()->staff()->create();
         $component = Livewire::actingAs($staff)->test(TaxResidency::class, ['customer' => $customer]);
-        $component->call('editFatca')->set('fatca.us_person_for_tax', 'no')->call('saveFatca')->assertHasNoErrors();
-        $first = $customer->fatcaDeclarations()->firstOrFail();
+        $component->call('editFatca')->set('fatca.us_person_for_tax', 'no')->set('fatca.us_green_card_holder', '')->set('fatca.us_resident', '')
+            ->set('fatca.selected_classification', '')->call('saveFatca')->assertHasNoErrors();
+        $first = $customer->fatcaDeclarations()->where('current_customer_key', $customer->id)->firstOrFail();
         $this->assertSame('Undetermined', $first->classification());
         $this->assertFalse($first->isComplete());
         $component->call('editFatca')->set('fatca.us_green_card_holder', 'no')->set('fatca.us_resident', 'no')
@@ -107,10 +115,10 @@ class TaxResidencyTest extends TestCase
         $this->assertTrue($second->isComplete());
         $component->call('editFatca')->set('fatca.us_resident', 'yes')->set('fatca.source', 'customer_attestation')
             ->call('saveFatca')->assertHasNoErrors()->assertSee('W-9 may be required');
-        $this->assertSame(3, $customer->fatcaDeclarations()->count());
+        $this->assertSame(4, $customer->fatcaDeclarations()->count());
         $this->assertSame('US Person', $customer->fatcaDeclarations()->whereNotNull('current_customer_key')->firstOrFail()->classification());
         $this->assertNull($first->fresh()->current_customer_key);
-        $this->assertSame(2, $customer->activities()->where('action', 'fatca_declaration_updated')->count());
+        $this->assertSame(3, $customer->activities()->where('action', 'fatca_declaration_updated')->count());
     }
 
     public function test_explicit_fatca_selection_is_preserved_independently_of_derived_classification(): void
@@ -123,7 +131,7 @@ class TaxResidencyTest extends TestCase
             ->set('fatca.selected_classification', 'non_us_person')
             ->call('saveFatca')->assertHasNoErrors();
 
-        $record = $customer->fatcaDeclarations()->firstOrFail();
+        $record = $customer->fatcaDeclarations()->where('current_customer_key', $customer->id)->firstOrFail();
         $this->assertSame('non_us_person', $record->selected_classification);
         $this->assertSame('US Person', $record->classification());
     }
@@ -153,7 +161,7 @@ class TaxResidencyTest extends TestCase
         $second = Livewire::actingAs($staff)->test(TaxResidency::class, ['customer' => $customer])->call('editFatca');
         $first->set('fatca.us_person_for_tax', 'yes')->call('saveFatca')->assertHasNoErrors();
         $second->set('fatca.us_person_for_tax', 'no')->call('saveFatca')->assertHasErrors('fatca.declared_on');
-        $this->assertSame(1, $customer->fatcaDeclarations()->count());
+        $this->assertSame(2, $customer->fatcaDeclarations()->count());
     }
 
     public function test_database_rejects_duplicate_current_jurisdictions(): void
@@ -177,6 +185,6 @@ class TaxResidencyTest extends TestCase
         $component->call('editFatca')->set('fatca.us_person_for_tax', 'no')->call('saveFatca')->assertHasNoErrors();
         $component->call('editFatca')->set('fatca.declared_on', today()->subDay()->toDateString())
             ->call('saveFatca')->assertHasErrors('fatca.declared_on');
-        $this->assertSame(1, $customer->fatcaDeclarations()->count());
+        $this->assertSame(2, $customer->fatcaDeclarations()->count());
     }
 }

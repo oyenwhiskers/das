@@ -4,6 +4,7 @@ namespace App\Services\Bimbsec;
 
 use App\Models\BimbsecApplication;
 use App\Models\BimbsecDocument;
+use App\Models\Customer;
 use App\Models\User;
 use Illuminate\Support\Facades\Storage;
 
@@ -14,6 +15,58 @@ class Generator
         private Resolver $resolver,
         private Renderer $renderer,
     ) {}
+
+    /**
+     * @param  array<string, mixed>  $choices
+     * @return array{source_hash: string, warnings: list<array{level: string, label: string, message: string, field_id: ?string}>, blocked: bool}
+     */
+    public function assess(Customer $customer, array $choices = []): array
+    {
+        $resolved = $this->resolver->resolve($customer, BimbsecApplication::normalizeChoices($choices));
+        $warnings = $this->withoutMirroredMailing(
+            $customer,
+            $this->merge($resolved['warnings'], $this->renderer->inspect($resolved['draws'])),
+        );
+
+        return [
+            'source_hash' => $resolved['source_hash'],
+            'warnings' => $warnings,
+            'blocked' => collect($warnings)->contains(fn (array $warning): bool => ($warning['level'] ?? '') === 'blocking'),
+        ];
+    }
+
+    /** Mailing uses the residential record, or the same text, so only residential needs shortening. */
+    public function mailingMirrorsResidential(Customer $customer, ?string $item = null): bool
+    {
+        $customer->loadMissing(['mailingAddress', 'residentialAddress']);
+        $mailing = $customer->mailingAddress;
+        $residential = $customer->residentialAddress;
+        if ($mailing === null || $residential === null) {
+            return false;
+        }
+        if ($mailing->same_as_residential === true) {
+            return true;
+        }
+        if ($item === null || $item === '' || $item === 'address_lines') {
+            $mailLines = trim(implode(' ', array_filter([(string) $mailing->line_1, (string) $mailing->line_2])));
+            $homeLines = trim(implode(' ', array_filter([(string) $residential->line_1, (string) $residential->line_2])));
+            if ($item === 'address_lines') {
+                return $mailLines !== '' && $mailLines === $homeLines;
+            }
+        }
+        if ($item === null || $item === '') {
+            foreach (['line_1', 'line_2', 'city', 'state', 'postcode', 'country'] as $column) {
+                if (trim((string) ($mailing->{$column} ?? '')) !== trim((string) ($residential->{$column} ?? ''))) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        return trim((string) ($mailing->{$item} ?? '')) !== ''
+            && trim((string) ($mailing->{$item} ?? '')) === trim((string) ($residential->{$item} ?? ''));
+    }
 
     public function refresh(BimbsecApplication $application, User $user): ?BimbsecDocument
     {
@@ -72,5 +125,27 @@ class Generator
         }
 
         return array_values($warnings);
+    }
+
+    /**
+     * @param  list<array{level: string, label: string, message: string, field_id: ?string}>  $warnings
+     * @return list<array{level: string, label: string, message: string, field_id: ?string}>
+     */
+    private function withoutMirroredMailing(Customer $customer, array $warnings): array
+    {
+        return array_values(array_filter($warnings, function (array $warning) use ($customer): bool {
+            $reference = $warning['reference_key'] ?? null;
+            $item = (string) ($warning['printed_item'] ?? '');
+            if (! is_string($reference) && is_string($warning['field_id'] ?? null)) {
+                $mapped = collect($this->catalog->fields())->firstWhere('id', $warning['field_id']);
+                $reference = $mapped['source']['reference_key'] ?? null;
+                $item = (string) ($mapped['printed_item'] ?? $item);
+            }
+            if ($reference !== 'addresses.mailing') {
+                return true;
+            }
+
+            return ! $this->mailingMirrorsResidential($customer, $item !== '' ? $item : null);
+        }));
     }
 }

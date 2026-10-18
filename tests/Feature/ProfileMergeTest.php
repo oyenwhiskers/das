@@ -38,9 +38,6 @@ class ProfileMergeTest extends TestCase
         ]);
         $email = $customer->primary_email;
         $customer->addresses()->create(['type' => AddressType::Mailing, 'same_as_residential' => false, 'line_1' => 'Kept']);
-        $customer->fatcaDeclarations()->create([
-            'current_customer_key' => $customer->id, 'us_person_for_tax' => false, 'declared_on' => today()->toDateString(), 'source' => 'staff_entry', 'recorded_by' => $staff->id,
-        ]);
         $customer->financialDeclarations()->create([
             'current_customer_key' => $customer->id, 'monthly_income_rm' => '0', 'wealth_sources' => [], 'declared_on' => today()->toDateString(), 'source' => 'staff_entry', 'recorded_by' => $staff->id,
         ]);
