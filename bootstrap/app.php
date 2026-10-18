@@ -19,6 +19,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => EnsureUserIsAdmin::class,
         ]);
 
+        $middleware->trustProxies(at: '*');
+
         $middleware->redirectGuestsTo('/login');
         $middleware->redirectUsersTo('/customers');
     })
