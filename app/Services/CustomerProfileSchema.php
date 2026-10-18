@@ -26,6 +26,28 @@ class CustomerProfileSchema
 
     public const PRODUCTS = ['local_equities' => 'Local Equities Trading', 'foreign_equities' => 'Foreign Equities Trading', 'short_term_share_margin' => 'Retail Equity — Short-Term Share Margin Financing', 'share_margin' => 'Retail Equity — Share Margin Financing', 'other' => 'Other'];
 
+    public static function personalAnnualBracketFromMonthly(mixed $monthlyIncome): ?string
+    {
+        if ($monthlyIncome === '' || $monthlyIncome === null) {
+            return null;
+        }
+
+        if (! is_scalar($monthlyIncome) || ! preg_match('/^\d{1,13}(\.\d{1,2})?$/', (string) $monthlyIncome)) {
+            return null;
+        }
+
+        $annualIncome = (float) $monthlyIncome * 12;
+
+        return match (true) {
+            $annualIncome <= 30000 => 'up_to_30000',
+            $annualIncome <= 60000 => '30001_60000',
+            $annualIncome <= 120000 => '60001_120000',
+            $annualIncome <= 180000 => '120001_180000',
+            $annualIncome <= 300000 => '180001_300000',
+            default => 'over_300000',
+        };
+    }
+
     public static function options(string $key): array
     {
         return match ($key) {

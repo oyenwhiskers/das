@@ -33,6 +33,21 @@ class CustomerFinancialDeclarationTest extends TestCase
         }
     }
 
+    public function test_saving_monthly_income_without_annual_bracket_fills_the_suggested_range(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->create();
+
+        Livewire::actingAs($staff)->test(Financial::class, ['customer' => $customer])
+            ->call('edit')
+            ->set('financial.monthly_income_rm', '3000.00')
+            ->set('financial.personal_annual_income_bracket', '')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertSame('30001_60000', $customer->financialDeclarations()->firstOrFail()->personal_annual_income_bracket);
+    }
+
     public function test_staff_can_correct_the_suggested_annual_income_bracket(): void
     {
         $staff = User::factory()->staff()->create();

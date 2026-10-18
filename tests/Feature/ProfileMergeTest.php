@@ -451,6 +451,26 @@ class ProfileMergeTest extends TestCase
         $this->assertSame(1, Customer::query()->where('full_legal_name', 'MAKHAZAN BIN MAHMUD')->count());
     }
 
+    public function test_merging_monthly_income_also_sets_the_personal_annual_bracket(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->create([
+            'full_legal_name' => 'Salary Customer',
+            'race' => 'Malay',
+            'country_of_residence' => 'Malaysia',
+        ]);
+        [, $profile] = $this->reviewed($customer->full_legal_name, [
+            $this->value('financial.monthly_income_rm', '3000.00'),
+            $this->value('financial.declared_on', today()->toDateString()),
+        ]);
+
+        $this->commit($staff, $profile, $customer);
+
+        $financial = $customer->financialDeclarations()->where('current_customer_key', $customer->id)->firstOrFail();
+        $this->assertSame('3000.00', $financial->monthly_income_rm);
+        $this->assertSame('30001_60000', $financial->personal_annual_income_bracket);
+    }
+
     public function test_auto_match_all_recommends_creating_an_unknown_applicant(): void
     {
         $staff = User::factory()->staff()->create();

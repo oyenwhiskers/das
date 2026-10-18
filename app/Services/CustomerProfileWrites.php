@@ -621,6 +621,12 @@ class CustomerProfileWrites
             'financial.declared_on' => ['required', 'date', 'before_or_equal:today'],
             'financial.source' => ['required', Rule::in(['staff_entry', 'customer_attestation'])],
         ])->validate()['financial'];
+        if (blank($data['personal_annual_income_bracket'] ?? null)) {
+            $suggested = CustomerProfileSchema::personalAnnualBracketFromMonthly($data['monthly_income_rm'] ?? null);
+            if ($suggested !== null) {
+                $data['personal_annual_income_bracket'] = $suggested;
+            }
+        }
         $sources = array_values(array_unique($data['wealth_sources'] ?? []));
         if (in_array('other', $sources, true) && blank(trim((string) ($data['other_wealth_source'] ?? '')))) {
             $this->fail('financial.other_wealth_source', 'Specify the other source of wealth or funds.');
