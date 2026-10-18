@@ -18,6 +18,7 @@ chmod -R ug+rwx storage bootstrap/cache
 # Cloud SQL is only reachable after Dokploy starts the container, so migrate here rather than during image build.
 if [ "${1:-}" = "frankenphp" ]; then
     php artisan migrate --force
+    php artisan db:seed --force
 
     i=1
     worker_pids=""

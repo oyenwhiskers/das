@@ -1,6 +1,6 @@
 # DAS production deployment
 
-Dokploy builds this repository from the `Dockerfile` and injects environment variables at runtime. The image does not contain `.env`, `APP_KEY`, or database passwords. Each start of the web container runs `php artisan migrate --force`, then FrankenPHP and five queue workers. The image build itself does not migrate: Cloud SQL is not available while Dokploy is building the image.
+Dokploy builds this repository from the `Dockerfile` and injects environment variables at runtime. The image does not contain `.env`, `APP_KEY`, or database passwords. Each start of the web container runs `php artisan migrate --force` and `php artisan db:seed --force`, then FrankenPHP and five queue workers. The image build itself does not migrate or seed: Cloud SQL is not available while Dokploy is building the image.
 
 ## Image
 
@@ -78,13 +78,7 @@ php artisan schedule:work
 
 ## First deployment
 
-The web container migrates on startup. Seed once, by hand, when the admin user does not exist yet:
-
-```
-php artisan db:seed --force
-```
-
-`ADMIN_NAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` are read by the seeder.
+The web container migrates and seeds on startup. `DatabaseSeeder` only runs `AdminUserSeeder`, which creates or updates the user from `ADMIN_NAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD`. Every restart sets that account's password back to `ADMIN_PASSWORD`.
 
 Optional, after the environment is confirmed:
 

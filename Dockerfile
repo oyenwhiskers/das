@@ -88,6 +88,6 @@ EXPOSE 80
 
 STOPSIGNAL SIGTERM
 
-# entrypoint.sh migrates, starts 5 queue workers, then FrankenPHP
+# entrypoint.sh migrates, seeds, starts 5 queue workers, then FrankenPHP
 ENTRYPOINT ["entrypoint.sh"]
 CMD ["frankenphp", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
