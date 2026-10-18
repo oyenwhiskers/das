@@ -1,0 +1,567 @@
+{
+    "document": "tests/Fixtures/round1/synthetic-application.pdf",
+    "sha256": "4514733b7327f1fb8abc8be78829714d013cb993d9e991d9244206818d4b8d42",
+    "pages": 4,
+    "applicant": "Farah Nadia binti Zulkifli",
+    "expected_primary_applicant_count": 1,
+    "form_reference_printed": "APP-441908",
+    "form_reference_note": "Printed on every page. It is not a Customer Profile field and must not be stored as an identification number.",
+    "values": [
+        {
+            "field_id": "customer.salutation",
+            "value": "Ms",
+            "page": 1,
+            "owner": "applicant",
+            "printed": "Ms"
+        },
+        {
+            "field_id": "customer.full_legal_name",
+            "value": "Farah Nadia binti Zulkifli",
+            "page": 1,
+            "owner": "applicant",
+            "printed": "Farah Nadia binti Zulkifli"
+        },
+        {
+            "field_id": "customer.date_of_birth",
+            "value": "1991-03-14",
+            "page": 1,
+            "owner": "applicant",
+            "printed": "14 March 1991"
+        },
+        {
+            "field_id": "customer.gender",
+            "value": "Female",
+            "page": 1,
+            "owner": "applicant",
+            "printed": "Female"
+        },
+        {
+            "field_id": "customer.nationality",
+            "value": "Malaysian",
+            "page": 1,
+            "owner": "applicant",
+            "printed": "Malaysian"
+        },
+        {
+            "field_id": "customer.country_of_residence",
+            "value": "Malaysia",
+            "page": 1,
+            "owner": "applicant",
+            "printed": "Malaysia"
+        },
+        {
+            "field_id": "customer.race",
+            "value": "Malay",
+            "page": 1,
+            "owner": "applicant",
+            "printed": "Malay"
+        },
+        {
+            "field_id": "customer.marital_status",
+            "value": "Married",
+            "page": 1,
+            "owner": "applicant",
+            "printed": "Married"
+        },
+        {
+            "field_id": "primary_identification.type",
+            "value": "nric",
+            "page": 1,
+            "owner": "applicant",
+            "printed": "NRIC"
+        },
+        {
+            "field_id": "primary_identification.number",
+            "value": "910314-10-5528",
+            "page": 1,
+            "owner": "applicant",
+            "printed": "910314-10-5528"
+        },
+        {
+            "field_id": "contacts[mobile].value",
+            "value": "012-8834419",
+            "page": 1,
+            "owner": "applicant",
+            "printed": "012-8834419"
+        },
+        {
+            "field_id": "contacts[email].value",
+            "value": "farah.nadia@example.net",
+            "page": 1,
+            "owner": "applicant",
+            "printed": "farah.nadia@example.net"
+        },
+        {
+            "field_id": "addresses[residential].line_1",
+            "value": "18 Jalan Teratai 3",
+            "page": 1,
+            "owner": "applicant",
+            "printed": "18 Jalan Teratai 3"
+        },
+        {
+            "field_id": "addresses[residential].line_2",
+            "value": "Taman Seri Maya",
+            "page": 1,
+            "owner": "applicant",
+            "printed": "Taman Seri Maya"
+        },
+        {
+            "field_id": "addresses[residential].city",
+            "value": "Petaling Jaya",
+            "page": 1,
+            "owner": "applicant",
+            "printed": "Petaling Jaya"
+        },
+        {
+            "field_id": "addresses[residential].state",
+            "value": "Selangor",
+            "page": 1,
+            "owner": "applicant",
+            "printed": "Selangor"
+        },
+        {
+            "field_id": "addresses[residential].postcode",
+            "value": "47301",
+            "page": 1,
+            "owner": "applicant",
+            "printed": "47301"
+        },
+        {
+            "field_id": "addresses[residential].country",
+            "value": "Malaysia",
+            "page": 1,
+            "owner": "applicant",
+            "printed": "Malaysia"
+        },
+        {
+            "field_id": "addresses[residential].occupancy_status",
+            "value": "owned",
+            "page": 1,
+            "owner": "applicant",
+            "printed": "[X] Owned"
+        },
+        {
+            "field_id": "addresses[mailing].same_as_residential",
+            "value": true,
+            "page": 1,
+            "owner": "applicant",
+            "printed": "[X] Yes"
+        },
+        {
+            "field_id": "customer.employment_status",
+            "value": "employed",
+            "page": 2,
+            "owner": "applicant",
+            "printed": "[X] Employed"
+        },
+        {
+            "field_id": "employments[].arrangement",
+            "value": "employee",
+            "page": 2,
+            "owner": "applicant",
+            "printed": "[X] Employee"
+        },
+        {
+            "field_id": "employments[].occupation",
+            "value": "Accounts Executive",
+            "page": 2,
+            "owner": "applicant",
+            "printed": "Accounts Executive"
+        },
+        {
+            "field_id": "employments[].employer_name",
+            "value": "Northwind Ledger Sdn Bhd",
+            "page": 2,
+            "owner": "applicant",
+            "printed": "Northwind Ledger Sdn Bhd"
+        },
+        {
+            "field_id": "employments[].registration_number",
+            "value": "202204418833",
+            "page": 2,
+            "owner": "applicant",
+            "printed": "202204418833"
+        },
+        {
+            "field_id": "employments[].industry",
+            "value": "Professional Services",
+            "page": 2,
+            "owner": "applicant",
+            "printed": "Professional Services"
+        },
+        {
+            "field_id": "employments[].sub_industry",
+            "value": "Accounting",
+            "page": 2,
+            "owner": "applicant",
+            "printed": "Accounting"
+        },
+        {
+            "field_id": "employments[].start_date",
+            "value": "2019-05-02",
+            "page": 2,
+            "owner": "applicant",
+            "printed": "2 May 2019"
+        },
+        {
+            "field_id": "employments[].is_current",
+            "value": true,
+            "page": 2,
+            "owner": "applicant",
+            "printed": "[X] Yes"
+        },
+        {
+            "field_id": "employments[].is_primary",
+            "value": true,
+            "page": 2,
+            "owner": "applicant",
+            "printed": "[X] Yes"
+        },
+        {
+            "field_id": "employments[].general_telephone",
+            "value": "03-77214400",
+            "page": 2,
+            "owner": "applicant",
+            "printed": "03-77214400"
+        },
+        {
+            "field_id": "employments[].address_line_1",
+            "value": "Level 8, Menara Nadi",
+            "page": 2,
+            "owner": "applicant",
+            "printed": "Level 8, Menara Nadi"
+        },
+        {
+            "field_id": "employments[].address_line_2",
+            "value": "22 Jalan Ampang",
+            "page": 2,
+            "owner": "applicant",
+            "printed": "22 Jalan Ampang"
+        },
+        {
+            "field_id": "employments[].city",
+            "value": "Kuala Lumpur",
+            "page": 2,
+            "owner": "applicant",
+            "printed": "Kuala Lumpur"
+        },
+        {
+            "field_id": "employments[].state",
+            "value": "Kuala Lumpur",
+            "page": 2,
+            "owner": "applicant",
+            "printed": "Kuala Lumpur"
+        },
+        {
+            "field_id": "employments[].postcode",
+            "value": "50450",
+            "page": 2,
+            "owner": "applicant",
+            "printed": "50450"
+        },
+        {
+            "field_id": "employments[].country",
+            "value": "Malaysia",
+            "page": 2,
+            "owner": "applicant",
+            "printed": "Malaysia"
+        },
+        {
+            "field_id": "bank_accounts[].bank_name",
+            "value": "Horizon Trust Bank",
+            "page": 3,
+            "owner": "applicant",
+            "printed": "Horizon Trust Bank"
+        },
+        {
+            "field_id": "bank_accounts[].bank_country",
+            "value": "Malaysia",
+            "page": 3,
+            "owner": "applicant",
+            "printed": "Malaysia"
+        },
+        {
+            "field_id": "bank_accounts[].branch_address",
+            "value": "4 Jalan Bukit Bintang, Kuala Lumpur",
+            "page": 3,
+            "owner": "applicant",
+            "printed": "4 Jalan Bukit Bintang, Kuala Lumpur"
+        },
+        {
+            "field_id": "bank_accounts[].account_type",
+            "value": "savings",
+            "page": 3,
+            "owner": "applicant",
+            "printed": "[X] Savings"
+        },
+        {
+            "field_id": "bank_accounts[].account_number",
+            "value": "8802143391",
+            "page": 3,
+            "owner": "applicant",
+            "printed": "8802143391"
+        },
+        {
+            "field_id": "bank_accounts[].account_holder_name",
+            "value": "Farah Nadia binti Zulkifli",
+            "page": 3,
+            "owner": "applicant",
+            "printed": "Farah Nadia binti Zulkifli"
+        },
+        {
+            "field_id": "bank_accounts[].ownership",
+            "value": "sole",
+            "page": 3,
+            "owner": "applicant",
+            "printed": "[X] Sole"
+        },
+        {
+            "field_id": "bank_accounts[].is_primary",
+            "value": true,
+            "page": 3,
+            "owner": "applicant",
+            "printed": "[X] Yes"
+        },
+        {
+            "field_id": "bank_accounts[].is_active",
+            "value": true,
+            "page": 3,
+            "owner": "applicant",
+            "printed": "[X] Yes"
+        },
+        {
+            "field_id": "financial.monthly_income_rm",
+            "value": "6400.00",
+            "page": 3,
+            "owner": "applicant",
+            "printed": "RM 6400.00"
+        },
+        {
+            "field_id": "financial.personal_annual_income_bracket",
+            "value": "60001_120000",
+            "page": 3,
+            "owner": "applicant",
+            "printed": "[X] RM60,001 - RM120,000"
+        },
+        {
+            "field_id": "financial.wealth_sources",
+            "value": [
+                "salary"
+            ],
+            "page": 3,
+            "owner": "applicant",
+            "printed": "[X] Salary"
+        },
+        {
+            "field_id": "financial.declared_on",
+            "value": "2026-01-12",
+            "page": 3,
+            "owner": "applicant",
+            "printed": "12 January 2026"
+        },
+        {
+            "field_id": "relationships[].relationship",
+            "value": "spouse",
+            "page": 4,
+            "owner": "related_person",
+            "printed": "[X] Spouse"
+        },
+        {
+            "field_id": "relationships[].is_next_of_kin",
+            "value": true,
+            "page": 4,
+            "owner": "related_person",
+            "printed": "[X] Yes"
+        },
+        {
+            "field_id": "relationships[].is_primary_next_of_kin",
+            "value": true,
+            "page": 4,
+            "owner": "related_person",
+            "printed": "[X] Yes"
+        },
+        {
+            "field_id": "relationships[].related_person.full_legal_name",
+            "value": "Hakim Iskandar bin Rahman",
+            "page": 4,
+            "owner": "related_person",
+            "printed": "Hakim Iskandar bin Rahman"
+        },
+        {
+            "field_id": "relationships[].related_person.identification_type",
+            "value": "nric",
+            "page": 4,
+            "owner": "related_person",
+            "printed": "NRIC"
+        },
+        {
+            "field_id": "relationships[].related_person.identification_number",
+            "value": "880621-14-3317",
+            "page": 4,
+            "owner": "related_person",
+            "printed": "880621-14-3317"
+        },
+        {
+            "field_id": "relationships[].related_person.date_of_birth",
+            "value": "1988-06-21",
+            "page": 4,
+            "owner": "related_person",
+            "printed": "21 June 1988"
+        },
+        {
+            "field_id": "relationships[].related_person.gender",
+            "value": "Male",
+            "page": 4,
+            "owner": "related_person",
+            "printed": "Male"
+        },
+        {
+            "field_id": "relationships[].related_person.nationality",
+            "value": "Malaysian",
+            "page": 4,
+            "owner": "related_person",
+            "printed": "Malaysian"
+        },
+        {
+            "field_id": "relationships[].related_person.mobile",
+            "value": "019-5527781",
+            "page": 4,
+            "owner": "related_person",
+            "printed": "019-5527781"
+        },
+        {
+            "field_id": "brokerage_declaration.answer",
+            "value": "no",
+            "page": 4,
+            "owner": "applicant",
+            "explicit_negative": true,
+            "printed": "[X] No"
+        },
+        {
+            "field_id": "compliance[pep].answer",
+            "value": "no",
+            "page": 4,
+            "owner": "applicant",
+            "explicit_negative": true,
+            "printed": "[X] No"
+        },
+        {
+            "field_id": "fatca.us_person_for_tax",
+            "value": "no",
+            "page": 4,
+            "owner": "applicant",
+            "explicit_negative": true,
+            "printed": "[X] No"
+        }
+    ],
+    "explicit_negatives": [
+        "brokerage_declaration.answer",
+        "compliance[pep].answer",
+        "fatca.us_person_for_tax"
+    ],
+    "related_person": {
+        "owner": "related_person",
+        "relationship": "spouse",
+        "full_legal_name": "Hakim Iskandar bin Rahman",
+        "must_not_be_primary_applicant": true
+    },
+    "unanswered": [
+        {
+            "field_id": "primary_identification.old_nric",
+            "page": 1,
+            "reason": "Line left blank"
+        },
+        {
+            "field_id": "contacts[home].value",
+            "page": 1,
+            "reason": "Line left blank"
+        },
+        {
+            "field_id": "employments[].direct_telephone",
+            "page": 2,
+            "reason": "Line left blank"
+        },
+        {
+            "field_id": "employments[].fax",
+            "page": 2,
+            "reason": "Line left blank"
+        },
+        {
+            "field_id": "relationships[].related_person.home_telephone",
+            "page": 4,
+            "reason": "Line left blank"
+        },
+        {
+            "field_id": "relationships[].related_person.email",
+            "page": 4,
+            "reason": "Line left blank"
+        },
+        {
+            "field_id": "relationships[].related_person.occupation",
+            "page": 4,
+            "reason": "Line left blank"
+        },
+        {
+            "field_id": "relationships[].related_person.employer_name",
+            "page": 4,
+            "reason": "Line left blank"
+        },
+        {
+            "field_id": "compliance[bankruptcy].answer",
+            "page": 4,
+            "reason": "Yes and No are both unticked"
+        },
+        {
+            "field_id": "compliance[petition].answer",
+            "page": 4,
+            "reason": "Yes and No are both unticked"
+        },
+        {
+            "field_id": "fatca.us_green_card_holder",
+            "page": 4,
+            "reason": "Yes and No are both unticked"
+        },
+        {
+            "field_id": "fatca.us_resident",
+            "page": 4,
+            "reason": "Yes and No are both unticked"
+        },
+        {
+            "field_id": "fatca.selected_classification",
+            "page": 4,
+            "reason": "US person and Non-US person are both unticked"
+        },
+        {
+            "field_id": "tax_identification.malaysian_tin",
+            "page": 4,
+            "reason": "Line left blank"
+        },
+        {
+            "field_id": "financial.joint_annual_income_bracket",
+            "page": 4,
+            "reason": "No joint-income box is ticked"
+        },
+        {
+            "field_id": "financial.net_asset_bracket",
+            "page": 4,
+            "reason": "No net-asset box is ticked"
+        },
+        {
+            "field_id": "financial.portfolio_bracket",
+            "page": 4,
+            "reason": "No portfolio box is ticked"
+        }
+    ],
+    "must_not_infer": [
+        "Hakim Iskandar bin Rahman is the spouse and next of kin, not a second primary applicant.",
+        "Northwind Ledger Sdn Bhd is the employer, not an applicant.",
+        "The bank account holder name repeats the applicant and does not create another person.",
+        "Do not copy Accounts Executive or Northwind Ledger Sdn Bhd onto the related person.",
+        "Do not fill joint annual income from marital status Married.",
+        "Do not store an unticked bankruptcy, petition, green card, or US resident answer as no or not_declared.",
+        "Do not store FATCA classification as non_us_person because US person for tax is No.",
+        "Do not copy the residential address into mailing address lines. Only the same-as-residential Yes is answered.",
+        "Do not treat APP-441908 as an NRIC or as a Customer Profile field.",
+        "Do not add wealth sources other than salary."
+    ]
+}

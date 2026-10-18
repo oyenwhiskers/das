@@ -1,0 +1,5 @@
+# Phase 6 synthetic verification
+
+Feature tests chain the existing fake Gemini HTTP path through profile extraction, review, and merge. They cover one applicant with a related person, nine applicants where only the chosen profile merges, one applicant whose values arrive on separate page batches, a staff choice of an existing child row, and sequential enrichment of one customer from separate reviewed profiles. Fill only empty leaves `false`, `0`, and explicit `no` in place, and a later profile does not invent a field it omitted. Overwrite, same-key replay, bank-account identity, a mismatched customer, a stale preview, a rolled-back invalid declaration, inactive staff, masked activity text, and unchanged `DocumentFindingsV1` are asserted.
+
+No live Gemini call was made. Token cost and model accuracy were not measured. Replace Completely remains blocked pending a business-owner deletion policy. Older scans without a schema hash, the serial 3600-second profile job, and production worker timeout were left unchanged.

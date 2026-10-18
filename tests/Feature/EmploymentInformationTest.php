@@ -1,0 +1,190 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Livewire\Customers\WorkFinance;
+use App\Models\Customer;
+use App\Models\User;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
+use Tests\TestCase;
+
+class EmploymentInformationTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_status_changes_preserve_history_and_retirement_information(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($staff, 'creator')->create();
+        $component = Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer]);
+
+        $component->call('editStatus')->set('employmentStatus', 'employed')->call('saveStatus')->assertHasNoErrors();
+        $component->call('add')->set('form.occupation', 'Engineer')->set('form.employer_name', 'ABC Sdn Bhd')
+            ->set('form.is_primary', true)->call('save')->assertHasNoErrors();
+        $job = $customer->employments()->firstOrFail();
+        $component->call('edit', $job->id)->set('form.is_current', false)->set('form.end_date', '2026-10-01')
+            ->call('save')->assertHasNoErrors();
+        $component->call('editStatus')->set('employmentStatus', 'retired')->set('retirementDate', '2026-10-02')
+            ->call('saveStatus')->assertHasNoErrors();
+
+        $this->assertSame('retired', $customer->fresh()->employment_status);
+        $this->assertSame('2026-10-02', $customer->fresh()->retirement_date->toDateString());
+        $this->assertFalse($job->fresh()->is_current);
+        $this->assertFalse($job->fresh()->is_primary);
+        $this->assertSame(1, $customer->employments()->count());
+        $this->assertTrue($customer->activities()->where('action', 'employment_ended')->exists());
+
+        $component->call('editStatus')->set('employmentStatus', 'unemployed')->call('saveStatus')->assertHasNoErrors();
+        $this->assertSame(1, $customer->employments()->count());
+        $this->assertSame('2026-10-02', $customer->fresh()->retirement_date->toDateString());
+    }
+
+    public function test_concurrent_jobs_require_confirmation_to_change_primary(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($staff, 'creator')->create();
+        $component = Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer]);
+
+        $component->call('add')->set('form.employer_name', 'First')->set('form.is_primary', true)->call('save')->assertHasNoErrors();
+        $first = $customer->employments()->firstOrFail();
+        $component->call('add')->set('form.employer_name', 'Second')->set('form.is_primary', true)
+            ->call('save')->assertHasErrors('form.is_primary');
+        $this->assertSame(1, $customer->employments()->count());
+        $component->set('confirmPrimaryReplacement', true)->call('save')->assertHasNoErrors();
+
+        $this->assertSame(2, $customer->employments()->count());
+        $this->assertFalse($first->fresh()->is_primary);
+        $this->assertTrue($customer->employments()->where('employer_name', 'Second')->firstOrFail()->is_primary);
+    }
+
+    public function test_validation_rejects_invalid_dates_and_current_end_date(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($staff, 'creator')->create();
+        $component = Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer]);
+
+        $component->call('add')->set('form.arrangement', 'employee')->set('form.start_date', '2026-10-02')->set('form.is_current', false)
+            ->set('form.end_date', '2026-10-01')->call('save')->assertHasErrors('form.end_date');
+        $component->set('form.is_current', true)->set('form.end_date', '2026-10-03')
+            ->call('save')->assertHasErrors('form.end_date');
+        $this->assertSame(0, $customer->employments()->count());
+    }
+
+    public function test_inactive_staff_cannot_access_employment_and_cross_customer_record_is_hidden(): void
+    {
+        $inactive = User::factory()->staff()->inactive()->create();
+        $customer = Customer::factory()->create();
+        Livewire::actingAs($inactive)->test(WorkFinance::class, ['customer' => $customer])->assertForbidden();
+
+        $staff = User::factory()->staff()->create();
+        $other = Customer::factory()->create();
+        $job = $other->employments()->create(['employer_name' => 'Private']);
+        $this->expectException(ModelNotFoundException::class);
+        Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer])->call('edit', $job->id);
+    }
+
+    public function test_self_employment_can_be_saved_without_an_employer_and_viewed_in_profile(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($staff, 'creator')->create();
+
+        Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer])
+            ->call('editStatus')->set('employmentStatus', 'self_employed')->call('saveStatus')->assertHasNoErrors()
+            ->call('add')->set('form.arrangement', 'self_employed')->set('form.occupation', 'Consultant')
+            ->set('form.registration_number', '202601234567')->set('form.city', 'Kuala Lumpur')
+            ->call('save')->assertHasNoErrors()->assertSee('Consultant');
+
+        $this->assertNull($customer->employments()->firstOrFail()->employer_name);
+        $this->actingAs($staff)->get(route('customers.show', $customer).'?tab=work')
+            ->assertOk()->assertSee('Work Information')->assertSee('Employment Status')->assertSee('Employment History');
+    }
+
+    public function test_other_status_requires_description_and_corrections_are_logged(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($staff, 'creator')->create();
+        $component = Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer]);
+
+        $component->call('editStatus')->set('employmentStatus', 'other')->call('saveStatus')
+            ->assertHasErrors('employmentStatusOther');
+        $component->set('employmentStatusOther', 'Student')->call('saveStatus')->assertHasNoErrors();
+        $component->call('add')->set('form.employer_name', 'Acme')->call('save')->assertHasNoErrors();
+        $job = $customer->employments()->firstOrFail();
+        $component->call('edit', $job->id)->set('form.employer_name', 'ACME')->set('isCorrection', true)
+            ->call('save')->assertHasNoErrors();
+
+        $this->assertSame('Student', $customer->fresh()->employment_status_other);
+        $this->assertSame('ACME', $job->fresh()->employer_name);
+        $this->assertTrue($customer->activities()->where('action', 'employment_record_corrected')->exists());
+    }
+
+    public function test_empty_record_and_invalid_contact_details_are_rejected(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($staff, 'creator')->create();
+        $component = Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer]);
+
+        $component->call('add')->call('save')->assertHasErrors('form.occupation');
+        $component->set('form.occupation', 'Engineer')->set('form.general_telephone', 'invalid')
+            ->call('save')->assertHasErrors('form.general_telephone');
+        $this->assertSame(0, $customer->employments()->count());
+    }
+
+    public function test_employment_history_stays_visible_while_adding_and_viewing_records(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($staff, 'creator')->create();
+        $previous = $customer->employments()->create([
+            'occupation' => 'Analyst',
+            'employer_name' => 'Former Company',
+            'start_date' => '2020-01-01',
+            'end_date' => '2022-12-31',
+            'is_current' => false,
+        ]);
+        $customer->employments()->create([
+            'occupation' => 'Manager',
+            'employer_name' => 'Current Company',
+            'start_date' => '2023-01-01',
+            'is_current' => true,
+        ]);
+
+        $component = Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer]);
+
+        $component->assertSeeInOrder(['Current employment', 'Current Company', 'Previous employment', 'Former Company'])
+            ->call('add')
+            ->assertSee('Add employment')
+            ->assertSee('Current Company')
+            ->assertSee('Former Company')
+            ->assertSee('role="dialog"', escape: false)
+            ->call('cancel')
+            ->call('view', $previous->id)
+            ->assertSee('Former Company')
+            ->assertSee('Current Company')
+            ->assertSee('employment-details-title');
+    }
+
+    public function test_status_card_and_history_card_keep_editor_and_employment_order_clear(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($staff, 'creator')->create();
+        $customer->employments()->create(['employer_name' => 'Former Company', 'is_current' => false, 'start_date' => '2024-01-01']);
+        $customer->employments()->create(['employer_name' => 'Other Current Company', 'is_current' => true, 'start_date' => '2026-01-01']);
+        $customer->employments()->create(['employer_name' => 'Primary Company', 'is_current' => true, 'is_primary' => true, 'start_date' => '2025-01-01']);
+
+        $component = Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer]);
+
+        $component->assertSeeInOrder(['Employment Status', 'Not specified', 'Change', 'Employment History', '+ Add Employment', 'Primary Company', 'Other Current Company', 'Former Company'])
+            ->assertSee('aria-label="Employment Status"', escape: false)
+            ->assertDontSee('Employment Information')
+            ->assertDontSee('id="employment-status"', escape: false)
+            ->call('editStatus')
+            ->assertSee('id="employment-status"', escape: false)
+            ->assertSee('Save Status')
+            ->assertSee('Cancel')
+            ->call('cancel')
+            ->assertDontSee('id="employment-status"', escape: false)
+            ->assertSee('+ Add Employment');
+    }
+}

@@ -1,0 +1,1904 @@
+{
+  "catalog_id": "bimb_individual_trading_feb2025_reference",
+  "catalog_version": "draft-1.0",
+  "reference_form": {
+    "title": "BIMB Securities Trading Account Application Form - Individual",
+    "version": "V.February 2025",
+    "total_pages": 14,
+    "fillable_pages": "1-8",
+    "terms_pages": "9-14"
+  },
+  "important": "Reference catalog prepared from attached form; field IDs are proposed canonical IDs and MUST be mapped to actual DAS repository field IDs/enums. Do not claim current database supports these IDs. No AI accuracy has been verified.",
+  "usage": {
+    "separate_customer_profile_from_application_office_and_evidence": true,
+    "retain_all_unmapped_information": true,
+    "initial_customer_link": null,
+    "mark_states": [
+      "selected",
+      "unselected",
+      "ambiguous",
+      "unreadable"
+    ],
+    "value_states": [
+      "provided",
+      "not_provided",
+      "explicit_no",
+      "not_applicable",
+      "ambiguous",
+      "unreadable"
+    ],
+    "owner_requirement": "A fact has both a logical applicant record and an entity role/identifier; do not assign related-person facts to the applicant.",
+    "merge_requirement": "Never change customer data until staff selects customer, strategy, reviews diff and confirms.",
+    "source_requirement": "Each populated field must carry document ID, page, evidence reference and observed raw text/mark."
+  },
+  "fields": [
+    {
+      "field_id": "application.client_code",
+      "label": "Client Code",
+      "description": "BSSB-assigned client code shown in office-use header; not the applicant’s NRIC.",
+      "source": {
+        "page": 1,
+        "section": "P1 — Account Type / Dealer Verification / FATCA & CRS"
+      },
+      "destination_scope": "office_use",
+      "value_type": "string"
+    },
+    {
+      "field_id": "application.rmr_dlr_code",
+      "label": "RMR/DLR Code",
+      "description": "Dealer or marketing/trading representative code in office-use header.",
+      "source": {
+        "page": 1,
+        "section": "P1 — Account Type / Dealer Verification / FATCA & CRS"
+      },
+      "destination_scope": "office_use",
+      "value_type": "string"
+    },
+    {
+      "field_id": "application.account_type",
+      "label": "Type of account",
+      "description": "Which account application type is expressly selected. Preserve printed account options.",
+      "source": {
+        "page": 1,
+        "section": "P1 — Account Type / Dealer Verification / FATCA & CRS"
+      },
+      "destination_scope": "application",
+      "value_type": "multi_enum",
+      "printed_options": [
+        "Trading Account",
+        "Margin Account"
+      ]
+    },
+    {
+      "field_id": "application.margin_credit_limit_applied",
+      "label": "Margin account / credit limit applied for",
+      "description": "Requested credit limit expressed in Malaysian ringgit, only if written.",
+      "source": {
+        "page": 1,
+        "section": "P1 — Account Type / Dealer Verification / FATCA & CRS"
+      },
+      "destination_scope": "application",
+      "value_type": "money"
+    },
+    {
+      "field_id": "application.applicant_verification_mode",
+      "label": "Applicant verification by DR",
+      "description": "Whether application was verified face to face or non-face-to-face.",
+      "source": {
+        "page": 1,
+        "section": "P1 — Account Type / Dealer Verification / FATCA & CRS"
+      },
+      "destination_scope": "application",
+      "value_type": "enum",
+      "printed_options": [
+        "Non Face-To-Face",
+        "Face to Face"
+      ]
+    },
+    {
+      "field_id": "tax.malaysian_tin",
+      "label": "Malaysian TIN",
+      "description": "Taxpayer Identification Number for Malaysian taxpayer; do not substitute NRIC.",
+      "source": {
+        "page": 1,
+        "section": "P1 — Account Type / Dealer Verification / FATCA & CRS"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "string"
+    },
+    {
+      "field_id": "tax.us_person_for_irs",
+      "label": "US person for US tax purposes",
+      "description": "Applicant answer to FATCA/CRS question 1.",
+      "source": {
+        "page": 1,
+        "section": "P1 — Account Type / Dealer Verification / FATCA & CRS"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "yes_no"
+    },
+    {
+      "field_id": "tax.us_green_card_holder",
+      "label": "US permanent resident card",
+      "description": "Applicant answer to whether they hold a US Permanent Resident Card (Green Card).",
+      "source": {
+        "page": 1,
+        "section": "P1 — Account Type / Dealer Verification / FATCA & CRS"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "yes_no"
+    },
+    {
+      "field_id": "tax.us_resident",
+      "label": "US resident",
+      "description": "Applicant answer to whether they are a US resident.",
+      "source": {
+        "page": 1,
+        "section": "P1 — Account Type / Dealer Verification / FATCA & CRS"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "yes_no"
+    },
+    {
+      "field_id": "tax.us_person_classification_marked",
+      "label": "US/Non-US classification",
+      "description": "Explicitly ticked US Person or Non US Person classification; do not infer tick from the three answers.",
+      "source": {
+        "page": 1,
+        "section": "P1 — Account Type / Dealer Verification / FATCA & CRS"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "enum",
+      "printed_options": [
+        "Non US Person",
+        "US Person"
+      ]
+    },
+    {
+      "field_id": "tax.no_tin_reason_boxes",
+      "label": "No TIN reasons (marked)",
+      "description": "The separately printed Reason A, Reason B and Reason C checkboxes above the jurisdiction table; retain actual visual mark states without assuming all apply to all jurisdictions.",
+      "source": {
+        "page": 1,
+        "section": "P1 — Account Type / Dealer Verification / FATCA & CRS"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "multi_enum",
+      "printed_options": [
+        "Reason A",
+        "Reason B",
+        "Reason C"
+      ]
+    },
+    {
+      "field_id": "application.us_w9_instruction",
+      "label": "W-9 requirement reference",
+      "description": "Form instructs US persons to complete W-9; this is an instruction, not proof W-9 was completed.",
+      "source": {
+        "page": 1,
+        "section": "P1 — Account Type / Dealer Verification / FATCA & CRS"
+      },
+      "destination_scope": "document_evidence",
+      "value_type": "document_instruction"
+    },
+    {
+      "field_id": "tax.foreign_residencies",
+      "label": "Tax jurisdictions outside Malaysia",
+      "description": "One entry per declared non-Malaysian jurisdiction, retaining its TIN or reason if unavailable.",
+      "source": {
+        "page": 1,
+        "section": "P1 — Account Type / Dealer Verification / FATCA & CRS"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "object",
+      "repeatable": true,
+      "children": [
+        {
+          "key": "country_of_tax_residence",
+          "description": "Jurisdiction/country where account holder is tax resident outside Malaysia."
+        },
+        {
+          "key": "tin",
+          "description": "TIN for that jurisdiction when provided."
+        },
+        {
+          "key": "missing_tin_reason",
+          "description": "Chosen A, B or C reason if a TIN is unavailable."
+        },
+        {
+          "key": "missing_tin_reason_b_explanation",
+          "description": "Written explanation for inability to obtain TIN when reason B is chosen."
+        }
+      ],
+      "notes": "Options: Reason A = jurisdiction does not issue TIN; Reason B = unable to obtain TIN; Reason C = TIN not required. Support additional sheets. Do not collapse distinct countries."
+    },
+    {
+      "field_id": "personal.salutation",
+      "label": "Salutation",
+      "description": "Applicant salutation/title as written.",
+      "source": {
+        "page": 2,
+        "section": "P2 — Section A Applicant Particulars / Section B Family"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "string"
+    },
+    {
+      "field_id": "personal.legal_name",
+      "label": "Name of applicant",
+      "description": "Applicant legal name as per NRIC/passport/registration document; excludes spouse/next of kin.",
+      "source": {
+        "page": 2,
+        "section": "P2 — Section A Applicant Particulars / Section B Family"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "string"
+    },
+    {
+      "field_id": "identification.current_nric_or_passport",
+      "label": "New NRIC/Passport/Registration No.",
+      "description": "Current applicant identification document number; preserve document type if determinable.",
+      "source": {
+        "page": 2,
+        "section": "P2 — Section A Applicant Particulars / Section B Family"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "string"
+    },
+    {
+      "field_id": "identification.old_nric",
+      "label": "Old NRIC",
+      "description": "Applicant old NRIC, not current NRIC or relative identifier.",
+      "source": {
+        "page": 2,
+        "section": "P2 — Section A Applicant Particulars / Section B Family"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "string"
+    },
+    {
+      "field_id": "personal.date_of_birth",
+      "label": "Date of birth",
+      "description": "Applicant date of birth from explicit entry, not inferred from NRIC.",
+      "source": {
+        "page": 2,
+        "section": "P2 — Section A Applicant Particulars / Section B Family"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "date"
+    },
+    {
+      "field_id": "personal.marital_status",
+      "label": "Marital status",
+      "description": "Applicant marital status selected in Section A.",
+      "source": {
+        "page": 2,
+        "section": "P2 — Section A Applicant Particulars / Section B Family"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "enum",
+      "printed_options": [
+        "Single",
+        "Married",
+        "Divorced"
+      ]
+    },
+    {
+      "field_id": "personal.nationality",
+      "label": "Nationality",
+      "description": "Malaysian selection or Other nationality specified by applicant.",
+      "source": {
+        "page": 2,
+        "section": "P2 — Section A Applicant Particulars / Section B Family"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "enum_or_other",
+      "printed_options": [
+        "Malaysian",
+        "Others"
+      ]
+    },
+    {
+      "field_id": "personal.country_of_residence",
+      "label": "Country of residence",
+      "description": "Applicant ordinary country of residence, not necessarily nationality or tax residence.",
+      "source": {
+        "page": 2,
+        "section": "P2 — Section A Applicant Particulars / Section B Family"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "string"
+    },
+    {
+      "field_id": "personal.gender",
+      "label": "Gender",
+      "description": "Applicant gender as selected.",
+      "source": {
+        "page": 2,
+        "section": "P2 — Section A Applicant Particulars / Section B Family"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "enum",
+      "printed_options": [
+        "Male",
+        "Female"
+      ]
+    },
+    {
+      "field_id": "personal.race",
+      "label": "Race",
+      "description": "Applicant race marked or stated under Others.",
+      "source": {
+        "page": 2,
+        "section": "P2 — Section A Applicant Particulars / Section B Family"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "enum_or_other",
+      "printed_options": [
+        "Malay",
+        "Chinese",
+        "Indian",
+        "Others"
+      ]
+    },
+    {
+      "field_id": "addresses.residential",
+      "label": "Resident address",
+      "description": "Applicant actual residential address including components.",
+      "source": {
+        "page": 2,
+        "section": "P2 — Section A Applicant Particulars / Section B Family"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "object",
+      "children": [
+        {
+          "key": "address_lines",
+          "description": "Residential street/unit/address text."
+        },
+        {
+          "key": "city",
+          "description": "Residential city."
+        },
+        {
+          "key": "state",
+          "description": "Residential state."
+        },
+        {
+          "key": "postcode",
+          "description": "Residential postal code as string."
+        },
+        {
+          "key": "country",
+          "description": "Residential country."
+        }
+      ]
+    },
+    {
+      "field_id": "addresses.property_status",
+      "label": "Property",
+      "description": "Residential property status, with separate Others explanation when selected.",
+      "source": {
+        "page": 2,
+        "section": "P2 — Section A Applicant Particulars / Section B Family"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "enum_or_other",
+      "printed_options": [
+        "Owned",
+        "Rented",
+        "Others"
+      ]
+    },
+    {
+      "field_id": "addresses.mailing",
+      "label": "Mailing address",
+      "description": "Applicant mailing address only if separately provided; blank does not authorize copying residential address.",
+      "source": {
+        "page": 2,
+        "section": "P2 — Section A Applicant Particulars / Section B Family"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "object",
+      "children": [
+        {
+          "key": "address_lines",
+          "description": "Mailing street/unit/address text."
+        },
+        {
+          "key": "city",
+          "description": "Mailing city."
+        },
+        {
+          "key": "state",
+          "description": "Mailing state."
+        },
+        {
+          "key": "postcode",
+          "description": "Mailing postcode."
+        },
+        {
+          "key": "country",
+          "description": "Mailing country."
+        }
+      ]
+    },
+    {
+      "field_id": "contact.home_phone",
+      "label": "Home telephone number",
+      "description": "Applicant home phone.",
+      "source": {
+        "page": 2,
+        "section": "P2 — Section A Applicant Particulars / Section B Family"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "string"
+    },
+    {
+      "field_id": "contact.mobile_phone",
+      "label": "Mobile telephone number",
+      "description": "Applicant mobile phone.",
+      "source": {
+        "page": 2,
+        "section": "P2 — Section A Applicant Particulars / Section B Family"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "string"
+    },
+    {
+      "field_id": "contact.email",
+      "label": "E-mail address",
+      "description": "Applicant e-mail as written.",
+      "source": {
+        "page": 2,
+        "section": "P2 — Section A Applicant Particulars / Section B Family"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "email"
+    },
+    {
+      "field_id": "contact.social_account",
+      "label": "Facebook/Instagram/Twitter account",
+      "description": "Account handles/social IDs provided by the applicant; do not invent platform if unclear.",
+      "source": {
+        "page": 2,
+        "section": "P2 — Section A Applicant Particulars / Section B Family"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "string"
+    },
+    {
+      "field_id": "relationships.spouse_or_next_of_kin",
+      "label": "Spouse or next-of-kin particulars",
+      "description": "Named related person; keep distinct from applicant and do not create another primary extracted profile.",
+      "source": {
+        "page": 2,
+        "section": "P2 — Section A Applicant Particulars / Section B Family"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "object",
+      "children": [
+        {
+          "key": "role",
+          "description": "Marked Spouse or Next of Kin."
+        },
+        {
+          "key": "relationship_specification",
+          "description": "Written relationship where next of kin, e.g. sibling."
+        },
+        {
+          "key": "legal_name",
+          "description": "Name of spouse/next of kin."
+        },
+        {
+          "key": "nric_or_passport",
+          "description": "Their identification number, NOT applicant identification."
+        },
+        {
+          "key": "date_of_birth",
+          "description": "Their date of birth."
+        },
+        {
+          "key": "employer_name_and_address",
+          "description": "Their employer/firm name and address."
+        },
+        {
+          "key": "employer_city",
+          "description": "Employer city."
+        },
+        {
+          "key": "employer_state",
+          "description": "Employer state."
+        },
+        {
+          "key": "employer_postcode",
+          "description": "Employer postcode."
+        },
+        {
+          "key": "employer_country",
+          "description": "Employer country."
+        },
+        {
+          "key": "occupation",
+          "description": "Their occupation."
+        },
+        {
+          "key": "home_phone",
+          "description": "Their home phone."
+        },
+        {
+          "key": "mobile_phone",
+          "description": "Their mobile phone."
+        },
+        {
+          "key": "email",
+          "description": "Their email."
+        }
+      ],
+      "notes": "Form explicitly notes: for next of kin, only name, relationship and contact number required. Do not require spouse-specific fields for a next-of-kin record."
+    },
+    {
+      "field_id": "compliance.related_to_bssb_staff",
+      "label": "Related to BSSB directors/employees/DR",
+      "description": "Whether applicant is related to any BSSB director, employee or dealer representative.",
+      "source": {
+        "page": 2,
+        "section": "P2 — Section A Applicant Particulars / Section B Family"
+      },
+      "destination_scope": "application",
+      "value_type": "yes_no"
+    },
+    {
+      "field_id": "compliance.bssb_staff_relatives",
+      "label": "Related BSSB directors/employees/DR details",
+      "description": "Details of related BSSB staff or representatives when yes; repeatable table.",
+      "source": {
+        "page": 2,
+        "section": "P2 — Section A Applicant Particulars / Section B Family"
+      },
+      "destination_scope": "application",
+      "value_type": "object",
+      "repeatable": true,
+      "children": [
+        {
+          "key": "row_no",
+          "description": "Printed No."
+        },
+        {
+          "key": "name",
+          "description": "Related director/employee/DR name."
+        },
+        {
+          "key": "relationship",
+          "description": "Relationship to applicant."
+        },
+        {
+          "key": "nric",
+          "description": "NRIC of the referenced person."
+        }
+      ]
+    },
+    {
+      "field_id": "compliance.related_to_bssb_clients",
+      "label": "Related to BSSB client",
+      "description": "Applicant answer to whether related to a client of BSSB.",
+      "source": {
+        "page": 3,
+        "section": "P3 — Family continued / Employment / Financial"
+      },
+      "destination_scope": "application",
+      "value_type": "yes_no"
+    },
+    {
+      "field_id": "compliance.bssb_client_relatives",
+      "label": "Related BSSB client details",
+      "description": "If yes, list every relevant person; repeatable table.",
+      "source": {
+        "page": 3,
+        "section": "P3 — Family continued / Employment / Financial"
+      },
+      "destination_scope": "application",
+      "value_type": "object",
+      "repeatable": true,
+      "children": [
+        {
+          "key": "row_no",
+          "description": "Printed No."
+        },
+        {
+          "key": "client_name",
+          "description": "Name of BSSB client."
+        },
+        {
+          "key": "relationship",
+          "description": "Relationship to applicant."
+        },
+        {
+          "key": "nric",
+          "description": "NRIC of BSSB client."
+        }
+      ]
+    },
+    {
+      "field_id": "employment.status",
+      "label": "Employment status",
+      "description": "Applicant status, not relative status; Others explanation where provided.",
+      "source": {
+        "page": 3,
+        "section": "P3 — Family continued / Employment / Financial"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "enum_or_other",
+      "printed_options": [
+        "Employed",
+        "Self-Employed",
+        "Retired",
+        "Others"
+      ]
+    },
+    {
+      "field_id": "employment.occupation_designation",
+      "label": "Occupation/Designation",
+      "description": "Applicant occupation or designation.",
+      "source": {
+        "page": 3,
+        "section": "P3 — Family continued / Employment / Financial"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "string"
+    },
+    {
+      "field_id": "employment.lth_group_employee",
+      "label": "Employee of LTH Group",
+      "description": "Explicit answer to LTH Group employee Yes/No.",
+      "source": {
+        "page": 3,
+        "section": "P3 — Family continued / Employment / Financial"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "yes_no"
+    },
+    {
+      "field_id": "employment.employer_name",
+      "label": "Employer/Firm",
+      "description": "Applicant employer/firm; for retired people form requests last employer.",
+      "source": {
+        "page": 3,
+        "section": "P3 — Family continued / Employment / Financial"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "string"
+    },
+    {
+      "field_id": "employment.employer_general_phone",
+      "label": "Employer Phone No. (General)",
+      "description": "Employer main/general telephone.",
+      "source": {
+        "page": 3,
+        "section": "P3 — Family continued / Employment / Financial"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "string"
+    },
+    {
+      "field_id": "employment.business_registration_no",
+      "label": "Company/Business Registration No.",
+      "description": "Company registration number, especially for self-employed applicant.",
+      "source": {
+        "page": 3,
+        "section": "P3 — Family continued / Employment / Financial"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "string"
+    },
+    {
+      "field_id": "employment.industry",
+      "label": "Industry",
+      "description": "Applicant employer or business industry.",
+      "source": {
+        "page": 3,
+        "section": "P3 — Family continued / Employment / Financial"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "string"
+    },
+    {
+      "field_id": "employment.sub_industry",
+      "label": "Sub-industry",
+      "description": "Applicant employer/business sub-industry.",
+      "source": {
+        "page": 3,
+        "section": "P3 — Family continued / Employment / Financial"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "string"
+    },
+    {
+      "field_id": "employment.business_address",
+      "label": "Office/Business Address",
+      "description": "Applicant employer/office address and components.",
+      "source": {
+        "page": 3,
+        "section": "P3 — Family continued / Employment / Financial"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "object",
+      "children": [
+        {
+          "key": "address_lines",
+          "description": "Employer/office address text."
+        },
+        {
+          "key": "city",
+          "description": "Office city."
+        },
+        {
+          "key": "state",
+          "description": "Office state."
+        },
+        {
+          "key": "postcode",
+          "description": "Office postal code."
+        },
+        {
+          "key": "country",
+          "description": "Office country."
+        }
+      ]
+    },
+    {
+      "field_id": "employment.office_direct_phone",
+      "label": "Office Telephone No. (DID)",
+      "description": "Employer office direct phone, separate from general phone.",
+      "source": {
+        "page": 3,
+        "section": "P3 — Family continued / Employment / Financial"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "string"
+    },
+    {
+      "field_id": "employment.fax",
+      "label": "Fax No.",
+      "description": "Employer office fax.",
+      "source": {
+        "page": 3,
+        "section": "P3 — Family continued / Employment / Financial"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "string"
+    },
+    {
+      "field_id": "employment.start_or_retirement_date",
+      "label": "Date of Employment/Retirement",
+      "description": "Written date of employment or retirement; retain ambiguity if not distinguished.",
+      "source": {
+        "page": 3,
+        "section": "P3 — Family continued / Employment / Financial"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "date"
+    },
+    {
+      "field_id": "banking.references",
+      "label": "Bank reference",
+      "description": "Each bank account presented in the table, without conflating bank and employer.",
+      "source": {
+        "page": 3,
+        "section": "P3 — Family continued / Employment / Financial"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "object",
+      "repeatable": true,
+      "children": [
+        {
+          "key": "bank",
+          "description": "Bank name."
+        },
+        {
+          "key": "branch_or_address",
+          "description": "Branch or bank address."
+        },
+        {
+          "key": "account_type",
+          "description": "Account type: savings, current, other."
+        },
+        {
+          "key": "account_number",
+          "description": "Bank account number as string; preserve leading zeros."
+        }
+      ],
+      "notes": "Form specifies Malaysia bank accounts only and no joint account allowed. Do not infer bank holder from other people."
+    },
+    {
+      "field_id": "financial.monthly_income",
+      "label": "Monthly Income",
+      "description": "Monthly applicant income amount as expressly stated.",
+      "source": {
+        "page": 3,
+        "section": "P3 — Family continued / Employment / Financial"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "money"
+    },
+    {
+      "field_id": "financial.personal_gross_annual_income_bracket",
+      "label": "Gross Annual Income (Personal)",
+      "description": "Ticked personal gross annual income range; never substitute a computed amount.",
+      "source": {
+        "page": 3,
+        "section": "P3 — Family continued / Employment / Financial"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "enum",
+      "printed_options": [
+        "≤ RM30,000",
+        "RM30,001-RM60,000",
+        "RM60,001-RM120,000",
+        "RM120,001-RM180,000",
+        "RM180,001–RM300,000",
+        "> RM300,000"
+      ]
+    },
+    {
+      "field_id": "financial.joint_annual_income_bracket",
+      "label": "Joint Annual Income (with Spouse)",
+      "description": "Ticked joint annual income range, separate from personal bracket.",
+      "source": {
+        "page": 3,
+        "section": "P3 — Family continued / Employment / Financial"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "enum",
+      "printed_options": [
+        "≤ RM50,000",
+        "RM50,001-RM100,000",
+        "RM100,001-RM200,000",
+        "RM200,001-RM300,000",
+        "RM300,001-RM400,000",
+        "> RM400,000"
+      ]
+    },
+    {
+      "field_id": "financial.net_asset_bracket",
+      "label": "Net Asset",
+      "description": "Ticked net asset amount range.",
+      "source": {
+        "page": 3,
+        "section": "P3 — Family continued / Employment / Financial"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "enum",
+      "printed_options": [
+        "≤ RM50,000",
+        "RM50,001-RM200,000",
+        "RM200,001-RM500,000",
+        "RM500,001-RM1,000,000",
+        "RM1,000,001-RM3,000,000",
+        ">RM3,000,000"
+      ]
+    },
+    {
+      "field_id": "financial.net_investment_portfolio_bracket",
+      "label": "Net Investment Portfolio",
+      "description": "Ticked net investment portfolio range (personal or joint with spouse).",
+      "source": {
+        "page": 3,
+        "section": "P3 — Family continued / Employment / Financial"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "enum",
+      "printed_options": [
+        "≤ RM50,000",
+        "RM50,001-RM100,000",
+        "RM100,001-RM300,000",
+        "RM300,001-RM500,000",
+        "RM500,001-RM1,000,00",
+        ">RM1,000,000"
+      ],
+      "notes": "Source form appears to have a typo in the RM500,001–RM1,000,00 option. Preserve raw label and separately canonicalize only after review; do not silently alter evidence."
+    },
+    {
+      "field_id": "financial.source_of_wealth_funds",
+      "label": "Source of Wealth/Funds",
+      "description": "All marked source-of-wealth/funds selections for trading, not single-select.",
+      "source": {
+        "page": 3,
+        "section": "P3 — Family continued / Employment / Financial"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "multi_enum",
+      "printed_options": [
+        "Savings",
+        "Salary",
+        "Business/Investment Income",
+        "Rental Income",
+        "Inherited Wealth",
+        "Shareholdings",
+        "Asset",
+        "Directorship",
+        "Credit Facility",
+        "Retained Earnings",
+        "Others"
+      ],
+      "notes": "Others requires preserving free-text specification."
+    },
+    {
+      "field_id": "investment.objectives",
+      "label": "Investment Objective",
+      "description": "All selected applicant investment objectives, including timing variants.",
+      "source": {
+        "page": 4,
+        "section": "P4 — Investment, PEP & Services"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "multi_enum",
+      "printed_options": [
+        "Short Term <1 year",
+        "Long Term >3 years",
+        "Dividend Income",
+        "Capital Growth"
+      ]
+    },
+    {
+      "field_id": "investment.risk_tolerance",
+      "label": "Risk Tolerance",
+      "description": "Applicant-declared risk tolerance, not BSSB office-assessed Client Risk Rating.",
+      "source": {
+        "page": 4,
+        "section": "P4 — Investment, PEP & Services"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "enum",
+      "printed_options": [
+        "Conservative",
+        "Moderate",
+        "Aggressive"
+      ]
+    },
+    {
+      "field_id": "investment.trading_knowledge",
+      "label": "Trading Knowledge",
+      "description": "Applicant trading knowledge selection.",
+      "source": {
+        "page": 4,
+        "section": "P4 — Investment, PEP & Services"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "enum",
+      "printed_options": [
+        "Beginner",
+        "Intermediate",
+        "Advance"
+      ]
+    },
+    {
+      "field_id": "investment.products",
+      "label": "Investment Product",
+      "description": "Requested products; multiple selections possible.",
+      "source": {
+        "page": 4,
+        "section": "P4 — Investment, PEP & Services"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "multi_enum",
+      "printed_options": [
+        "Equities trading (local)",
+        "Equities trading (foreign)",
+        "Retail Equity – Short term share margin financing",
+        "Retail Equity – Share margin financing",
+        "Others"
+      ],
+      "notes": "Retain Others explanation."
+    },
+    {
+      "field_id": "investment.has_other_brokers",
+      "label": "Other Trading/Margin Account",
+      "description": "Explicit Yes/No to whether applicant has account with another broker.",
+      "source": {
+        "page": 4,
+        "section": "P4 — Investment, PEP & Services"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "yes_no"
+    },
+    {
+      "field_id": "investment.other_broker_accounts",
+      "label": "Other broker account details",
+      "description": "One row per broker account if declared.",
+      "source": {
+        "page": 4,
+        "section": "P4 — Investment, PEP & Services"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "object",
+      "repeatable": true,
+      "children": [
+        {
+          "key": "row_no",
+          "description": "Printed No."
+        },
+        {
+          "key": "broker_name",
+          "description": "Name of broker."
+        },
+        {
+          "key": "branch_or_address",
+          "description": "Broker branch/address."
+        },
+        {
+          "key": "account_type",
+          "description": "Trading or Margin."
+        }
+      ]
+    },
+    {
+      "field_id": "compliance.pep_exposure",
+      "label": "Political Exposed Person declaration",
+      "description": "Explicit response to prominent public position held/sought by applicant, family or close associates, not a standalone automatic determination.",
+      "source": {
+        "page": 4,
+        "section": "P4 — Investment, PEP & Services"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "yes_no"
+    },
+    {
+      "field_id": "compliance.pep_people",
+      "label": "PEP related people",
+      "description": "If PEP Yes, each listed person with their relationship and position details.",
+      "source": {
+        "page": 4,
+        "section": "P4 — Investment, PEP & Services"
+      },
+      "destination_scope": "customer_profile",
+      "value_type": "object",
+      "repeatable": true,
+      "children": [
+        {
+          "key": "row_no",
+          "description": "Printed No."
+        },
+        {
+          "key": "name",
+          "description": "Person listed."
+        },
+        {
+          "key": "relationship",
+          "description": "Relationship to applicant."
+        },
+        {
+          "key": "occupation",
+          "description": "Occupation or position."
+        },
+        {
+          "key": "nric",
+          "description": "Their NRIC."
+        },
+        {
+          "key": "employer_or_country",
+          "description": "Employer or country as entered."
+        }
+      ]
+    },
+    {
+      "field_id": "application.online_trading_requested",
+      "label": "Online Trading via BISonline",
+      "description": "Whether applicant requests BISonline online trading.",
+      "source": {
+        "page": 4,
+        "section": "P4 — Investment, PEP & Services"
+      },
+      "destination_scope": "application",
+      "value_type": "yes_no"
+    },
+    {
+      "field_id": "application.bisonline_login_id",
+      "label": "BISonline Login ID (EBC ID)",
+      "description": "Applicant provided online trading login identifier.",
+      "source": {
+        "page": 4,
+        "section": "P4 — Investment, PEP & Services"
+      },
+      "destination_scope": "application",
+      "value_type": "string"
+    },
+    {
+      "field_id": "application.estatement_delivery_option",
+      "label": "e-Contract/e-Statement delivery",
+      "description": "Chosen delivery channel(s), preserve marks.",
+      "source": {
+        "page": 4,
+        "section": "P4 — Investment, PEP & Services"
+      },
+      "destination_scope": "application",
+      "value_type": "enum",
+      "printed_options": [
+        "by e-mail",
+        "BISonline"
+      ]
+    },
+    {
+      "field_id": "application.payment_instruction",
+      "label": "Payment Instruction",
+      "description": "Whether cheque or e-Payment to applicant bank is expressly selected.",
+      "source": {
+        "page": 4,
+        "section": "P4 — Investment, PEP & Services"
+      },
+      "destination_scope": "application",
+      "value_type": "enum",
+      "printed_options": [
+        "To issue cheque payable to me",
+        "e-Payment – credit directly into my bank account"
+      ]
+    },
+    {
+      "field_id": "application.applicant_declaration",
+      "label": "Applicant declaration",
+      "description": "Preserve existence and substantive declaration/consent references, without inferring that all statements are separately affirmed merely because printed.",
+      "source": {
+        "page": 5,
+        "section": "P5 — Section F Applicant Declaration"
+      },
+      "destination_scope": "document_evidence",
+      "value_type": "declaration_document"
+    },
+    {
+      "field_id": "application.dealings_capacity",
+      "label": "Principal / on behalf of parties",
+      "description": "Selected declaration whether dealing for own account as principal or on behalf of another party.",
+      "source": {
+        "page": 5,
+        "section": "P5 — Section F Applicant Declaration"
+      },
+      "destination_scope": "application",
+      "value_type": "enum",
+      "printed_options": [
+        "For me as principal",
+        "For and on behalf of party(ies) set out below"
+      ]
+    },
+    {
+      "field_id": "application.principal_parties",
+      "label": "Principal account holder / third-party parties",
+      "description": "Details of concerned parties if on behalf of others.",
+      "source": {
+        "page": 5,
+        "section": "P5 — Section F Applicant Declaration"
+      },
+      "destination_scope": "application",
+      "value_type": "object",
+      "repeatable": true,
+      "children": [
+        {
+          "key": "name",
+          "description": "Name of party concerned/principal account holder."
+        },
+        {
+          "key": "nric_passport_authority_card_no",
+          "description": "Party identification number."
+        },
+        {
+          "key": "registered_address",
+          "description": "Party registered address."
+        }
+      ]
+    },
+    {
+      "field_id": "application.authorized_signature",
+      "label": "Authorised Signature",
+      "description": "Whether an applicant authorised signature is visibly present; store image evidence, not transcribed signature text.",
+      "source": {
+        "page": 5,
+        "section": "P5 — Section F Applicant Declaration"
+      },
+      "destination_scope": "document_evidence",
+      "value_type": "signature"
+    },
+    {
+      "field_id": "application.authorized_signatory_name",
+      "label": "Authorised signatory name",
+      "description": "Name printed/written under authorised signature; may match applicant but must not be assumed.",
+      "source": {
+        "page": 5,
+        "section": "P5 — Section F Applicant Declaration"
+      },
+      "destination_scope": "application",
+      "value_type": "string"
+    },
+    {
+      "field_id": "application.authorized_signatory_id",
+      "label": "Authorised signatory NRIC/Passport",
+      "description": "ID written for applicant signatory.",
+      "source": {
+        "page": 5,
+        "section": "P5 — Section F Applicant Declaration"
+      },
+      "destination_scope": "application",
+      "value_type": "string"
+    },
+    {
+      "field_id": "application.authorized_signature_date",
+      "label": "Authorised signature date",
+      "description": "Date by applicant signature.",
+      "source": {
+        "page": 5,
+        "section": "P5 — Section F Applicant Declaration"
+      },
+      "destination_scope": "application",
+      "value_type": "date"
+    },
+    {
+      "field_id": "application.witness_signature",
+      "label": "Witness signature",
+      "description": "Presence of witness signature, preserve evidence only.",
+      "source": {
+        "page": 5,
+        "section": "P5 — Section F Applicant Declaration"
+      },
+      "destination_scope": "document_evidence",
+      "value_type": "signature"
+    },
+    {
+      "field_id": "application.witness_name",
+      "label": "Witness name",
+      "description": "Witness name as written, not applicant name.",
+      "source": {
+        "page": 5,
+        "section": "P5 — Section F Applicant Declaration"
+      },
+      "destination_scope": "application",
+      "value_type": "string"
+    },
+    {
+      "field_id": "application.witness_id",
+      "label": "Witness NRIC/Passport",
+      "description": "Witness identification number.",
+      "source": {
+        "page": 5,
+        "section": "P5 — Section F Applicant Declaration"
+      },
+      "destination_scope": "application",
+      "value_type": "string"
+    },
+    {
+      "field_id": "application.witness_date",
+      "label": "Witness signature date",
+      "description": "Date written next to witness signature.",
+      "source": {
+        "page": 5,
+        "section": "P5 — Section F Applicant Declaration"
+      },
+      "destination_scope": "application",
+      "value_type": "date"
+    },
+    {
+      "field_id": "application.trading_document_checklist",
+      "label": "Trading account supporting documents",
+      "description": "Individually preserve visual checkbox status for each trading-account supporting document.",
+      "source": {
+        "page": 6,
+        "section": "P6 — Document Checklist / Non-face-to-face verification"
+      },
+      "destination_scope": "application",
+      "value_type": "multi_enum",
+      "printed_options": [
+        "Certified true copy of Applicant NRIC/Passport",
+        "Certified true copy of Staff ID Card (LTH Group employee)",
+        "Certified true copy of latest 1 month salary slip",
+        "Certified true copy of latest tax assessment form (Form BE)",
+        "Certified true copy of latest 1 month bank statement/passbook"
+      ]
+    },
+    {
+      "field_id": "application.margin_document_checklist",
+      "label": "Margin account supporting documents",
+      "description": "Individually preserve visual checkbox status for each margin-account supporting document.",
+      "source": {
+        "page": 6,
+        "section": "P6 — Document Checklist / Non-face-to-face verification"
+      },
+      "destination_scope": "application",
+      "value_type": "multi_enum",
+      "printed_options": [
+        "Certified true copy of Applicant NRIC/Passport",
+        "Certified true copy of latest 3 months salary slip",
+        "Certified true copy of latest 3 months bank statement/passbook",
+        "Certified true copy of latest tax assessment form (Form BE)"
+      ]
+    },
+    {
+      "field_id": "application.non_face_to_face_verification_methods",
+      "label": "Verification method for non-face-to-face client",
+      "description": "Selected verification methods by DR; more than one may be ticked.",
+      "source": {
+        "page": 6,
+        "section": "P6 — Document Checklist / Non-face-to-face verification"
+      },
+      "destination_scope": "application",
+      "value_type": "multi_enum",
+      "printed_options": [
+        "Confirmed with HR of Client’s Employer",
+        "Received & Encash Personal Cheque ≥ RM100",
+        "Video Conference",
+        "Confirmed with BIMB Holdings Berhad Group",
+        "Others"
+      ]
+    },
+    {
+      "field_id": "application.non_face_to_face_remarks",
+      "label": "Verification remarks",
+      "description": "Written remarks for non-face-to-face client verification.",
+      "source": {
+        "page": 6,
+        "section": "P6 — Document Checklist / Non-face-to-face verification"
+      },
+      "destination_scope": "application",
+      "value_type": "text"
+    },
+    {
+      "field_id": "application.verified_by_name",
+      "label": "Verified By — name",
+      "description": "Name of person who verified the client.",
+      "source": {
+        "page": 6,
+        "section": "P6 — Document Checklist / Non-face-to-face verification"
+      },
+      "destination_scope": "office_use",
+      "value_type": "string"
+    },
+    {
+      "field_id": "application.verified_by_id",
+      "label": "Verified By — NRIC/Passport",
+      "description": "Identity of person who verified.",
+      "source": {
+        "page": 6,
+        "section": "P6 — Document Checklist / Non-face-to-face verification"
+      },
+      "destination_scope": "office_use",
+      "value_type": "string"
+    },
+    {
+      "field_id": "application.verified_by_date",
+      "label": "Verified By — date",
+      "description": "Date verifier completed section.",
+      "source": {
+        "page": 6,
+        "section": "P6 — Document Checklist / Non-face-to-face verification"
+      },
+      "destination_scope": "office_use",
+      "value_type": "date"
+    },
+    {
+      "field_id": "application.verified_by_signature",
+      "label": "Verified By signature",
+      "description": "Presence of verification signature, with evidence.",
+      "source": {
+        "page": 6,
+        "section": "P6 — Document Checklist / Non-face-to-face verification"
+      },
+      "destination_scope": "document_evidence",
+      "value_type": "signature"
+    },
+    {
+      "field_id": "application.dealer_representative_recommended_checkbox",
+      "label": "Recommended by Dealer’s Representative",
+      "description": "Whether the Recommended by Dealer’s Representative checkbox is explicitly marked on page 7.",
+      "source": {
+        "page": 7,
+        "section": "P7 — Dealer / Marketing/Trading Representative Declarations"
+      },
+      "destination_scope": "application",
+      "value_type": "checkbox"
+    },
+    {
+      "field_id": "application.dealer_representative_declaration",
+      "label": "Dealer’s Representative declaration",
+      "description": "Preserve printed signed declaration for Dealer’s Representative and whether signature is present; do not assert CDD completed without explicit indication.",
+      "source": {
+        "page": 7,
+        "section": "P7 — Dealer / Marketing/Trading Representative Declarations"
+      },
+      "destination_scope": "document_evidence",
+      "value_type": "declaration_document"
+    },
+    {
+      "field_id": "application.dealer_representative_signature",
+      "label": "Dealer’s Representative signature",
+      "description": "Signature presence for Dealer’s Representative.",
+      "source": {
+        "page": 7,
+        "section": "P7 — Dealer / Marketing/Trading Representative Declarations"
+      },
+      "destination_scope": "document_evidence",
+      "value_type": "signature"
+    },
+    {
+      "field_id": "application.dealer_representative_name",
+      "label": "Dealer’s Representative name",
+      "description": "Name of Dealer’s Representative, not applicant or witness.",
+      "source": {
+        "page": 7,
+        "section": "P7 — Dealer / Marketing/Trading Representative Declarations"
+      },
+      "destination_scope": "application",
+      "value_type": "string"
+    },
+    {
+      "field_id": "application.dealer_representative_id",
+      "label": "Dealer’s Representative NRIC/Passport",
+      "description": "ID of Dealer’s Representative.",
+      "source": {
+        "page": 7,
+        "section": "P7 — Dealer / Marketing/Trading Representative Declarations"
+      },
+      "destination_scope": "application",
+      "value_type": "string"
+    },
+    {
+      "field_id": "application.dealer_representative_date",
+      "label": "Dealer’s Representative signature date",
+      "description": "Date next to Dealer’s Representative declaration.",
+      "source": {
+        "page": 7,
+        "section": "P7 — Dealer / Marketing/Trading Representative Declarations"
+      },
+      "destination_scope": "application",
+      "value_type": "date"
+    },
+    {
+      "field_id": "application.dealer_representative_witness_signature",
+      "label": "Dealer’s Representative witness signature",
+      "description": "Witness signature presence for Dealer’s Representative declaration.",
+      "source": {
+        "page": 7,
+        "section": "P7 — Dealer / Marketing/Trading Representative Declarations"
+      },
+      "destination_scope": "document_evidence",
+      "value_type": "signature"
+    },
+    {
+      "field_id": "application.dealer_representative_witness_name",
+      "label": "Dealer’s Representative witness name",
+      "description": "Witness name for Dealer’s Representative declaration.",
+      "source": {
+        "page": 7,
+        "section": "P7 — Dealer / Marketing/Trading Representative Declarations"
+      },
+      "destination_scope": "application",
+      "value_type": "string"
+    },
+    {
+      "field_id": "application.dealer_representative_witness_id",
+      "label": "Dealer’s Representative witness NRIC/Passport",
+      "description": "Witness ID for Dealer’s Representative declaration.",
+      "source": {
+        "page": 7,
+        "section": "P7 — Dealer / Marketing/Trading Representative Declarations"
+      },
+      "destination_scope": "application",
+      "value_type": "string"
+    },
+    {
+      "field_id": "application.dealer_representative_witness_date",
+      "label": "Dealer’s Representative witness date",
+      "description": "Witness date for Dealer’s Representative declaration.",
+      "source": {
+        "page": 7,
+        "section": "P7 — Dealer / Marketing/Trading Representative Declarations"
+      },
+      "destination_scope": "application",
+      "value_type": "date"
+    },
+    {
+      "field_id": "application.dealer_representative_recommended_initial_limit",
+      "label": "Dealer’s Representative recommended initial trading limit",
+      "description": "Recommended initial trading limit in RM for Dealer’s Representative declaration.",
+      "source": {
+        "page": 7,
+        "section": "P7 — Dealer / Marketing/Trading Representative Declarations"
+      },
+      "destination_scope": "application",
+      "value_type": "money"
+    },
+    {
+      "field_id": "application.marketing_trading_representative_recommended_checkbox",
+      "label": "Recommended by Marketing/Trading Representative",
+      "description": "Whether the Recommended by Marketing/Trading Representative checkbox is explicitly marked on page 7.",
+      "source": {
+        "page": 7,
+        "section": "P7 — Dealer / Marketing/Trading Representative Declarations"
+      },
+      "destination_scope": "application",
+      "value_type": "checkbox"
+    },
+    {
+      "field_id": "application.marketing_trading_representative_declaration",
+      "label": "Marketing/Trading Representative declaration",
+      "description": "Preserve printed signed declaration for Marketing/Trading Representative and whether signature is present; do not assert CDD completed without explicit indication.",
+      "source": {
+        "page": 7,
+        "section": "P7 — Dealer / Marketing/Trading Representative Declarations"
+      },
+      "destination_scope": "document_evidence",
+      "value_type": "declaration_document"
+    },
+    {
+      "field_id": "application.marketing_trading_representative_signature",
+      "label": "Marketing/Trading Representative signature",
+      "description": "Signature presence for Marketing/Trading Representative.",
+      "source": {
+        "page": 7,
+        "section": "P7 — Dealer / Marketing/Trading Representative Declarations"
+      },
+      "destination_scope": "document_evidence",
+      "value_type": "signature"
+    },
+    {
+      "field_id": "application.marketing_trading_representative_name",
+      "label": "Marketing/Trading Representative name",
+      "description": "Name of Marketing/Trading Representative, not applicant or witness.",
+      "source": {
+        "page": 7,
+        "section": "P7 — Dealer / Marketing/Trading Representative Declarations"
+      },
+      "destination_scope": "application",
+      "value_type": "string"
+    },
+    {
+      "field_id": "application.marketing_trading_representative_id",
+      "label": "Marketing/Trading Representative NRIC/Passport",
+      "description": "ID of Marketing/Trading Representative.",
+      "source": {
+        "page": 7,
+        "section": "P7 — Dealer / Marketing/Trading Representative Declarations"
+      },
+      "destination_scope": "application",
+      "value_type": "string"
+    },
+    {
+      "field_id": "application.marketing_trading_representative_date",
+      "label": "Marketing/Trading Representative signature date",
+      "description": "Date next to Marketing/Trading Representative declaration.",
+      "source": {
+        "page": 7,
+        "section": "P7 — Dealer / Marketing/Trading Representative Declarations"
+      },
+      "destination_scope": "application",
+      "value_type": "date"
+    },
+    {
+      "field_id": "application.marketing_trading_representative_witness_signature",
+      "label": "Marketing/Trading Representative witness signature",
+      "description": "Witness signature presence for Marketing/Trading Representative declaration.",
+      "source": {
+        "page": 7,
+        "section": "P7 — Dealer / Marketing/Trading Representative Declarations"
+      },
+      "destination_scope": "document_evidence",
+      "value_type": "signature"
+    },
+    {
+      "field_id": "application.marketing_trading_representative_witness_name",
+      "label": "Marketing/Trading Representative witness name",
+      "description": "Witness name for Marketing/Trading Representative declaration.",
+      "source": {
+        "page": 7,
+        "section": "P7 — Dealer / Marketing/Trading Representative Declarations"
+      },
+      "destination_scope": "application",
+      "value_type": "string"
+    },
+    {
+      "field_id": "application.marketing_trading_representative_witness_id",
+      "label": "Marketing/Trading Representative witness NRIC/Passport",
+      "description": "Witness ID for Marketing/Trading Representative declaration.",
+      "source": {
+        "page": 7,
+        "section": "P7 — Dealer / Marketing/Trading Representative Declarations"
+      },
+      "destination_scope": "application",
+      "value_type": "string"
+    },
+    {
+      "field_id": "application.marketing_trading_representative_witness_date",
+      "label": "Marketing/Trading Representative witness date",
+      "description": "Witness date for Marketing/Trading Representative declaration.",
+      "source": {
+        "page": 7,
+        "section": "P7 — Dealer / Marketing/Trading Representative Declarations"
+      },
+      "destination_scope": "application",
+      "value_type": "date"
+    },
+    {
+      "field_id": "application.marketing_trading_representative_recommended_initial_limit",
+      "label": "Marketing/Trading Representative recommended initial trading limit",
+      "description": "Recommended initial trading limit in RM for Marketing/Trading Representative declaration.",
+      "source": {
+        "page": 7,
+        "section": "P7 — Dealer / Marketing/Trading Representative Declarations"
+      },
+      "destination_scope": "application",
+      "value_type": "money"
+    },
+    {
+      "field_id": "office.trading_limit_recommended",
+      "label": "Trading limit recommended",
+      "description": "Staff-recommended trading limit in RM.",
+      "source": {
+        "page": 8,
+        "section": "P8 — Office Use Only"
+      },
+      "destination_scope": "office_use",
+      "value_type": "money"
+    },
+    {
+      "field_id": "office.trading_limit_justification",
+      "label": "Justification",
+      "description": "Office justification for recommended trading limit.",
+      "source": {
+        "page": 8,
+        "section": "P8 — Office Use Only"
+      },
+      "destination_scope": "office_use",
+      "value_type": "text"
+    },
+    {
+      "field_id": "office.supporting_documents",
+      "label": "Documents furnished",
+      "description": "Narrative summary of documents furnished for application/trading limit.",
+      "source": {
+        "page": 8,
+        "section": "P8 — Office Use Only"
+      },
+      "destination_scope": "office_use",
+      "value_type": "text"
+    },
+    {
+      "field_id": "office.client_type",
+      "label": "Client Type",
+      "description": "Office-assigned client type, free text/code.",
+      "source": {
+        "page": 8,
+        "section": "P8 — Office Use Only"
+      },
+      "destination_scope": "office_use",
+      "value_type": "string"
+    },
+    {
+      "field_id": "office.brokerage_type",
+      "label": "Brokerage Type",
+      "description": "Office-assigned brokerage type, free text/code.",
+      "source": {
+        "page": 8,
+        "section": "P8 — Office Use Only"
+      },
+      "destination_scope": "office_use",
+      "value_type": "string"
+    },
+    {
+      "field_id": "office.cds_account_number",
+      "label": "CDS Account No.",
+      "description": "Office CDS account number, including any preprinted prefix; do not treat blank suffix as complete value.",
+      "source": {
+        "page": 8,
+        "section": "P8 — Office Use Only"
+      },
+      "destination_scope": "office_use",
+      "value_type": "string"
+    },
+    {
+      "field_id": "office.cds_account_name",
+      "label": "CDS Account Name",
+      "description": "Office account name for CDS account.",
+      "source": {
+        "page": 8,
+        "section": "P8 — Office Use Only"
+      },
+      "destination_scope": "office_use",
+      "value_type": "string"
+    },
+    {
+      "field_id": "office.client_risk_rating",
+      "label": "Client Risk Rating",
+      "description": "Office-assessed client risk rating; distinct from applicant investment risk tolerance.",
+      "source": {
+        "page": 8,
+        "section": "P8 — Office Use Only"
+      },
+      "destination_scope": "office_use",
+      "value_type": "enum",
+      "printed_options": [
+        "Low Risk",
+        "Medium Risk",
+        "High Risk"
+      ]
+    },
+    {
+      "field_id": "office.high_net_worth",
+      "label": "High Net Worth",
+      "description": "Office high-net-worth assessment Yes/No.",
+      "source": {
+        "page": 8,
+        "section": "P8 — Office Use Only"
+      },
+      "destination_scope": "office_use",
+      "value_type": "yes_no"
+    },
+    {
+      "field_id": "office.vetting",
+      "label": "Vetting",
+      "description": "Selections from office screening/vetting list; multiple possible.",
+      "source": {
+        "page": 8,
+        "section": "P8 — Office Use Only"
+      },
+      "destination_scope": "office_use",
+      "value_type": "multi_enum",
+      "printed_options": [
+        "Sanction List",
+        "PEP",
+        "Others",
+        "Adverse Media",
+        "Watch List"
+      ]
+    },
+    {
+      "field_id": "office.share_margin_bankruptcy_status",
+      "label": "Share Margin Bankruptcy",
+      "description": "Office screening selection regarding bankruptcy/discharge.",
+      "source": {
+        "page": 8,
+        "section": "P8 — Office Use Only"
+      },
+      "destination_scope": "office_use",
+      "value_type": "enum",
+      "printed_options": [
+        "Bankrupt",
+        "Not Bankrupt/Discharged Date"
+      ]
+    },
+    {
+      "field_id": "office.share_margin_discharge_date",
+      "label": "Discharged Date",
+      "description": "Discharge date when explicitly entered in additional share-margin information.",
+      "source": {
+        "page": 8,
+        "section": "P8 — Office Use Only"
+      },
+      "destination_scope": "office_use",
+      "value_type": "date"
+    },
+    {
+      "field_id": "office.remarks",
+      "label": "Remarks",
+      "description": "Office remarks.",
+      "source": {
+        "page": 8,
+        "section": "P8 — Office Use Only"
+      },
+      "destination_scope": "office_use",
+      "value_type": "text"
+    },
+    {
+      "field_id": "office.processed_by",
+      "label": "Processed By",
+      "description": "Processed By staff sign-off including written name/signature and date; do not infer sign-off from empty cell.",
+      "source": {
+        "page": 8,
+        "section": "P8 — Office Use Only"
+      },
+      "destination_scope": "office_use",
+      "value_type": "object",
+      "children": [
+        {
+          "key": "name_or_signature",
+          "description": "Signer identity or signature evidence."
+        },
+        {
+          "key": "date",
+          "description": "Signed/completed date."
+        }
+      ]
+    },
+    {
+      "field_id": "office.approved_by",
+      "label": "Approved By",
+      "description": "Approved By staff sign-off including written name/signature and date; do not infer sign-off from empty cell.",
+      "source": {
+        "page": 8,
+        "section": "P8 — Office Use Only"
+      },
+      "destination_scope": "office_use",
+      "value_type": "object",
+      "children": [
+        {
+          "key": "name_or_signature",
+          "description": "Signer identity or signature evidence."
+        },
+        {
+          "key": "date",
+          "description": "Signed/completed date."
+        }
+      ]
+    },
+    {
+      "field_id": "office.data_entry",
+      "label": "Data Entry",
+      "description": "Data Entry staff sign-off including written name/signature and date; do not infer sign-off from empty cell.",
+      "source": {
+        "page": 8,
+        "section": "P8 — Office Use Only"
+      },
+      "destination_scope": "office_use",
+      "value_type": "object",
+      "children": [
+        {
+          "key": "name_or_signature",
+          "description": "Signer identity or signature evidence."
+        },
+        {
+          "key": "date",
+          "description": "Signed/completed date."
+        }
+      ]
+    },
+    {
+      "field_id": "office.checked_by",
+      "label": "Checked By",
+      "description": "Checked By staff sign-off including written name/signature and date; do not infer sign-off from empty cell.",
+      "source": {
+        "page": 8,
+        "section": "P8 — Office Use Only"
+      },
+      "destination_scope": "office_use",
+      "value_type": "object",
+      "children": [
+        {
+          "key": "name_or_signature",
+          "description": "Signer identity or signature evidence."
+        },
+        {
+          "key": "date",
+          "description": "Signed/completed date."
+        }
+      ]
+    },
+    {
+      "field_id": "office.reviewed_by",
+      "label": "Reviewed By",
+      "description": "Reviewed By staff sign-off including written name/signature and date; do not infer sign-off from empty cell.",
+      "source": {
+        "page": 8,
+        "section": "P8 — Office Use Only"
+      },
+      "destination_scope": "office_use",
+      "value_type": "object",
+      "children": [
+        {
+          "key": "name_or_signature",
+          "description": "Signer identity or signature evidence."
+        },
+        {
+          "key": "date",
+          "description": "Signed/completed date."
+        }
+      ]
+    }
+  ],
+  "terms_handling": {
+    "pages": [
+      9,
+      10,
+      11,
+      12,
+      13,
+      14
+    ],
+    "classification": "document_evidence",
+    "instructions": "Store document/terms presence, version, page ranges, clause text/searchability as source evidence. Do not generate permanent customer-profile fields from every printed contractual clause. Do not infer consent to individual terms solely because printed."
+  },
+  "layout_note": "Page 1 has office-use client/RMR-DLR codes, pages 2-8 also have unlabeled office-use check rectangles beside rows. Preserve visible marks in document evidence, but do not fabricate semantic destination fields for unlabeled boxes."
+}
