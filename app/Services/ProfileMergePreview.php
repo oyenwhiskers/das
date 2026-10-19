@@ -60,8 +60,8 @@ class ProfileMergePreview
             $target = $resolved[$rowKey]['target'] ?? null;
             $current = $this->current($customer, $value['field_id'], $target);
             $proposed = $value['value'];
-            $action = $this->action($current, $proposed, $strategy);
-            if (is_string($current) && is_string($proposed) && ! str_contains(strtolower((string) $value['field_id']), 'email') && $current !== $proposed && mb_strtoupper($current, 'UTF-8') === mb_strtoupper($proposed, 'UTF-8')) {
+            $action = $this->action($current, $proposed, $strategy, (string) $value['field_id']);
+            if (is_string($current) && is_string($proposed) && ! str_contains(strtolower((string) $value['field_id']), 'email') && $current !== $proposed && mb_strtoupper($current, 'UTF-8') === mb_strtoupper($proposed, 'UTF-8') && ! $this->isIdentificationNumberField((string) $value['field_id'])) {
                 $action = 'replace';
             }
             $included = in_array($action, ['add', 'replace', 'clear'], true) && ! in_array($key, $excluded, true);
@@ -482,7 +482,6 @@ class ProfileMergePreview
                 $blank('bank_accounts[].bank_country') ? 'bank country' : null,
                 $blank('bank_accounts[].account_number') ? 'account number' : null,
                 $blank('bank_accounts[].account_holder_name') ? 'account holder name' : null,
-                $blank('bank_accounts[].account_type') ? 'account type' : null,
             ])),
             'relationships' => array_values(array_filter([
                 $blank('relationships[].related_person.full_legal_name') ? 'family member name' : null,
@@ -743,12 +742,12 @@ class ProfileMergePreview
         return $customer->financialDeclarations->firstWhere('current_customer_key', $customer->id);
     }
 
-    private function action(mixed $current, mixed $proposed, string $strategy): string
+    private function action(mixed $current, mixed $proposed, string $strategy, ?string $fieldId = null): string
     {
         if ($this->isEmpty($proposed)) {
             return $strategy === 'replace_all' && ! $this->isEmpty($current) ? 'clear' : 'skip';
         }
-        if ($this->same($current, $proposed)) {
+        if ($this->same($current, $proposed, $fieldId)) {
             return 'skip';
         }
         if ($this->isEmpty($current)) {
@@ -763,9 +762,23 @@ class ProfileMergePreview
         return $value === null || $value === '' || $value === [];
     }
 
-    private function same(mixed $current, mixed $proposed): bool
+    private function same(mixed $current, mixed $proposed, ?string $fieldId = null): bool
     {
+        if ($fieldId !== null && $this->isIdentificationNumberField($fieldId)) {
+            $left = is_string($current) || is_numeric($current) ? (string) $current : null;
+            $right = is_string($proposed) || is_numeric($proposed) ? (string) $proposed : null;
+
+            return CustomerIdentification::normalizeNumber($left) !== null
+                && CustomerIdentification::normalizeNumber($left) === CustomerIdentification::normalizeNumber($right);
+        }
+
         return $this->canonical($current) === $this->canonical($proposed);
+    }
+
+    private function isIdentificationNumberField(string $fieldId): bool
+    {
+        return $fieldId === 'primary_identification.number'
+            || str_ends_with($fieldId, '.identification_number');
     }
 
     private function canonical(mixed $value): string

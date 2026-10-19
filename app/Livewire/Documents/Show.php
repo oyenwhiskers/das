@@ -721,6 +721,9 @@ class Show extends Component
             if (($profile->reviewed_projection['grouping_status'] ?? 'active') === 'withdrawn') {
                 continue;
             }
+            if (($profile->reviewed_projection['values'] ?? []) === []) {
+                continue;
+            }
             $filled = [];
             $heading = $profile->record_ref;
             foreach ($profile->reviewed_projection['values'] ?? [] as $item) {

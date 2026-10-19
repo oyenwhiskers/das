@@ -292,6 +292,26 @@ class ProfileMergeTest extends TestCase
         $this->assertNull($account->ownership);
     }
 
+    public function test_a_bank_account_is_saved_when_account_type_was_not_printed(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->create(['full_legal_name' => 'Ahmad Saifuldin Bin Abu Bakar', 'race' => 'Malay', 'country_of_residence' => 'Malaysia']);
+        [, $profile] = $this->reviewed($customer->full_legal_name, [
+            $this->value('bank_accounts[].bank_name', 'CIMB', 'acct-1'),
+            $this->value('bank_accounts[].bank_country', 'Malaysia', 'acct-1'),
+            $this->value('bank_accounts[].account_number', '7654695964', 'acct-1'),
+            $this->value('bank_accounts[].account_holder_name', 'Ahmad Saifuldin Bin Abu Bakar', 'acct-1'),
+        ]);
+
+        $this->commit($staff, $profile, $customer);
+
+        $account = $customer->fresh()->bankAccounts()->first();
+        $this->assertNotNull($account);
+        $this->assertSame('CIMB', $account->bank_name);
+        $this->assertSame('7654695964', $account->account_number);
+        $this->assertNull($account->account_type);
+    }
+
     public function test_only_a_different_identification_blocks_a_match(): void
     {
         $staff = User::factory()->staff()->create();
@@ -389,9 +409,11 @@ class ProfileMergeTest extends TestCase
         ]);
 
         Livewire::actingAs($staff)->test(Show::class, ['documentScan' => $scan])
-            ->assertSee('Expand all')
-            ->assertSee('Collapse all')
+            ->assertSee('Find an applicant')
+            ->assertSee('View')
             ->assertSee('Auto-Match all')
+            ->assertDontSee('Expand all')
+            ->assertDontSee('Collapse all')
             ->call('autoMatchAll')
             ->assertSet('matchAll', true)
             ->assertSee('Kept Name')
@@ -469,6 +491,63 @@ class ProfileMergeTest extends TestCase
         $financial = $customer->financialDeclarations()->where('current_customer_key', $customer->id)->firstOrFail();
         $this->assertSame('3000.00', $financial->monthly_income_rm);
         $this->assertSame('30001_60000', $financial->personal_annual_income_bracket);
+    }
+
+    public function test_fill_empty_treats_the_same_nric_with_different_formatting_as_unchanged(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->create([
+            'full_legal_name' => 'ABDUL MALIK RADHUAN BIN ALI',
+            'race' => 'Malay',
+            'country_of_residence' => 'Malaysia',
+            'primary_identification_type' => IdentificationType::Nric,
+            'primary_identification_number' => '830923-03-6187',
+        ]);
+        $customer->identifications()->create([
+            'type' => IdentificationType::Nric, 'number' => '830923-03-6187', 'normalized_number' => '830923036187',
+            'issuing_jurisdiction' => 'MY', 'is_primary' => true,
+        ]);
+        $person = \App\Models\RelatedPerson::query()->create([
+            'full_legal_name' => 'SUHAIMI BIN SHAFAIN',
+            'identification_type' => IdentificationType::Nric,
+            'identification_number' => '810506-03-6065',
+            'normalized_identification_number' => '810506036065',
+            'mobile' => '014-3434744',
+            'occupation' => null,
+        ]);
+        $customer->relationships()->create([
+            'related_person_id' => $person->id,
+            'relationship' => 'other',
+            'other_relationship' => 'Next of kin',
+            'is_next_of_kin' => true,
+            'is_primary_next_of_kin' => true,
+            'active_identity_key' => $customer->id.':person:'.$person->id,
+        ]);
+        [, $profile] = $this->reviewed($customer->full_legal_name, [
+            $this->value('primary_identification.type', 'nric'),
+            $this->value('primary_identification.number', '830923 03 6187'),
+            $this->value('relationships[].related_person.full_legal_name', 'SUHAIMI BIN SHAFAIN', '1'),
+            $this->value('relationships[].relationship', 'other', '1'),
+            $this->value('relationships[].other_relationship', 'Next of kin', '1'),
+            $this->value('relationships[].related_person.identification_type', 'nric', '1'),
+            $this->value('relationships[].related_person.identification_number', '810506036065', '1'),
+            $this->value('relationships[].related_person.mobile', '014-3434744', '1'),
+            $this->value('relationships[].related_person.occupation', 'BUSINESS', '1'),
+            $this->value('relationships[].is_next_of_kin', true, '1'),
+            $this->value('relationships[].is_primary_next_of_kin', true, '1'),
+        ]);
+
+        $preview = app(ProfileMergePreview::class)->make($profile, $customer->fresh(), 'fill_empty', [], []);
+        $idLines = collect($preview['lines'])->whereIn('field_id', [
+            'primary_identification.number',
+            'relationships[].related_person.identification_number',
+        ]);
+        $this->assertTrue($idLines->every(fn (array $line): bool => $line['action'] === 'skip'));
+        $this->commit($staff, $profile, $customer);
+
+        $this->assertSame('BUSINESS', $person->fresh()->occupation);
+        $this->assertSame('810506-03-6065', $person->fresh()->identification_number);
+        $this->assertSame('830923-03-6187', $customer->fresh()->primary_identification_number);
     }
 
     public function test_auto_match_all_recommends_creating_an_unknown_applicant(): void

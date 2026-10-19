@@ -222,8 +222,8 @@ class CustomerProfileWrites
             'fullLegalName' => ['exclude_if:source,customer', Rule::requiredIf($source === 'new'), 'nullable', 'string', 'max:255'],
             'relationship' => ['required', Rule::in(CustomerProfileSchema::options('relationship'))],
             'otherRelationship' => ['required_if:relationship,other', 'nullable', 'string', 'max:100'],
-            'identificationType' => ['exclude_if:source,customer', 'nullable', 'required_with:identificationNumber', Rule::enum(IdentificationType::class)],
-            'identificationNumber' => ['exclude_if:source,customer', 'nullable', 'required_with:identificationType', 'string', 'max:100'],
+            'identificationType' => ['exclude_if:source,customer', 'nullable', Rule::requiredIf($source === 'new' && $record === null && filled($input['identificationNumber'] ?? null)), Rule::enum(IdentificationType::class)],
+            'identificationNumber' => ['exclude_if:source,customer', 'nullable', Rule::requiredIf($source === 'new' && $record === null && filled($input['identificationType'] ?? null)), 'string', 'max:100'],
             'dateOfBirth' => ['exclude_if:source,customer', 'nullable', 'date', 'before_or_equal:today'],
             'gender' => ['exclude_if:source,customer', 'nullable', 'string', 'max:50'],
             'nationality' => ['exclude_if:source,customer', 'nullable', 'string', 'max:100'],
@@ -275,16 +275,9 @@ class CustomerProfileWrites
         try {
             DB::transaction(function () use ($customer, $validated, $source, $record, $actor): void {
                 if ($source === 'new') {
-                    $formattedNumber = filled($validated['identificationNumber'] ?? null)
-                        ? CustomerIdentification::formatNumber($validated['identificationNumber'], $validated['identificationType'] ?: null)
-                        : null;
-                    $normalized = CustomerIdentification::normalizeNumber($formattedNumber);
                     $person = $record?->relatedPerson ?? new RelatedPerson;
                     $personDetails = [
                         'full_legal_name' => trim($validated['fullLegalName']),
-                        'identification_type' => $validated['identificationType'] ?: null,
-                        'identification_number' => $formattedNumber,
-                        'normalized_identification_number' => $normalized,
                         'date_of_birth' => $validated['dateOfBirth'] ?: null,
                         'gender' => $validated['gender'] ?: null,
                         'nationality' => $validated['nationality'] ?: null,
@@ -303,6 +296,16 @@ class CustomerProfileWrites
                         'employer_postcode' => $validated['employerPostcode'] ?: null,
                         'employer_country' => $validated['employerCountry'] ?: null,
                     ];
+                    if (filled($validated['identificationNumber'] ?? null)) {
+                        $formattedNumber = CustomerIdentification::formatNumber($validated['identificationNumber'], $validated['identificationType'] ?: null);
+                        $personDetails['identification_type'] = $validated['identificationType'] ?: null;
+                        $personDetails['identification_number'] = $formattedNumber;
+                        $personDetails['normalized_identification_number'] = CustomerIdentification::normalizeNumber($formattedNumber);
+                    } elseif ($person->exists === false) {
+                        $personDetails['identification_type'] = $validated['identificationType'] ?: null;
+                        $personDetails['identification_number'] = null;
+                        $personDetails['normalized_identification_number'] = null;
+                    }
                     $person->fill($personDetails)->save();
                     $identityKey = "{$customer->id}:person:{$person->id}";
                 } else {
@@ -433,11 +436,14 @@ class CustomerProfileWrites
         if (blank($fields['ownership'] ?? null)) {
             $fields['ownership'] = null;
         }
+        if (blank($fields['account_type'] ?? null)) {
+            $fields['account_type'] = null;
+        }
         $data = Validator::make(['form' => $fields], [
             'form.bank_name' => ['required', 'string', 'max:255'],
             'form.bank_country' => ['required', 'string', 'max:255'],
             'form.branch_address' => ['nullable', 'string', 'max:255'],
-            'form.account_type' => ['required', Rule::in(CustomerProfileSchema::options('bank_account_type'))],
+            'form.account_type' => ['nullable', Rule::in(CustomerProfileSchema::options('bank_account_type'))],
             'form.account_number' => [$accountId ? 'nullable' : 'required', 'string', 'max:100', 'regex:/^[A-Za-z0-9][A-Za-z0-9\s-]*$/'],
             'form.account_holder_name' => ['required', 'string', 'max:255'],
             'form.ownership' => ['nullable', Rule::in(CustomerProfileSchema::options('bank_ownership'))],

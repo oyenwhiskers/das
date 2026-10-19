@@ -48,6 +48,8 @@ class SinglePassExtractionTest extends TestCase
             && str_contains($request['input'][1]['text'], 'contract_version must be the exact string 2.0')
             && str_contains($request['input'][1]['text'], 'A value is one short line: only the text printed for that field, then stop.')
             && str_contains($request['input'][1]['text'], 'When a word is written as single letters with spaces between them, join those letters into the word and return that one short line. E S E Y is ESEY.')
+            && str_contains($request['input'][1]['text'], 'Do not stop after bank name and account number if branch is printed')
+            && str_contains($request['input'][1]['text'], 'bank_accounts[].branch_address')
             && str_contains($request['input'][1]['text'], 'Fields to fill:')
             && str_contains($request['input'][1]['text'], 'customer.full_legal_name | Full Legal Name | string | Applicant\'s full legal name'));
 
@@ -84,6 +86,31 @@ class SinglePassExtractionTest extends TestCase
         $this->assertFalse($values->has('customer.full_legal_name'));
         $this->assertSame('931023115077', preg_replace('/\D/', '', (string) $values['primary_identification.number']));
         $this->assertContains('Invalid field value', array_column($profile->original_projection['warnings'], 'issue'));
+    }
+
+    public function test_a_record_with_only_invalid_values_does_not_create_an_empty_applicant(): void
+    {
+        $scan = $this->scan();
+        $this->fake($this->payload([[
+            'record_ref' => 'MAZRUL KHAZANI BIN MAHMUD', 'anchor' => 'Application', 'source_pages' => [1], 'warnings' => [],
+            'values' => [
+                $this->value('customer.full_legal_name', 'provided', "MAZRUL KHAZANI BIN MAHMUD\n\nWait: starting new records."),
+            ],
+        ], [
+            'record_ref' => 'MAZRUL KHAZANI BIN MAHMUD', 'anchor' => 'Application', 'source_pages' => [1], 'warnings' => [],
+            'values' => [
+                $this->value('customer.full_legal_name', 'provided', 'MAZRUL KHAZANI BIN MAHMUD'),
+                $this->value('primary_identification.number', 'provided', '820222-03-5625'),
+            ],
+        ]]));
+
+        app(SinglePassExtraction::class)->run($scan, app(GeminiDocumentReader::class));
+
+        $profile = $scan->extractedProfiles()->sole();
+        $values = collect($profile->original_projection['values'])->pluck('value', 'field_id');
+        $this->assertSame('MAZRUL KHAZANI BIN MAHMUD', $values['customer.full_legal_name']);
+        $this->assertSame('820222035625', preg_replace('/\D/', '', (string) $values['primary_identification.number']));
+        $this->assertSame(1, $scan->extractedProfiles()->count());
     }
 
     public function test_a_broken_ff_ligature_is_read_as_ff(): void
@@ -622,6 +649,19 @@ class SinglePassExtractionTest extends TestCase
         $this->actingAs($staff)->get(route('documents.show', $scan))
             ->assertOk()
             ->assertSeeInOrder(['Employment Start Date', '2010-09-14']);
+    }
+
+    public function test_prompt_asks_for_bank_branch_and_complete_bank_reference_lines(): void
+    {
+        $snapshot = CustomerProfileSchema::snapshot();
+        $pass = app(SinglePassExtraction::class);
+        $fields = $pass->fieldList($snapshot);
+        $prompt = $pass->prompt($snapshot, 1, 2);
+
+        $this->assertStringContainsString('bank_accounts[].branch_address', $fields);
+        $this->assertStringContainsString('When a Bank Reference or bank block prints Bank, Branch, Account type, and Account number', $prompt);
+        $this->assertStringContainsString('Do not stop after bank name and account number if branch is printed', $prompt);
+        $this->assertStringContainsString('Profile fill prompt '.SinglePassExtraction::PROMPT_VERSION, $prompt);
     }
 
     public function test_an_empty_terms_batch_may_use_the_page_number_as_its_contract_version(): void

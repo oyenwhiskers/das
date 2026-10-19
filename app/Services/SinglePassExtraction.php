@@ -19,7 +19,7 @@ use UnexpectedValueException;
 
 class SinglePassExtraction
 {
-    public const PROMPT_VERSION = '8';
+    public const PROMPT_VERSION = '9';
 
     public const CONTRACT = '2.0';
 
@@ -194,6 +194,7 @@ class SinglePassExtraction
             .'A phone, email, occupation, or employer address printed in a family or next-of-kin section belongs to that related person. Store the mobile on relationships[].related_person.mobile, not on the applicant\'s contact. '
             .'A next-of-kin or family address is not an employer. Leave employer fields blank unless the form names an employer. '
             .'An employer, bank, account number, or income printed on the page is its own field. '
+            .'When a Bank Reference or bank block prints Bank, Branch, Account type, and Account number, emit each filled printed line on its matching bank_accounts[] field under the same row_ref. Do not stop after bank name and account number if branch is printed. For account_type, emit only when one of savings, current, or other is clearly selected, not when the page only prints the options label savings/current/others. '
             .'The printed heading "Spouse/Next of kin" is a label. Use spouse only when the applicant and the related person are different genders. An NRIC with an odd last digit is male and an even last digit is female. When both are the same gender, set relationships[].relationship to other and relationships[].other_relationship to Next of kin. '
             .'Copy repeatable field ids exactly, including the []. Put the row number only in row_ref. Do not write [0] or [1] inside a field id. '
             .'Repeatable fields need a stable row_ref. Leave observations that fit no listed field in unresolved. '
@@ -309,6 +310,11 @@ class SinglePassExtraction
             $built = $this->values($record, $fields, $start, $end);
             if ($built['pages'] === []) {
                 $unresolved[] = ['warning' => 'Record '.$ref.' has no supported page.'];
+
+                continue;
+            }
+            if ($built['values'] === []) {
+                $unresolved[] = ['warning' => 'Record '.$ref.' had no usable field values.'];
 
                 continue;
             }
