@@ -249,7 +249,7 @@ class SinglePassExtractionTest extends TestCase
         $this->assertSame('Amina Noor', $scan->extractedProfiles()->sole()->original_projection['values'][0]['value']);
         Http::assertSent(fn ($request): bool => str_contains($request['input'][1]['text'], 'A blank page is still readable.')
             && str_contains($request['input'][1]['text'], 'relationships[].related_person.mobile')
-            && str_contains($request['input'][1]['text'], 'Use spouse only when the applicant and the related person are different genders.'));
+            && str_contains($request['input'][1]['text'], 'Set relationships[].relationship to spouse only when customer.marital_status is Married'));
         $this->actingAs($staff)->get(route('documents.show', $scan))
             ->assertOk()
             ->assertDontSee('A later page group was not readable');
@@ -545,6 +545,38 @@ class SinglePassExtractionTest extends TestCase
             ->assertSee('Personal details')
             ->assertDontSee('No listed field was filled')
             ->assertDontSee('0 findings stored.');
+    }
+
+    public function test_a_single_applicant_with_opposite_gender_relative_is_next_of_kin_not_spouse(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $scan = $this->scan($staff);
+        $this->fake($this->payload([[
+            'record_ref' => 'applicant_01',
+            'source_pages' => [1],
+            'values' => [
+                ['field_id' => 'customer.full_legal_name', 'value' => 'Zulaikha Allysha Binti Mazwan'],
+                ['field_id' => 'customer.marital_status', 'value' => 'Single'],
+                ['field_id' => 'primary_identification.number', 'value' => '990301-06-5314'],
+                ['field_id' => 'primary_identification.type', 'value' => 'nric'],
+                ['field_id' => 'relationships[].relationship', 'value' => 'spouse'],
+                ['field_id' => 'relationships[].related_person.full_legal_name', 'value' => 'Mazwan Bin Mahmud'],
+                ['field_id' => 'relationships[].related_person.identification_number', 'value' => '700101-01-1235'],
+            ],
+        ]]));
+
+        app(SinglePassExtraction::class)->run($scan, app(GeminiDocumentReader::class));
+
+        $values = collect($scan->extractedProfiles()->sole()->original_projection['values'])->keyBy('field_id');
+        $this->assertSame('other', $values['relationships[].relationship']['value'] ?? null);
+        $this->assertSame('Next of kin', $values['relationships[].other_relationship']['value'] ?? null);
+        $this->assertSame('Single', $values['customer.marital_status']['value'] ?? null);
+        $this->actingAs($staff)->get(route('documents.show', $scan))
+            ->assertOk()
+            ->assertSeeInOrder(['Relationship To Applicant', 'NEXT OF KIN'])
+            ->assertSee('SINGLE')
+            ->assertDontSee('SPOUSE')
+            ->assertDontSee('MARRIED');
     }
 
     public function test_a_male_applicant_and_male_relative_are_next_of_kin_instead_of_spouse(): void

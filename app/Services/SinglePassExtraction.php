@@ -19,7 +19,7 @@ use UnexpectedValueException;
 
 class SinglePassExtraction
 {
-    public const PROMPT_VERSION = '9';
+    public const PROMPT_VERSION = '10';
 
     public const CONTRACT = '2.0';
 
@@ -195,7 +195,7 @@ class SinglePassExtraction
             .'A next-of-kin or family address is not an employer. Leave employer fields blank unless the form names an employer. '
             .'An employer, bank, account number, or income printed on the page is its own field. '
             .'When a Bank Reference or bank block prints Bank, Branch, Account type, and Account number, emit each filled printed line on its matching bank_accounts[] field under the same row_ref. Do not stop after bank name and account number if branch is printed. For account_type, emit only when one of savings, current, or other is clearly selected, not when the page only prints the options label savings/current/others. '
-            .'The printed heading "Spouse/Next of kin" is a label. Use spouse only when the applicant and the related person are different genders. An NRIC with an odd last digit is male and an even last digit is female. When both are the same gender, set relationships[].relationship to other and relationships[].other_relationship to Next of kin. '
+            .'The printed heading "Spouse/Next of kin" is a label, not proof of marriage. Set relationships[].relationship to spouse only when customer.marital_status is Married (or the form clearly names husband/wife/spouse). Opposite gender alone is not enough. When marital status is Single, Divorced, Widowed, or blank, or both people are the same gender, set relationships[].relationship to other and relationships[].other_relationship to Next of kin. An NRIC with an odd last digit is male and an even last digit is female. '
             .'Copy repeatable field ids exactly, including the []. Put the row number only in row_ref. Do not write [0] or [1] inside a field id. '
             .'Repeatable fields need a stable row_ref. Leave observations that fit no listed field in unresolved. '
             ."Fields to fill:\n".$this->fieldList($snapshot);
@@ -469,10 +469,69 @@ class SinglePassExtraction
                 'source_page' => $page, 'evidence_text' => mb_substr(trim($quote), 0, 2000),
             ];
         }
+        [$values, $warnings] = $this->demoteSpouseWhenNotMarried($values, $warnings);
         $pages = array_values($declared);
         sort($pages);
 
         return ['pages' => $pages, 'values' => $values, 'warnings' => $warnings];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $values
+     * @param  list<array<string, mixed>>  $warnings
+     * @return array{0: list<array<string, mixed>>, 1: list<array<string, mixed>>}
+     */
+    private function demoteSpouseWhenNotMarried(array $values, array $warnings): array
+    {
+        $marital = null;
+        foreach ($values as $value) {
+            if (($value['field_id'] ?? null) === 'customer.marital_status' && ($value['state'] ?? null) === 'provided' && is_string($value['value'] ?? null)) {
+                $marital = strtolower(trim($value['value']));
+            }
+        }
+        if ($marital === null || $marital === '' || $marital === 'married') {
+            return [$values, $warnings];
+        }
+        $needsOther = [];
+        foreach ($values as $index => $value) {
+            if (($value['field_id'] ?? null) !== 'relationships[].relationship'
+                || ($value['state'] ?? null) !== 'provided'
+                || strcasecmp(trim((string) ($value['value'] ?? '')), 'spouse') !== 0) {
+                continue;
+            }
+            $values[$index]['value'] = 'other';
+            $row = is_string($value['row_ref'] ?? null) ? $value['row_ref'] : null;
+            $needsOther[$row ?? ''] = $value;
+            $warnings[] = [
+                'field_id' => 'relationships[].relationship',
+                'row_ref' => $row,
+                'issue' => 'Spouse conflicts with marital status '.$marital.'; stored as Next of kin',
+            ];
+        }
+        if ($needsOther === []) {
+            return [$values, $warnings];
+        }
+        foreach ($values as $value) {
+            if (($value['field_id'] ?? null) === 'relationships[].other_relationship'
+                && ($value['state'] ?? null) === 'provided'
+                && filled($value['value'] ?? null)) {
+                unset($needsOther[is_string($value['row_ref'] ?? null) ? $value['row_ref'] : '']);
+            }
+        }
+        foreach ($needsOther as $row => $source) {
+            $values[] = [
+                'field_id' => 'relationships[].other_relationship',
+                'entity_ref' => $source['entity_ref'],
+                'entity_role' => $source['entity_role'],
+                'row_ref' => $row === '' ? ($source['row_ref'] ?? null) : $row,
+                'state' => 'provided',
+                'value' => 'Next of kin',
+                'source_page' => $source['source_page'],
+                'evidence_text' => $source['evidence_text'] ?? '',
+            ];
+        }
+
+        return [$values, $warnings];
     }
 
     /**

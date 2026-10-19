@@ -203,6 +203,19 @@ class FamilyRelationshipsTest extends TestCase
         $this->assertFalse($customer->relationships()->firstOrFail()->is_next_of_kin);
     }
 
+    public function test_a_single_customer_cannot_be_given_a_spouse(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($staff, 'creator')->create(['marital_status' => 'Single']);
+
+        Livewire::actingAs($staff)->test(FamilyRelationships::class, ['customer' => $customer])
+            ->call('add')->set('fullLegalName', 'Mazwan Bin Mahmud')->set('relationship', 'spouse')
+            ->set('mobile', '+60123456789')->set('isNextOfKin', true)->set('isPrimaryNextOfKin', true)
+            ->call('save')->assertHasErrors(['relationship']);
+
+        $this->assertDatabaseCount('customer_relationships', 0);
+    }
+
     public function test_the_same_family_identification_is_stored_separately_for_each_customer(): void
     {
         $staff = User::factory()->staff()->create();

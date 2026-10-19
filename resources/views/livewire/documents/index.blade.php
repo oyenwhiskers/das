@@ -41,19 +41,18 @@
                         <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                             <tr>
                                 <th scope="col" class="px-4 py-3"><input type="checkbox" wire:click.prevent="toggleAll" @checked($documents->total() > 0 && count($selected) >= $documents->total()) aria-label="Select all documents" /></th>
-                                <th scope="col" class="px-4 py-3">Filename</th><th scope="col" class="px-4 py-3">Document type</th><th scope="col" class="px-4 py-3">Uploaded</th><th scope="col" class="px-4 py-3">Status</th><th scope="col" class="px-4 py-3">Uploaded by</th><th scope="col" class="px-4 py-3">Action</th>
+                                <th scope="col" class="px-4 py-3">Filename</th><th scope="col" class="px-4 py-3">Document type</th><th scope="col" class="px-4 py-3">Uploaded</th><th scope="col" class="px-4 py-3">Status</th><th scope="col" class="px-4 py-3">Uploaded by</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 text-slate-700">
                             @foreach ($documents as $scan)
-                                <tr>
+                                <tr class="cursor-pointer hover:bg-slate-50" x-on:click="if (!$event.target.closest('button, input')) Livewire.navigate(@js(route('documents.show', $scan)))">
                                     <td class="px-4 py-3"><input type="checkbox" wire:model.live="selected" value="{{ $scan->id }}" aria-label="Select {{ $scan->original_filename }}" /></td>
                                     <td class="max-w-xs truncate px-4 py-3 font-medium text-slate-900">{{ $scan->original_filename }}</td>
                                     <td class="px-4 py-3">{{ $scan->document_type ?? '—' }}</td>
                                     <td class="whitespace-nowrap px-4 py-3">{{ $scan->created_at->timezone(config('app.timezone'))->format('d/m/Y, h:i A') }}</td>
                                     <td class="px-4 py-3"><span @class(['rounded-full px-2 py-1 text-xs font-medium', 'bg-emerald-50 text-emerald-700' => $scan->status->value === 'completed' && $scan->extraction_status === 'completed', 'bg-red-50 text-red-700' => $scan->status->value === 'failed' || $scan->extraction_status === 'failed', 'bg-slate-100 text-slate-700' => $scan->status->value !== 'failed' && in_array($scan->extraction_status, ['not_started', 'processing'])])>{{ $scan->status->value === 'completed' ? match ($scan->extraction_status) { 'completed' => 'Completed', 'processing' => 'Extracting', 'failed' => 'Extraction failed', default => 'Waiting for extraction' } : $scan->status->label() }}</span></td>
                                     <td class="px-4 py-3">{{ $scan->uploader?->name ?? 'Unknown' }}</td>
-                                    <td class="px-4 py-3"><a href="{{ route('documents.show', $scan) }}" wire:navigate class="font-medium text-navy-800 hover:underline">View</a></td>
                                 </tr>
                             @endforeach
                         </tbody>

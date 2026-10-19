@@ -907,6 +907,7 @@ class Show extends Component
             ];
         }
         $this->rejectSameGenderSpouse($filled, $labels);
+        $this->rejectUnmarriedSpouse($filled, $labels);
 
         return $filled;
     }
@@ -935,13 +936,44 @@ class Show extends Component
         if (! $this->sameGender($applicant, $related)) {
             return;
         }
+        $this->demoteSpouseRows($filled, $labels, 'Same gender', $hasOther);
+    }
+
+    /**
+     * @param  list<array{field_id: string, label: string, value: string, from_ic?: bool, note?: string}>  $filled
+     * @param  array<string, string>  $labels
+     */
+    private function rejectUnmarriedSpouse(array &$filled, array $labels): void
+    {
+        $marital = null;
+        $hasOther = false;
+        foreach ($filled as $row) {
+            if ($row['field_id'] === 'customer.marital_status') {
+                $marital = strtolower(trim((string) $row['value']));
+            }
+            if ($row['field_id'] === 'relationships[].other_relationship' && trim((string) $row['value']) !== '') {
+                $hasOther = true;
+            }
+        }
+        if ($marital === null || $marital === '' || $marital === 'married') {
+            return;
+        }
+        $this->demoteSpouseRows($filled, $labels, 'Not married', $hasOther);
+    }
+
+    /**
+     * @param  list<array{field_id: string, label: string, value: string, from_ic?: bool, note?: string}>  $filled
+     * @param  array<string, string>  $labels
+     */
+    private function demoteSpouseRows(array &$filled, array $labels, string $note, bool $hasOther): void
+    {
         $changed = false;
         foreach ($filled as $index => $row) {
             if ($row['field_id'] !== 'relationships[].relationship' || strcasecmp(trim((string) $row['value']), 'spouse') !== 0) {
                 continue;
             }
             $filled[$index]['value'] = 'other';
-            $filled[$index]['note'] = 'Same gender';
+            $filled[$index]['note'] = $note;
             $changed = true;
         }
         if (! $changed || $hasOther) {
@@ -952,7 +984,7 @@ class Show extends Component
             'label' => $labels['relationships[].other_relationship'] ?? 'Other Relationship',
             'value' => 'Next of kin',
             'from_ic' => false,
-            'note' => 'Same gender',
+            'note' => $note,
         ];
     }
 

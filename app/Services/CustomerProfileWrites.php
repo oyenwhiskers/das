@@ -56,6 +56,14 @@ class CustomerProfileWrites
             'marital_status' => ['nullable', 'string', 'max:50'],
         ])->validate();
 
+        if (filled($validated['marital_status'] ?? null)
+            && strcasecmp(trim((string) $validated['marital_status']), 'married') !== 0
+            && $customer->relationships()->where('relationship', 'spouse')->exists()) {
+            throw ValidationException::withMessages([
+                'marital_status' => 'This customer has a spouse on file. Change that relationship first, or keep marital status as Married.',
+            ]);
+        }
+
         $identificationType = filled($validated['identification_type'] ?? null) ? IdentificationType::from($validated['identification_type']) : null;
         $matches = $this->duplicates->check($identificationType, ($validated['identification_number'] ?? null) ?: null, $customer->primary_email, $customer->primary_mobile, $validated['full_legal_name'], $customer->id, ($validated['issuing_jurisdiction'] ?? null) ?: null);
         if ($matches['strong']->isNotEmpty()) {
@@ -261,6 +269,10 @@ class CustomerProfileWrites
         }
         if ($validated['isNextOfKin'] && blank($contact)) {
             $errors[$source === 'customer' ? 'linkedCustomerId' : 'mobile'] = 'Next of kin requires a usable contact number.';
+        }
+        if ($validated['relationship'] === 'spouse' && filled($customer->marital_status)
+            && strcasecmp(trim((string) $customer->marital_status), 'married') !== 0) {
+            $errors['relationship'] = 'Marital status is '.$customer->marital_status.'. Set Married before adding a spouse, or choose Next of kin / another relationship.';
         }
         if ($source === 'new' && filled($validated['identificationNumber'])) {
             $normalized = CustomerIdentification::normalizeNumber($validated['identificationNumber']);
