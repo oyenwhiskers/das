@@ -26,6 +26,8 @@ class Show extends Component
 
     public string $email = '';
 
+    public string $nric = '';
+
     public string $role = '';
 
     public string $password = '';
@@ -41,6 +43,7 @@ class Show extends Component
     {
         $this->name = $this->user->name;
         $this->email = $this->user->email;
+        $this->nric = (string) ($this->user->nric ?? '');
         $this->role = $this->user->role->value;
         $this->password = '';
         $this->password_confirmation = '';
@@ -59,6 +62,7 @@ class Show extends Component
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($this->user)],
+            'nric' => ['nullable', 'string', 'max:30'],
             'role' => ['required', Rule::enum(UserRole::class)],
             'password' => ['nullable', 'confirmed', PasswordRule::defaults()],
         ]);
@@ -72,6 +76,7 @@ class Show extends Component
         $payload = [
             'name' => $validated['name'],
             'email' => $validated['email'],
+            'nric' => filled($validated['nric'] ?? null) ? trim($validated['nric']) : null,
             'role' => UserRole::from($validated['role']),
         ];
 

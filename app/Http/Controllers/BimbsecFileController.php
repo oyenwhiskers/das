@@ -22,7 +22,11 @@ class BimbsecFileController extends Controller
         Gate::authorize('view', $application);
         $document = $this->generator->refresh($application, request()->user());
         abort_unless($document !== null && Storage::disk('local')->exists($document->storage_path), 404);
-        $bytes = $this->dates->apply(Storage::disk('local')->get($document->storage_path));
+        $customer->loadMissing('primaryIdentification');
+        $bytes = $this->dates->apply(
+            Storage::disk('local')->get($document->storage_path),
+            [$this->verifiedBy($customer)],
+        );
         $download = request()->boolean('download');
 
         return response($bytes, 200, [
@@ -49,7 +53,17 @@ class BimbsecFileController extends Controller
     {
         Gate::authorize('view', $batch);
         abort_unless($batch->complete && is_string($batch->storage_path) && Storage::disk('local')->exists($batch->storage_path), 404);
-        $bytes = $this->dates->apply(Storage::disk('local')->get($batch->storage_path));
+        $ids = array_values($batch->application_ids ?? []);
+        $customers = BimbsecApplication::query()
+            ->with(['customer.primaryIdentification'])
+            ->whereIn('id', $ids)
+            ->get()
+            ->keyBy('id');
+        $applicants = [];
+        foreach ($ids as $id) {
+            $applicants[] = $this->verifiedBy($customers->get($id)?->customer);
+        }
+        $bytes = $this->dates->apply(Storage::disk('local')->get($batch->storage_path), $applicants);
 
         return response($bytes, 200, [
             'Content-Type' => 'application/pdf',
@@ -67,5 +81,18 @@ class BimbsecFileController extends Controller
         return view('bimbsec.print', [
             'url' => route('bimbsec.batches.file', $batch),
         ]);
+    }
+
+    /** @return array{name: string, nric: string} */
+    private function verifiedBy(?Customer $customer): array
+    {
+        if ($customer === null) {
+            return ['name' => '', 'nric' => ''];
+        }
+
+        return [
+            'name' => (string) $customer->full_legal_name,
+            'nric' => (string) ($customer->primaryIdentification?->number ?: $customer->primary_identification_number ?: ''),
+        ];
     }
 }

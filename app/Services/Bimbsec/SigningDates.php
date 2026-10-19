@@ -7,7 +7,10 @@ use setasign\Fpdi\PdfParser\StreamReader;
 
 class SigningDates
 {
-    public function apply(string $bytes): string
+    /**
+     * @param  list<array{name?: string, nric?: string}>  $applicants  one entry per 14-page form in the PDF
+     */
+    public function apply(string $bytes, array $applicants = []): string
     {
         $pdf = new Fpdi('P', 'pt');
         $pdf->SetAutoPageBreak(false);
@@ -20,19 +23,50 @@ class SigningDates
             $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
             $pdf->useTemplate($template, 0, 0, $size['width'], $size['height']);
             if (($page - 5) % 14 === 0) {
-                $this->write($pdf, 122.0, $date);
-                $this->write($pdf, 347.0, $date);
+                $index = intdiv($page - 5, 14);
+                $this->writeAuthorised($pdf, $applicants[$index] ?? [], $date);
+            }
+            if (($page - 6) % 14 === 0) {
+                $index = intdiv($page - 6, 14);
+                $this->writeVerifiedBy($pdf, $applicants[$index] ?? [], $date);
             }
         }
 
         return $pdf->Output('S');
     }
 
-    private function write(Fpdi $pdf, float $x, string $date): void
+    /** @param  array{name?: string, nric?: string}  $applicant */
+    private function writeAuthorised(Fpdi $pdf, array $applicant, string $date): void
     {
         $pdf->SetFont('Helvetica', '', 8);
         $pdf->SetTextColor(0, 0, 0);
-        $pdf->SetXY($x, 716.4);
-        $pdf->Cell(80, 8, $date, 0, 0, 'L');
+        $name = mb_strtoupper(trim((string) ($applicant['name'] ?? '')));
+        $nric = mb_strtoupper(trim((string) ($applicant['nric'] ?? '')));
+        // Authorised column only; witness Name / NRIC / Date stay blank for handwriting.
+        $this->writeField($pdf, 122.0, 676.0, $name);
+        $this->writeField($pdf, 122.0, 694.0, $nric);
+        $this->writeField($pdf, 122.0, 716.4, $date);
+    }
+
+    /** @param  array{name?: string, nric?: string}  $applicant */
+    private function writeVerifiedBy(Fpdi $pdf, array $applicant, string $date): void
+    {
+        $pdf->SetFont('Helvetica', '', 8);
+        $pdf->SetTextColor(0, 0, 0);
+        $name = mb_strtoupper(trim((string) ($applicant['name'] ?? '')));
+        $nric = mb_strtoupper(trim((string) ($applicant['nric'] ?? '')));
+        // Mapping rects are rough estimates. Calibrated so each value sits on its label line.
+        $this->writeField($pdf, 70.0, 651.0, $name);
+        $this->writeField($pdf, 118.0, 660.0, $nric);
+        $this->writeField($pdf, 67.0, 670.0, $date);
+    }
+
+    private function writeField(Fpdi $pdf, float $x, float $y, string $text): void
+    {
+        if ($text === '') {
+            return;
+        }
+        $pdf->SetXY($x, $y);
+        $pdf->Cell(180.0, 8.0, $text, 0, 0, 'L');
     }
 }

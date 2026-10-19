@@ -72,7 +72,9 @@ class CustomerProfileWrites
         try {
             DB::transaction(function () use ($customer, $validated, $actor): void {
                 $identificationType = filled($validated['identification_type'] ?? null) ? IdentificationType::from($validated['identification_type']) : null;
-                $identificationNumber = filled($validated['identification_number'] ?? null) ? trim($validated['identification_number']) : null;
+                $identificationNumber = filled($validated['identification_number'] ?? null)
+                    ? CustomerIdentification::formatNumber($validated['identification_number'], $identificationType)
+                    : null;
                 $issuingJurisdiction = $identificationType === IdentificationType::Nric ? 'MY' : (filled($validated['issuing_jurisdiction'] ?? null) ? strtoupper(trim($validated['issuing_jurisdiction'])) : 'UNSPECIFIED');
                 $customer->update([
                     'salutation' => filled($validated['salutation'] ?? null) ? $validated['salutation'] : null,
@@ -271,12 +273,15 @@ class CustomerProfileWrites
         try {
             DB::transaction(function () use ($customer, $validated, $source, $record, $actor): void {
                 if ($source === 'new') {
-                    $normalized = CustomerIdentification::normalizeNumber($validated['identificationNumber']);
+                    $formattedNumber = filled($validated['identificationNumber'] ?? null)
+                        ? CustomerIdentification::formatNumber($validated['identificationNumber'], $validated['identificationType'] ?: null)
+                        : null;
+                    $normalized = CustomerIdentification::normalizeNumber($formattedNumber);
                     $person = $record?->relatedPerson ?? new RelatedPerson;
                     $personDetails = [
                         'full_legal_name' => trim($validated['fullLegalName']),
                         'identification_type' => $validated['identificationType'] ?: null,
-                        'identification_number' => $validated['identificationNumber'] ?: null,
+                        'identification_number' => $formattedNumber,
                         'normalized_identification_number' => $normalized,
                         'date_of_birth' => $validated['dateOfBirth'] ?: null,
                         'gender' => $validated['gender'] ?: null,
@@ -900,16 +905,21 @@ class CustomerProfileWrites
                     if ($duplicate) {
                         $this->fail('association.name', 'An active PEP association already exists for this person.');
                     }
+                    $formattedNumber = filled($data['identification_number'] ?? null)
+                        ? CustomerIdentification::formatNumber($data['identification_number'], $data['identification_type'] ?: null)
+                        : null;
                     $person = RelatedPerson::query()->create([
                         'full_legal_name' => trim((string) $data['name']),
                         'identification_type' => $data['identification_type'] ?: null,
-                        'identification_number' => $data['identification_number'] ?: null,
-                        'normalized_identification_number' => CustomerIdentification::normalizeNumber($data['identification_number'] ?: null),
+                        'identification_number' => $formattedNumber,
+                        'normalized_identification_number' => CustomerIdentification::normalizeNumber($formattedNumber),
                     ]);
                 }
                 if ($source === 'new' && $record && $person) {
-                    $replacementNumber = filled($data['identification_number'] ?? '') ? trim((string) $data['identification_number']) : $person->identification_number;
                     $replacementType = filled($data['identification_type'] ?? '') ? $data['identification_type'] : $person->identification_type?->value;
+                    $replacementNumber = filled($data['identification_number'] ?? '')
+                        ? CustomerIdentification::formatNumber($data['identification_number'], $replacementType)
+                        : $person->identification_number;
                     if (trim((string) $data['name']) !== $person->full_legal_name || $replacementNumber !== $person->identification_number || $replacementType !== $person->identification_type?->value) {
                         $person = $person->replicate();
                         $person->fill([

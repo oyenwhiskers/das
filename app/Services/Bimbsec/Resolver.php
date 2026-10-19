@@ -204,7 +204,12 @@ class Resolver
 
             return $selected;
         }
-        $eligible = $customer->bankAccounts->filter(fn (CustomerBankAccount $account): bool => $account->is_active && $account->is_primary && $this->applicantOwned($account) && $this->malaysia($account->bank_country));
+        // Active sole Malaysia accounts only; primary disambiguates when several qualify.
+        $eligible = $customer->bankAccounts->filter(fn (CustomerBankAccount $account): bool => $account->is_active && $this->applicantOwned($account) && $this->malaysia($account->bank_country));
+        $primary = $eligible->where('is_primary', true);
+        if ($primary->count() === 1) {
+            return $primary->first();
+        }
         if ($eligible->count() === 1) {
             return $eligible->first();
         }
@@ -291,7 +296,9 @@ class Resolver
             'personal.race' => $this->race($customer->race, $item),
             'addresses.residential' => $this->address($customer->residentialAddress, $item, false),
             'addresses.property_status' => $this->occupancy($customer->residentialAddress?->occupancy_status?->value, $customer->residentialAddress?->occupancy_other, $item),
-            'addresses.mailing' => $this->address($this->mailing($customer), $item, true),
+            'addresses.mailing' => $customer->mailingAddress?->same_as_residential === true
+                ? null
+                : $this->address($customer->mailingAddress, $item, true),
             'contact.home_phone' => $this->contact($customer, ContactType::Home, 'Home telephone'),
             'contact.mobile_phone' => $this->contact($customer, ContactType::Mobile, 'Mobile telephone'),
             'contact.email' => $this->contact($customer, ContactType::Email, 'Email'),
@@ -368,6 +375,10 @@ class Resolver
             'application.payment_instruction' => $this->one($context['choices']['payment'] ?? null, [
                 'cheque' => 'To issue cheque payable to me', 'epayment' => 'e-Payment – credit directly into my bank account',
             ], $item, 'Payment instruction', true),
+            'application.trading_document_checklist' => in_array($item, [
+                'Certified true copy of Applicant NRIC/Passport',
+                'Certified true copy of latest 1 month bank statement/passbook',
+            ], true),
             'compliance.related_to_bssb_staff' => $this->yesNo(null, $item, 'Related to a BSSB director, employee or dealer\'s representative', false, 'no'),
             'compliance.related_to_bssb_clients' => $this->yesNo(null, $item, 'Related to a BSSB client', false, 'no'),
             'compliance.bssb_staff_relatives', 'compliance.bssb_client_relatives' => null,
@@ -519,16 +530,6 @@ class Resolver
         }
 
         return $printed === $item;
-    }
-
-    private function mailing(Customer $customer): mixed
-    {
-        $mailing = $customer->mailingAddress;
-        if ($mailing?->same_as_residential === true) {
-            return $customer->residentialAddress;
-        }
-
-        return $mailing;
     }
 
     private function address(mixed $address, string $item, bool $mailing): mixed

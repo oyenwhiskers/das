@@ -742,10 +742,12 @@ class Show extends Component
             return;
         }
         if ($reference === 'identification.current_nric_or_passport') {
-            $customer->update(['primary_identification_number' => $value, 'updated_by' => $user->id]);
+            $type = $customer->primary_identification_type ?? $customer->primaryIdentification?->type;
+            $formatted = \App\Models\CustomerIdentification::formatNumber($value === '' ? null : $value, $type) ?? '';
+            $customer->update(['primary_identification_number' => $formatted === '' ? null : $formatted, 'updated_by' => $user->id]);
             $customer->primaryIdentification?->update([
-                'number' => $value,
-                'normalized_number' => \App\Models\CustomerIdentification::normalizeNumber($value),
+                'number' => $formatted === '' ? null : $formatted,
+                'normalized_number' => \App\Models\CustomerIdentification::normalizeNumber($formatted === '' ? null : $formatted),
             ]);
             $activity->log($customer, CustomerActivityAction::Updated, $user, 'NRIC corrected from BIMBSEC');
 
@@ -782,7 +784,15 @@ class Show extends Component
                 'employer_name_and_address' => 'employer_address',
                 default => str_starts_with($item, 'employer_') ? $item : 'employer_'.$item,
             };
-            $person->update([$column => $value === '' ? null : $value]);
+            if ($column === 'identification_number') {
+                $formatted = \App\Models\CustomerIdentification::formatNumber($value === '' ? null : $value, $person->identification_type) ?? null;
+                $person->update([
+                    'identification_number' => $formatted,
+                    'normalized_identification_number' => \App\Models\CustomerIdentification::normalizeNumber($formatted),
+                ]);
+            } else {
+                $person->update([$column => $value === '' ? null : $value]);
+            }
             $activity->log($customer, CustomerActivityAction::Updated, $user, 'Spouse or next of kin corrected from BIMBSEC');
 
             return;

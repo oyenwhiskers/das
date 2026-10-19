@@ -47,4 +47,27 @@ class CustomerIdentification extends Model
 
         return $normalized === '' ? null : $normalized;
     }
+
+    public static function formatNumber(?string $number, IdentificationType|string|null $type = null): ?string
+    {
+        if (blank($number)) {
+            return null;
+        }
+
+        $trimmed = trim($number);
+        $isNric = $type === IdentificationType::Nric
+            || $type === IdentificationType::Nric->value
+            || (is_string($type) && strtolower($type) === 'nric');
+
+        if (! $isNric) {
+            return $trimmed;
+        }
+
+        $normalized = self::normalizeNumber($trimmed);
+        if ($normalized !== null && preg_match('/^\d{12}$/', $normalized) === 1) {
+            return substr($normalized, 0, 6).'-'.substr($normalized, 6, 2).'-'.substr($normalized, 8, 4);
+        }
+
+        return $trimmed;
+    }
 }

@@ -10,6 +10,7 @@ new class extends Component
 {
     public string $name = '';
     public string $email = '';
+    public string $nric = '';
 
     /**
      * Mount the component.
@@ -18,6 +19,7 @@ new class extends Component
     {
         $this->name = Auth::user()->name;
         $this->email = Auth::user()->email;
+        $this->nric = (string) (Auth::user()->nric ?? '');
     }
 
     /**
@@ -30,7 +32,9 @@ new class extends Component
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', Rule::unique(User::class)->ignore($user->id)],
+            'nric' => ['nullable', 'string', 'max:30'],
         ]);
+        $validated['nric'] = filled($validated['nric'] ?? null) ? trim($validated['nric']) : null;
 
         $user->fill($validated);
 
@@ -102,6 +106,12 @@ new class extends Component
                     @endif
                 </div>
             @endif
+        </div>
+
+        <div>
+            <x-input-label for="nric" :value="__('NRIC / Passport')" />
+            <x-text-input wire:model="nric" id="nric" name="nric" type="text" class="mt-1 block w-full" />
+            <x-input-error class="mt-2" :messages="$errors->get('nric')" />
         </div>
 
         <div class="flex items-center gap-4">

@@ -223,6 +223,7 @@ class FamilyRelationshipsTest extends TestCase
         $this->assertDatabaseCount('customer_relationships', 2);
         $this->assertSame('Siti Hassan', $firstCustomer->relationships()->firstOrFail()->relatedPerson->full_legal_name);
         $this->assertSame('Different Person', $secondCustomer->relationships()->firstOrFail()->relatedPerson->full_legal_name);
+        $this->assertSame('900101-12-1234', $secondCustomer->relationships()->firstOrFail()->relatedPerson->identification_number);
         $this->assertSame('900101121234', $secondCustomer->relationships()->firstOrFail()->relatedPerson->normalized_identification_number);
     }
 
@@ -253,6 +254,7 @@ class FamilyRelationshipsTest extends TestCase
         $relationship = $applicant->relationships()->firstOrFail();
         $this->assertNull($relationship->related_customer_id);
         $this->assertSame('Suhaimi Bin Shafain', $relationship->relatedPerson->full_legal_name);
+        $this->assertSame('810506-03-6065', $relationship->relatedPerson->identification_number);
         $this->assertSame('810506036065', $relationship->relatedPerson->normalized_identification_number);
     }
 }

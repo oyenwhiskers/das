@@ -128,6 +128,15 @@ class BimbsecModuleTest extends TestCase
         $remote = collect($resolved['draws'])->first(fn (array $draw): bool => ($draw['field']['printed_item'] ?? '') === 'Non Face-To-Face');
         $this->assertTrue($trading['on'] ?? false);
         $this->assertTrue($remote['on'] ?? false);
+        foreach ([
+            'Certified true copy of Applicant NRIC/Passport',
+            'Certified true copy of latest 1 month bank statement/passbook',
+        ] as $doc) {
+            $tick = collect($resolved['draws'])->first(fn (array $draw): bool => ($draw['field']['printed_item'] ?? '') === $doc);
+            $this->assertTrue($tick['on'] ?? false, $doc);
+        }
+        $staffId = collect($resolved['draws'])->first(fn (array $draw): bool => ($draw['field']['printed_item'] ?? '') === 'Certified true copy of Staff ID Card (LTH Group employee)');
+        $this->assertNull($staffId);
         $principal = collect($resolved['draws'])->first(fn (array $draw): bool => ($draw['field']['printed_item'] ?? '') === 'For me as principal');
         $this->assertTrue($principal['on'] ?? false);
         foreach (['tax.us_person_for_irs', 'tax.us_green_card_holder', 'tax.us_resident'] as $key) {
@@ -172,6 +181,30 @@ class BimbsecModuleTest extends TestCase
         $this->assertSame($before, $ali->fresh()->updated_at?->toJSON());
         $pdf = new Fpdi;
         $this->assertSame(14, $pdf->setSourceFile(Storage::disk('local')->path($document->storage_path)));
+    }
+
+    public function test_a_sole_malaysia_bank_maps_without_being_marked_primary(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = $this->customer($user, 'ALI BIN ABU', '900101011234');
+        $customer->bankAccounts()->create([
+            'bank_name' => 'CIMB',
+            'bank_country' => 'Malaysia',
+            'branch_address' => 'KL Main',
+            'account_type' => 'savings',
+            'account_number' => '9876543210',
+            'account_holder_name' => 'ALI BIN ABU',
+            'ownership' => 'sole',
+            'is_primary' => false,
+            'is_active' => true,
+            'identity_hash' => CustomerBankAccount::identityHash('CIMB', 'Malaysia', '9876543210'),
+        ]);
+
+        $draws = collect(app(Resolver::class)->resolve($customer->fresh(), [])['draws']);
+        $this->assertSame(['CIMB'], $draws->first(fn (array $draw): bool => ($draw['field']['printed_item'] ?? '') === 'bank')['rows'] ?? null);
+        $this->assertSame(['KL Main'], $draws->first(fn (array $draw): bool => ($draw['field']['printed_item'] ?? '') === 'branch_or_address')['rows'] ?? null);
+        $this->assertSame(['Savings'], $draws->first(fn (array $draw): bool => ($draw['field']['printed_item'] ?? '') === 'account_type')['rows'] ?? null);
+        $this->assertSame(['9876543210'], $draws->first(fn (array $draw): bool => ($draw['field']['printed_item'] ?? '') === 'account_number')['rows'] ?? null);
     }
 
     public function test_a_long_name_stays_locked_until_it_is_shortened_on_the_profile(): void
@@ -262,11 +295,18 @@ class BimbsecModuleTest extends TestCase
         $this->assertSame('1 Jalan Damai', $customer->fresh()->residentialAddress->line_1);
         $this->assertTrue((bool) $customer->fresh()->mailingAddress->same_as_residential);
         $this->assertFalse(app(Generator::class)->assess($customer->fresh(), [])['blocked']);
+
+        $draws = app(Resolver::class)->resolve($customer->fresh(), [])['draws'];
+        $mailingDraws = collect($draws)->filter(
+            fn (array $draw): bool => ($draw['field']['source']['reference_key'] ?? '') === 'addresses.mailing'
+                && filled($draw['text'] ?? null),
+        );
+        $this->assertTrue($mailingDraws->isEmpty(), 'Mailing PDF fields must stay blank when same as residential.');
     }
 
     public function test_opening_the_pdf_stamps_the_date_without_rewriting_the_file(): void
     {
-        $user = User::factory()->staff()->create();
+        $user = User::factory()->staff()->create(['name' => 'Siti Aminah']);
         $customer = $this->customer($user, 'ALI BIN ABU', '900101011234');
         $application = $customer->bimbsecApplications()->create([
             'choices' => BimbsecApplication::normalizeChoices(['account_type' => 'trading']),
@@ -279,7 +319,11 @@ class BimbsecModuleTest extends TestCase
             ->get(route('bimbsec.file', [$customer, $application]))
             ->assertOk()
             ->assertHeader('content-type', 'application/pdf');
-        $this->assertTrue($this->pdfContains($response->getContent(), now()->format('d/m/Y')));
+        $served = $response->getContent();
+        $this->assertTrue($this->pdfContains($served, now()->format('d/m/Y')));
+        $this->assertTrue($this->pdfContains($served, 'ALI BIN ABU'));
+        $this->assertTrue($this->pdfContains($served, '900101011234'));
+        $this->assertFalse($this->pdfContains($served, 'SITI AMINAH'));
         $this->assertSame($bytes, Storage::disk('local')->get($document->fresh()->storage_path));
         $this->assertFalse($this->pdfContains($bytes, now()->format('d/m/Y')));
     }

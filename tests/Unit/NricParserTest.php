@@ -2,6 +2,8 @@
 
 namespace Tests\Unit;
 
+use App\Enums\IdentificationType;
+use App\Models\CustomerIdentification;
 use App\Services\NricParser;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -72,5 +74,15 @@ class NricParserTest extends TestCase
     {
         $this->assertSame('900101141234', $this->parser->normalize('900101-14-1234'));
         $this->assertSame('900101141234', $this->parser->normalize('900101 14 1234'));
+    }
+
+    #[Test]
+    public function it_formats_nric_to_dashed_display(): void
+    {
+        $this->assertSame('900101-14-1234', CustomerIdentification::formatNumber('900101141234', IdentificationType::Nric));
+        $this->assertSame('900101-14-1234', CustomerIdentification::formatNumber('900101-14-1234', 'nric'));
+        $this->assertSame('900101-14-1234', CustomerIdentification::formatNumber('900101 14 1234', 'nric'));
+        $this->assertSame('AB-123', CustomerIdentification::formatNumber(' AB-123 ', IdentificationType::Passport));
+        $this->assertSame('7704036259', CustomerIdentification::formatNumber('7704036259', 'nric'));
     }
 }

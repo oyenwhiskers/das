@@ -40,7 +40,7 @@ class CustomerCreator
                 ? IdentificationType::from($data['identification_type'])
                 : null;
             $identificationNumber = filled($data['identification_number'] ?? null)
-                ? trim($data['identification_number'])
+                ? CustomerIdentification::formatNumber($data['identification_number'], $identificationType)
                 : null;
             $issuingJurisdiction = $identificationType === IdentificationType::Nric
                 ? 'MY'

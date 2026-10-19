@@ -8699,9 +8699,9 @@
         "subfield": "Certified true copy of Applicant NRIC/Passport",
         "option_display_value": "Certified true copy of Applicant NRIC/Passport"
       },
-      "fill_policy": "manual",
-      "source_policy": "STAFF VERIFY",
-      "business_rule": "Check actual supporting document or verification action before marking; do not infer from customer data.",
+      "fill_policy": "confirm",
+      "source_policy": "CONFIRM",
+      "business_rule": "Always mark for trading applications; NRIC/passport is a standard required attachment.",
       "placement": {
         "type": "checkbox",
         "rect": [
@@ -8722,7 +8722,7 @@
         "blank_when_unknown": true
       },
       "description": "Individually preserve visual checkbox status for each trading-account supporting document.",
-      "should_autofill": false
+      "should_autofill": true
     },
     {
       "id": "bimb.p6.193",
@@ -8867,9 +8867,9 @@
         "subfield": "Certified true copy of latest 1 month bank statement/passbook",
         "option_display_value": "Certified true copy of latest 1 month bank statement/passbook"
       },
-      "fill_policy": "manual",
-      "source_policy": "STAFF VERIFY",
-      "business_rule": "Check actual supporting document or verification action before marking; do not infer from customer data.",
+      "fill_policy": "confirm",
+      "source_policy": "CONFIRM",
+      "business_rule": "Always mark for trading applications; latest bank statement/passbook is a standard required attachment.",
       "placement": {
         "type": "checkbox",
         "rect": [
@@ -8890,7 +8890,7 @@
         "blank_when_unknown": true
       },
       "description": "Individually preserve visual checkbox status for each trading-account supporting document.",
-      "should_autofill": false
+      "should_autofill": true
     },
     {
       "id": "bimb.p6.197",

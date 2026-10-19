@@ -75,6 +75,11 @@
                             <x-input-error :messages="$errors->get('email')" class="mt-2" />
                         </div>
                         <div>
+                            <x-input-label for="nric" value="NRIC / Passport" />
+                            <x-text-input wire:model="nric" id="nric" class="mt-1 block w-full" />
+                            <x-input-error :messages="$errors->get('nric')" class="mt-2" />
+                        </div>
+                        <div>
                             <x-input-label for="role" value="Role" />
                             <select wire:model="role" id="role" class="mt-1 block w-full rounded-md border-slate-300 text-sm shadow-sm focus:border-navy-500 focus:ring-navy-500">
                                 @foreach (\App\Enums\UserRole::cases() as $userRole)
@@ -83,7 +88,6 @@
                             </select>
                             <x-input-error :messages="$errors->get('role')" class="mt-2" />
                         </div>
-                        <div></div>
                         <div>
                             <x-input-label for="password" value="New Password (optional)" />
                             <x-text-input wire:model="password" id="password" type="password" class="mt-1 block w-full" autocomplete="new-password" />
@@ -102,6 +106,7 @@
                     <dl class="grid gap-x-6 gap-y-5 text-sm sm:grid-cols-2">
                         <div><dt class="text-slate-500">Full Name</dt><dd class="mt-1 font-medium text-slate-900">{{ $user->name }}</dd></div>
                         <div><dt class="text-slate-500">Email</dt><dd class="mt-1 break-all font-medium text-slate-900">{{ $user->email }}</dd></div>
+                        <div><dt class="text-slate-500">NRIC / Passport</dt><dd class="mt-1 font-medium text-slate-900">{{ $user->nric ?: '—' }}</dd></div>
                         <div><dt class="text-slate-500">Role</dt><dd class="mt-1 font-medium text-slate-900">{{ $user->role->label() }}</dd></div>
                         <div><dt class="text-slate-500">Status</dt><dd class="mt-1 font-medium text-slate-900">{{ $user->is_active ? 'Active' : 'Inactive' }}</dd></div>
                     </dl>

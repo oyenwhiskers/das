@@ -7,6 +7,7 @@ use App\Livewire\Customers\Create;
 use App\Livewire\Customers\Show;
 use App\Models\Customer;
 use App\Models\CustomerIdentification;
+use App\Models\RelatedPerson;
 use App\Models\User;
 use App\Services\CustomerCreator;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -80,8 +81,69 @@ class CustomerIdentificationIntegrityTest extends TestCase
         $this->assertDatabaseHas('customer_identifications', [
             'customer_id' => $customer->id,
             'issuing_jurisdiction' => 'MY',
+            'number' => '900101-12-1234',
             'normalized_number' => '900101121234',
         ]);
+        $this->assertSame('900101-12-1234', $customer->fresh()->primary_identification_number);
+    }
+
+    public function test_create_stores_undashed_nric_in_dashed_format(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = app(CustomerCreator::class)->create([
+            'full_legal_name' => 'Dashed Person',
+            'identification_type' => 'nric',
+            'identification_number' => '900101121234',
+        ], $user);
+
+        $this->assertSame('900101-12-1234', $customer->primary_identification_number);
+        $this->assertDatabaseHas('customer_identifications', [
+            'customer_id' => $customer->id,
+            'number' => '900101-12-1234',
+            'normalized_number' => '900101121234',
+        ]);
+    }
+
+    public function test_backfill_rewrites_existing_undashed_nrics_and_leaves_others(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($user, 'creator')->create([
+            'primary_identification_type' => IdentificationType::Nric,
+            'primary_identification_number' => '900101121234',
+        ]);
+        $identification = CustomerIdentification::query()->create([
+            'customer_id' => $customer->id,
+            'type' => IdentificationType::Nric,
+            'issuing_jurisdiction' => 'MY',
+            'number' => '900101121234',
+            'normalized_number' => '900101121234',
+            'is_primary' => true,
+        ]);
+        $passportCustomer = Customer::factory()->for($user, 'creator')->create([
+            'primary_identification_type' => IdentificationType::Passport,
+            'primary_identification_number' => 'A1234567',
+        ]);
+        $person = RelatedPerson::query()->create([
+            'full_legal_name' => 'Family Member',
+            'identification_type' => IdentificationType::Nric,
+            'identification_number' => '810506036065',
+            'normalized_identification_number' => '810506036065',
+        ]);
+        $short = Customer::factory()->for($user, 'creator')->create([
+            'primary_identification_type' => IdentificationType::Nric,
+            'primary_identification_number' => '7704036259',
+        ]);
+
+        $migration = require database_path('migrations/2026_10_19_120000_backfill_nric_dashed_format.php');
+        $migration->up();
+
+        $this->assertSame('900101-12-1234', $customer->fresh()->primary_identification_number);
+        $this->assertSame('900101-12-1234', $identification->fresh()->number);
+        $this->assertSame('900101121234', $identification->fresh()->normalized_number);
+        $this->assertSame('A1234567', $passportCustomer->fresh()->primary_identification_number);
+        $this->assertSame('810506-03-6065', $person->fresh()->identification_number);
+        $this->assertSame('810506036065', $person->fresh()->normalized_identification_number);
+        $this->assertSame('7704036259', $short->fresh()->primary_identification_number);
     }
 
     public function test_passport_identity_is_scoped_to_issuing_jurisdiction(): void
