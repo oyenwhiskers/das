@@ -166,7 +166,7 @@ class Renderer
         if (! is_array($rows) || $rows === [] || $text === '') {
             return [];
         }
-        if (! empty($placement['uppercase']) || ($field['print_setting']['input_uppercase'] ?? false)) {
+        if ($this->shouldUppercase($field, $placement)) {
             $text = mb_strtoupper($text);
         }
         $chars = $this->chars($text);
@@ -355,6 +355,35 @@ class Renderer
             'printed_item' => $field['printed_item'] ?? null,
             'message' => $label.' is too long for the form. '.$left,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $field
+     * @param  array<string, mixed>  $placement
+     */
+    private function shouldUppercase(array $field, array $placement): bool
+    {
+        if ($this->isEmailField($field)) {
+            return false;
+        }
+
+        return ! empty($placement['uppercase']) || ($field['print_setting']['input_uppercase'] ?? false);
+    }
+
+    /** @param  array<string, mixed>  $field */
+    private function isEmailField(array $field): bool
+    {
+        $key = strtolower((string) ($field['source']['reference_key'] ?? ''));
+        $item = strtolower((string) ($field['printed_item'] ?? ''));
+        $group = strtolower((string) ($field['printed_group'] ?? ''));
+
+        return $key === 'contact.email'
+            || str_ends_with($key, '.email')
+            || $item === 'email'
+            || str_contains($item, 'e-mail')
+            || str_contains($item, 'email')
+            || str_contains($group, 'e-mail')
+            || str_contains($group, 'email');
     }
 
     /** @param  array<string, mixed>  $field */

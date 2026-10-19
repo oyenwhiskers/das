@@ -143,7 +143,9 @@ class CustomerProfileWrites
             }
             $customer->update([
                 'primary_mobile' => filled($validated['mobile']) ? $validated['mobile'] : null,
-                'primary_email' => filled($validated['email']) ? $validated['email'] : null,
+                'primary_email' => filled($validated['email'])
+                    ? CustomerContact::normalizeValue(ContactType::Email, $validated['email'])
+                    : null,
                 'updated_by' => $actor->id,
             ]);
             $this->activity->log($customer, CustomerActivityAction::Updated, $actor, 'Contact information updated');
@@ -288,7 +290,9 @@ class CustomerProfileWrites
                         'nationality' => $validated['nationality'] ?: null,
                         'mobile' => $validated['mobile'] ?: null,
                         'home_telephone' => $validated['homeTelephone'] ?: null,
-                        'email' => $validated['email'] ?: null,
+                        'email' => filled($validated['email'] ?? null)
+                            ? CustomerContact::normalizeValue(ContactType::Email, $validated['email'])
+                            : null,
                         'occupation' => $validated['occupation'] ?: null,
                         'employer_name' => $validated['employerName'] ?: null,
                         'employer_address' => $validated['employerAddress'] ?: null,
@@ -995,7 +999,10 @@ class CustomerProfileWrites
 
             return;
         }
-        $payload = ['value' => $value, 'normalized_value' => CustomerContact::normalizeValue($type, $value), 'is_primary' => $isPrimary];
+        $normalized = CustomerContact::normalizeValue($type, $value);
+        // Emails are stored lowercase (same as normalized); never print/save as capitals.
+        $stored = $type === ContactType::Email ? $normalized : $value;
+        $payload = ['value' => $stored, 'normalized_value' => $normalized, 'is_primary' => $isPrimary];
         if ($existing) {
             $existing->update($payload);
         } else {

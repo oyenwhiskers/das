@@ -54,7 +54,9 @@ class CustomerCreator
                 throw new \InvalidArgumentException('Issuing jurisdiction is required for this identification type.');
             }
             $mobile = filled($data['mobile'] ?? null) ? trim($data['mobile']) : null;
-            $email = filled($data['email'] ?? null) ? trim($data['email']) : null;
+            $email = filled($data['email'] ?? null)
+                ? CustomerContact::normalizeValue(ContactType::Email, $data['email'])
+                : null;
 
             $customer = Customer::query()->create([
                 'reference' => $this->referenceGenerator->generate(),

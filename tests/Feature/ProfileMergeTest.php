@@ -241,7 +241,7 @@ class ProfileMergeTest extends TestCase
         $this->assertSame('KEPT NAME', $customer->full_legal_name);
         $this->assertSame('MARRIED', $customer->marital_status);
         $this->assertSame('MALAYSIA', $customer->country_of_residence);
-        $this->assertSame('Keep.Me@Example.com', $customer->primary_email);
+        $this->assertSame('keep.me@example.com', $customer->primary_email);
         $this->assertSame('Chinese', $customer->race);
         $this->assertSame('OLD123', $customer->identifications()->first()->old_nric);
 

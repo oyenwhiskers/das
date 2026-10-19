@@ -328,6 +328,31 @@ class BimbsecModuleTest extends TestCase
         $this->assertFalse($this->pdfContains($bytes, now()->format('d/m/Y')));
     }
 
+    public function test_email_on_the_form_keeps_lowercase_and_is_not_uppercased(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = $this->customer($user, 'ALI BIN ABU', '900101011234');
+        $customer->contacts()->create([
+            'type' => ContactType::Email,
+            'value' => 'ali.bin.abu@example.com',
+            'normalized_value' => 'ali.bin.abu@example.com',
+            'is_primary' => true,
+        ]);
+        $customer->update(['primary_email' => 'ali.bin.abu@example.com']);
+
+        $email = collect(app(Resolver::class)->resolve($customer->fresh(), [])['draws'])
+            ->first(fn (array $draw): bool => ($draw['field']['source']['reference_key'] ?? '') === 'contact.email');
+        $this->assertSame('ali.bin.abu@example.com', $email['text'] ?? null);
+        $this->assertFalse((bool) ($email['field']['placement']['uppercase'] ?? false));
+        $this->assertFalse((bool) ($email['field']['print_setting']['input_uppercase'] ?? false));
+
+        app(Generator::class)->generate($customer->bimbsecApplications()->create([
+            'choices' => BimbsecApplication::normalizeChoices([]),
+            'created_by' => $user->id,
+        ]), $user);
+        $this->assertFalse(app(Generator::class)->assess($customer->fresh(), [])['blocked']);
+    }
+
     public function test_a_customer_has_one_bimbsec_form(): void
     {
         $user = User::factory()->staff()->create();

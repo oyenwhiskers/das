@@ -2657,7 +2657,7 @@
         ],
         "line_order": "row_major",
         "space_consumes_cell": true,
-        "uppercase": true,
+        "uppercase": false,
         "on_overflow": "stop_and_review",
         "coordinate_status": "measured_vector"
       },
@@ -2666,10 +2666,10 @@
         "default_font": "Helvetica",
         "font_size_pt": 7,
         "ink": "black",
-        "input_uppercase": true,
+        "input_uppercase": false,
         "blank_when_unknown": true
       },
-      "description": "Applicant e-mail as written.",
+      "description": "Applicant e-mail as written (preserve case; do not uppercase).",
       "should_autofill": true
     },
     {
@@ -3389,7 +3389,7 @@
         ],
         "line_order": "row_major",
         "space_consumes_cell": true,
-        "uppercase": true,
+        "uppercase": false,
         "on_overflow": "stop_and_review",
         "coordinate_status": "measured_vector"
       },
@@ -3398,10 +3398,10 @@
         "default_font": "Helvetica",
         "font_size_pt": 7,
         "ink": "black",
-        "input_uppercase": true,
+        "input_uppercase": false,
         "blank_when_unknown": true
       },
-      "description": "Their email.",
+      "description": "Their email (preserve case; do not uppercase).",
       "should_autofill": true
     },
     {
