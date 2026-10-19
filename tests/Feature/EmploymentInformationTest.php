@@ -36,9 +36,12 @@ class EmploymentInformationTest extends TestCase
         $this->assertSame(1, $customer->employments()->count());
         $this->assertTrue($customer->activities()->where('action', 'employment_ended')->exists());
 
-        $component->call('editStatus')->set('employmentStatus', 'unemployed')->call('saveStatus')->assertHasNoErrors();
+        $component->call('editStatus')->set('employmentStatus', 'other')->set('employmentStatusOther', 'Homemaker')
+            ->call('saveStatus')->assertHasNoErrors();
         $this->assertSame(1, $customer->employments()->count());
-        $this->assertSame('2026-10-02', $customer->fresh()->retirement_date->toDateString());
+        $this->assertSame('other', $customer->fresh()->employment_status);
+        $this->assertSame('Homemaker', $customer->fresh()->employment_status_other);
+        $this->assertNull($customer->fresh()->retirement_date);
     }
 
     public function test_concurrent_jobs_require_confirmation_to_change_primary(): void
@@ -65,7 +68,7 @@ class EmploymentInformationTest extends TestCase
         $customer = Customer::factory()->for($staff, 'creator')->create();
         $component = Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer]);
 
-        $component->call('add')->set('form.arrangement', 'employee')->set('form.start_date', '2026-10-02')->set('form.is_current', false)
+        $component->call('add')->set('form.arrangement', 'employed')->set('form.start_date', '2026-10-02')->set('form.is_current', false)
             ->set('form.end_date', '2026-10-01')->call('save')->assertHasErrors('form.end_date');
         $component->set('form.is_current', true)->set('form.end_date', '2026-10-03')
             ->call('save')->assertHasErrors('form.end_date');
@@ -118,6 +121,28 @@ class EmploymentInformationTest extends TestCase
         $this->assertSame('Student', $customer->fresh()->employment_status_other);
         $this->assertSame('ACME', $job->fresh()->employer_name);
         $this->assertTrue($customer->activities()->where('action', 'employment_record_corrected')->exists());
+    }
+
+    public function test_arrangement_matches_form_3_and_others_syncs_to_bimb_status(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($staff, 'creator')->create();
+        $component = Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer]);
+
+        $component->call('add')->set('form.arrangement', 'other')->set('form.occupation', 'Trader')
+            ->call('save')->assertHasErrors('form.arrangement_other');
+        $component->set('form.arrangement_other', 'KONTRAKTOR')->call('save')->assertHasNoErrors();
+
+        $this->assertSame('other', $customer->fresh()->employment_status);
+        $this->assertSame('KONTRAKTOR', $customer->fresh()->employment_status_other);
+        $this->assertSame('other', $customer->employments()->firstOrFail()->arrangement);
+
+        $draws = collect(app(\App\Services\Bimbsec\Resolver::class)->resolve($customer->fresh(), [])['draws']);
+        $others = $draws->first(fn (array $d): bool => ($d['field']['source']['reference_key'] ?? '') === 'employment.status'
+            && ($d['field']['printed_item'] ?? '') === 'Others');
+        $this->assertTrue($others['on'] ?? false);
+        $this->assertSame('KONTRAKTOR', $draws->first(fn (array $d): bool => ($d['field']['source']['reference_key'] ?? '') === 'employment.status'
+            && str_starts_with((string) ($d['field']['printed_item'] ?? ''), 'Others (specify)'))['text'] ?? null);
     }
 
     public function test_empty_record_and_invalid_contact_details_are_rejected(): void

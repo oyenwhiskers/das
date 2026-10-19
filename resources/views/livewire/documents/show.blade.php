@@ -248,7 +248,7 @@
                     @endphp
                     <div
                         x-data="{
-                            query: '',
+                            query: (() => { const value = new URLSearchParams(window.location.search).get('q'); return value ? value : ''; })(),
                             viewing: null,
                             searches: @js(array_column($applicantRows, 'search')),
                             matches(text) {

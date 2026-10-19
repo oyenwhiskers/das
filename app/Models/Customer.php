@@ -228,6 +228,11 @@ class Customer extends Model
         return $this->hasMany(CustomerFatcaDeclaration::class);
     }
 
+    public function profileMerges(): HasMany
+    {
+        return $this->hasMany(ExtractedProfileMerge::class);
+    }
+
     public function deleteWithDependents(): void
     {
         DB::transaction(function (): void {

@@ -359,6 +359,7 @@ class Show extends Component
         }
         $fields = [
             'arrangement' => $job?->arrangement,
+            'arrangement_other' => $customer->employment_status_other,
             'occupation' => $this->occupation,
             'employer_name' => $this->employer_name,
             'registration_number' => $this->registration_number,
@@ -658,8 +659,17 @@ class Show extends Component
                 ? trim(implode(' ', array_filter([$address->line_1, $address->line_2])))
                 : (string) ($address->{$item} ?? '');
         }
-        $job = app(Resolver::class)->subjects($customer, $this->application->choices ?? [])['employment'];
+        $resolver = app(Resolver::class);
+        $job = $resolver->subjects($customer, $this->application->choices ?? [])['employment'];
         if ($reference === 'employment.business_address' && $job !== null) {
+            if ($resolver->businessAddressUsesResidential($customer, $job)) {
+                $home = $customer->residentialAddress;
+
+                return $item === 'address_lines'
+                    ? trim(implode(' ', array_filter([$home?->line_1, $home?->line_2])))
+                    : (string) ($home?->{$item} ?? '');
+            }
+
             return $item === 'address_lines'
                 ? trim(implode(' ', array_filter([$job->address_line_1, $job->address_line_2])))
                 : (string) ($job->{$item} ?? '');

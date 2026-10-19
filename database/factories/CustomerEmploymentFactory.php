@@ -20,7 +20,7 @@ class CustomerEmploymentFactory extends Factory
     {
         return [
             'customer_id' => Customer::factory(),
-            'arrangement' => 'employee',
+            'arrangement' => 'employed',
             'occupation' => fake()->jobTitle(),
             'employer_name' => fake()->company(),
             'is_current' => true,

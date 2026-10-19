@@ -35,4 +35,14 @@ class ExtractedProfileMerge extends Model
     {
         return $this->belongsTo(User::class, 'merged_by');
     }
+
+    public function strategyLabel(): string
+    {
+        return match ($this->strategy) {
+            'fill_empty' => 'Fill empty only',
+            'overwrite' => 'Overwrite and fill empty',
+            'replace_all' => 'Replace all',
+            default => $this->strategy,
+        };
+    }
 }

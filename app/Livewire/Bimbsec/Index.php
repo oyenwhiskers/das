@@ -164,7 +164,7 @@ class Index extends Component
         $customers = Customer::query()
             ->search($this->search)
             ->with(['bimbsecApplications' => fn ($query) => $query->with('document')->orderBy('id')])
-            ->latest('updated_at')
+            ->orderBy('full_legal_name')
             ->paginate(15);
         $pageIds = $customers->getCollection()->pluck('id')->map(fn ($id): int => (int) $id)->all();
         $fit = [];

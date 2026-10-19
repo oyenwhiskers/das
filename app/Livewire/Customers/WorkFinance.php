@@ -101,10 +101,20 @@ class WorkFinance extends Component
                 $this->form[$field] = (bool) $employment->{$field};
             } elseif (in_array($field, ['start_date', 'end_date'], true)) {
                 $this->form[$field] = $employment->{$field}?->format('Y-m-d') ?? '';
+            } elseif ($field === 'arrangement_other') {
+                continue;
             } else {
                 $this->form[$field] = $employment->{$field} ?? '';
             }
         }
+        $this->form['arrangement'] = match ($this->form['arrangement']) {
+            'employee' => 'employed',
+            'contractor', 'business_owner' => 'other',
+            default => $this->form['arrangement'],
+        };
+        $this->form['arrangement_other'] = $this->form['arrangement'] === 'other'
+            ? ($this->customer->employment_status_other ?? '')
+            : '';
         $this->mode = 'edit';
     }
 
@@ -145,7 +155,7 @@ class WorkFinance extends Component
         $this->confirmPrimaryReplacement = false;
         $this->isCorrection = false;
         $this->form = array_fill_keys([
-            'arrangement', 'occupation', 'employer_name', 'registration_number', 'industry', 'sub_industry',
+            'arrangement', 'arrangement_other', 'occupation', 'employer_name', 'registration_number', 'industry', 'sub_industry',
             'start_date', 'end_date', 'general_telephone', 'direct_telephone', 'fax', 'address_line_1',
             'address_line_2', 'city', 'state', 'postcode', 'country',
         ], '');

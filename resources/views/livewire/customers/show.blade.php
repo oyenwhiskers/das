@@ -8,8 +8,8 @@
 @endphp
 
 <div class="bg-[#F8FAFC] py-4 sm:py-5" x-data="{
-    activeTab: (() => { const tabs = { personal: 'personal', relationships: 'relationships', work: 'work', financial: 'financial', investment: 'investment', tax: 'tax', compliance: 'compliance', 'work-finance': 'work' }; const selected = tabs[new URLSearchParams(window.location.search).get('tab')]; return selected ? selected : 'personal'; })(),
-    tabOrder: ['personal', 'relationships', 'work', 'financial', 'investment', 'tax', 'compliance'],
+    activeTab: (() => { const tabs = { personal: 'personal', relationships: 'relationships', work: 'work', financial: 'financial', investment: 'investment', tax: 'tax', compliance: 'compliance', 'data-source': 'data-source', 'work-finance': 'work' }; const selected = tabs[new URLSearchParams(window.location.search).get('tab')]; return selected ? selected : 'personal'; })(),
+    tabOrder: ['personal', 'relationships', 'work', 'financial', 'investment', 'tax', 'compliance', 'data-source'],
     activityOpen: false,
     dirty: false,
     openActivity() {
@@ -129,16 +129,16 @@
             @endphp
             <div class="border-b border-slate-200" role="tablist" aria-label="Customer profile sections" x-on:keydown.arrow-right.prevent="moveTab(1)" x-on:keydown.arrow-left.prevent="moveTab(-1)">
                 <div class="flex flex-wrap gap-1">
-                    @foreach (['personal' => 'Personal', 'relationships' => 'Relationships', 'work' => 'Work Information', 'financial' => 'Financial Information', 'investment' => 'Investment', 'tax' => 'Tax & Residency', 'compliance' => 'Compliance'] as $tab => $label)
+                    @foreach (['personal' => 'Personal', 'relationships' => 'Relationships', 'work' => 'Work Information', 'financial' => 'Financial Information', 'investment' => 'Investment', 'tax' => 'Tax & Residency', 'compliance' => 'Compliance', 'data-source' => 'Data Source'] as $tab => $label)
                         @php
-                            $sectionPercent = $sectionCompletion[$tab];
+                            $sectionPercent = $sectionCompletion[$tab] ?? null;
                         @endphp
                         <button type="button" x-ref="{{ $tab }}Tab" id="tab-{{ $tab }}" role="tab" aria-controls="panel-{{ $tab }}" :aria-selected="activeTab === '{{ $tab }}'" :tabindex="activeTab === '{{ $tab }}' ? 0 : -1" @click="switchTab('{{ $tab }}')" class="inline-flex items-center gap-1.5 border-b-2 px-3 py-3 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-500" :class="activeTab === '{{ $tab }}' ? 'border-navy-700 text-navy-900' : 'border-transparent text-slate-600 hover:text-navy-900'">
                             <span>{{ $label }}</span>
-                            @if ($sectionPercent >= 100)
+                            @if ($sectionPercent !== null && $sectionPercent >= 100)
                                 <svg class="h-3.5 w-3.5 text-emerald-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg>
                                 <span class="sr-only">complete</span>
-                            @else
+                            @elseif ($sectionPercent !== null)
                                 <span @class([
                                     'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums',
                                     'bg-rose-50 text-rose-700' => $sectionPercent < 50,
@@ -498,6 +498,9 @@
             </div>
             <div id="panel-compliance" role="tabpanel" aria-labelledby="tab-compliance" x-show="activeTab === 'compliance'" x-cloak class="space-y-4">
                 <livewire:customers.compliance :customer="$customer" :key="'compliance-'.$customer->id" />
+            </div>
+            <div id="panel-data-source" role="tabpanel" aria-labelledby="tab-data-source" x-show="activeTab === 'data-source'" x-cloak class="space-y-4">
+                <livewire:customers.data-source :customer="$customer" :key="'data-source-'.$customer->id" />
             </div>
     </div>
     <div x-show="activityOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6" x-on:keydown.escape.window="if (activityOpen) closeActivity()">

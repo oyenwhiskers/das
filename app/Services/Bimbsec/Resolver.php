@@ -312,7 +312,7 @@ class Resolver
             'employment.business_registration_no' => $this->text($context['employment']?->registration_number, 'Business registration'),
             'employment.industry' => $this->text($context['employment']?->industry, 'Industry'),
             'employment.sub_industry' => $this->text($context['employment']?->sub_industry, 'Sub-industry'),
-            'employment.business_address' => $this->employmentAddress($context['employment'], $item),
+            'employment.business_address' => $this->employmentAddress($customer, $context['employment'], $item),
             'employment.office_direct_phone' => $this->text($context['employment']?->direct_telephone, 'Office telephone'),
             'employment.fax' => $this->text($context['employment']?->fax, 'Fax'),
             'employment.start_or_retirement_date' => $this->employmentDate($customer, $context['employment']),
@@ -649,16 +649,43 @@ class Resolver
         return $this->one($customer->employment_status, $map, $item, 'Employment status');
     }
 
-    private function employmentAddress(?CustomerEmployment $employment, string $item): ?string
+    /** Self-employed with no office address: print residential into Office/Business Address boxes. */
+    public function businessAddressUsesResidential(Customer $customer, ?CustomerEmployment $employment): bool
+    {
+        if ($employment === null) {
+            return false;
+        }
+        if ($customer->employment_status !== 'self_employed' && $employment->arrangement !== 'self_employed') {
+            return false;
+        }
+        foreach (['address_line_1', 'address_line_2', 'city', 'state', 'postcode', 'country'] as $column) {
+            if (filled($employment->{$column})) {
+                return false;
+            }
+        }
+
+        return $customer->residentialAddress !== null;
+    }
+
+    private function employmentAddress(Customer $customer, ?CustomerEmployment $employment, string $item): ?string
     {
         if ($employment === null) {
             return null;
         }
+        $source = $this->businessAddressUsesResidential($customer, $employment)
+            ? $customer->residentialAddress
+            : $employment;
         if ($item === 'address_lines') {
-            return $this->text(trim(implode(' ', array_filter([$employment->address_line_1, $employment->address_line_2]))), 'Employer address');
-        }
+            $line1 = $source instanceof CustomerEmployment ? $source->address_line_1 : $source?->line_1;
+            $line2 = $source instanceof CustomerEmployment ? $source->address_line_2 : $source?->line_2;
 
-        return $this->text($employment->{$item} ?? null, $this->titled('Employer', $item));
+            return $this->text(trim(implode(' ', array_filter([$line1, $line2]))), 'Employer address');
+        }
+        $value = $source instanceof CustomerEmployment
+            ? ($source->{$item} ?? null)
+            : ($source?->{$item} ?? null);
+
+        return $this->text($value, $this->titled('Employer', $item));
     }
 
     private function employmentDate(Customer $customer, ?CustomerEmployment $employment): ?string

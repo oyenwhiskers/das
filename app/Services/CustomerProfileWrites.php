@@ -353,8 +353,8 @@ class CustomerProfileWrites
         DB::transaction(function () use ($customer, $data, $actor): void {
             $customer->update([
                 'employment_status' => $data['employmentStatus'] ?: null,
-                'employment_status_other' => $data['employmentStatus'] === 'other' ? $data['employmentStatusOther'] : $customer->employment_status_other,
-                'retirement_date' => $data['employmentStatus'] === 'retired' ? ($data['retirementDate'] ?: null) : $customer->retirement_date,
+                'employment_status_other' => $data['employmentStatus'] === 'other' ? trim((string) $data['employmentStatusOther']) : null,
+                'retirement_date' => $data['employmentStatus'] === 'retired' ? ($data['retirementDate'] ?: null) : null,
                 'updated_by' => $actor->id,
             ]);
             $this->activity->log($customer, CustomerActivityAction::EmploymentStatusUpdated, $actor);
@@ -364,8 +364,18 @@ class CustomerProfileWrites
     /** @param  array<string, mixed>  $fields */
     public function saveEmployment(Customer $customer, array $fields, User $actor, ?int $employmentId = null, bool $confirmPrimaryReplacement = false, bool $isCorrection = false): void
     {
+        // shortcut: map pre-Form-3 arrangement values, drop when none remain in DB
+        $fields['arrangement'] = match ($fields['arrangement'] ?? null) {
+            'employee' => 'employed',
+            'contractor', 'business_owner' => 'other',
+            default => $fields['arrangement'] ?? null,
+        };
+        if (($fields['arrangement'] ?? null) === 'other' && blank($fields['arrangement_other'] ?? null)) {
+            $fields['arrangement_other'] = $customer->employment_status_other;
+        }
         $validated = Validator::make(['form' => $fields], [
             'form.arrangement' => ['nullable', Rule::in(CustomerProfileSchema::options('arrangement'))],
+            'form.arrangement_other' => ['required_if:form.arrangement,other', 'nullable', 'string', 'max:255'],
             'form.occupation' => ['nullable', 'string', 'max:255'],
             'form.employer_name' => ['nullable', 'string', 'max:255'],
             'form.registration_number' => ['nullable', 'string', 'max:100', 'regex:/^[A-Za-z0-9\s\-\/().]+$/'],
@@ -397,7 +407,9 @@ class CustomerProfileWrites
         if (! $validated['is_current']) {
             $validated['is_primary'] = false;
         }
-        DB::transaction(function () use ($customer, $validated, $actor, $employmentId, $confirmPrimaryReplacement, $isCorrection): void {
+        $arrangementOther = $validated['arrangement'] === 'other' ? trim((string) $validated['arrangement_other']) : null;
+        unset($validated['arrangement_other']);
+        DB::transaction(function () use ($customer, $validated, $arrangementOther, $actor, $employmentId, $confirmPrimaryReplacement, $isCorrection): void {
             Customer::query()->whereKey($customer->id)->lockForUpdate()->firstOrFail();
             $employment = $employmentId ? $customer->employments()->findOrFail($employmentId) : null;
             $existingPrimary = $customer->employments()->where('is_primary', true)
@@ -419,6 +431,13 @@ class CustomerProfileWrites
                 $employment->update($attributes);
             } else {
                 $customer->employments()->create($attributes);
+            }
+            if (filled($validated['arrangement'])) {
+                $this->saveEmploymentStatus($customer, [
+                    'employmentStatus' => $validated['arrangement'],
+                    'employmentStatusOther' => $arrangementOther,
+                    'retirementDate' => $validated['arrangement'] === 'retired' ? ($customer->retirement_date?->toDateString() ?? '') : null,
+                ], $actor);
             }
             $this->activity->log($customer, $wasNew ? CustomerActivityAction::EmploymentAdded : ($isCorrection ? CustomerActivityAction::EmploymentRecordCorrected : CustomerActivityAction::EmploymentUpdated), $actor);
             if ($wasCurrent && ! $validated['is_current']) {

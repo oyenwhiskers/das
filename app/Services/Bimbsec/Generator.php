@@ -141,11 +141,16 @@ class Generator
                 $reference = $mapped['source']['reference_key'] ?? null;
                 $item = (string) ($mapped['printed_item'] ?? $item);
             }
-            if ($reference !== 'addresses.mailing') {
-                return true;
+            if ($reference === 'addresses.mailing') {
+                return ! $this->mailingMirrorsResidential($customer, $item !== '' ? $item : null);
+            }
+            if ($reference === 'employment.business_address') {
+                $job = $this->resolver->subjects($customer, [])['employment'] ?? null;
+
+                return ! $this->resolver->businessAddressUsesResidential($customer, $job);
             }
 
-            return ! $this->mailingMirrorsResidential($customer, $item !== '' ? $item : null);
+            return true;
         }));
     }
 }

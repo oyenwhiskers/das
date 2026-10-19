@@ -11,6 +11,7 @@ use App\Models\BimbsecBatch;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
 use App\Models\CustomerBankAccount;
+use App\Models\CustomerEmployment;
 use App\Models\CustomerIdentification;
 use App\Models\RelatedPerson;
 use App\Models\User;
@@ -55,6 +56,18 @@ class BimbsecModuleTest extends TestCase
         $component->call('togglePage', $pageIds)->assertSet('selected', $pageIds);
         $this->assertCount(15, $component->get('selected'));
         $this->assertSame(16, Customer::query()->count());
+    }
+
+    public function test_index_lists_customers_alphabetically_by_name(): void
+    {
+        $user = User::factory()->staff()->create();
+        Customer::factory()->for($user, 'creator')->create(['full_legal_name' => 'Zara Binti Omar']);
+        Customer::factory()->for($user, 'creator')->create(['full_legal_name' => 'Ali Bin Abu']);
+        Customer::factory()->for($user, 'creator')->create(['full_legal_name' => 'Mira Binti Lim']);
+
+        Livewire::actingAs($user)
+            ->test(Index::class)
+            ->assertSeeInOrder(['Ali Bin Abu', 'Mira Binti Lim', 'Zara Binti Omar']);
     }
 
     public function test_profile_maps_name_nric_and_does_not_copy_another_customers_relative(): void
@@ -302,6 +315,45 @@ class BimbsecModuleTest extends TestCase
                 && filled($draw['text'] ?? null),
         );
         $this->assertTrue($mailingDraws->isEmpty(), 'Mailing PDF fields must stay blank when same as residential.');
+    }
+
+    public function test_self_employed_with_empty_office_address_uses_residential_on_the_form(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = $this->customer($user, 'ALI BIN ABU', '900101011234');
+        $customer->update(['employment_status' => 'self_employed']);
+        CustomerEmployment::factory()->selfEmployed()->create([
+            'customer_id' => $customer->id,
+            'occupation' => 'BUSINESS',
+            'employer_name' => 'PASAR BESAR',
+            'is_primary' => true,
+            'is_current' => true,
+        ]);
+        $long = str_repeat('JALAN PANJANG ', 8).'TAMAN';
+        $customer->residentialAddress->update(['line_1' => $long, 'line_2' => null]);
+
+        $draws = collect(app(Resolver::class)->resolve($customer->fresh(), [])['draws']);
+        $officeLines = $draws->first(
+            fn (array $draw): bool => ($draw['field']['source']['reference_key'] ?? '') === 'employment.business_address'
+                && ($draw['field']['printed_item'] ?? '') === 'address_lines',
+        );
+        $this->assertSame($long, $officeLines['text'] ?? null);
+
+        $messages = collect(app(Generator::class)->assess($customer->fresh(), [])['warnings'])
+            ->where('level', 'blocking')
+            ->pluck('message');
+        $this->assertTrue($messages->contains(fn (string $message): bool => str_contains($message, 'Resident address')));
+        $this->assertFalse($messages->contains(fn (string $message): bool => str_contains($message, 'Employer address')));
+
+        CustomerEmployment::query()->where('customer_id', $customer->id)->update([
+            'address_line_1' => 'LOT 9 PASAR',
+            'city' => 'Tanah Merah',
+        ]);
+        $officeLines = collect(app(Resolver::class)->resolve($customer->fresh(), [])['draws'])->first(
+            fn (array $draw): bool => ($draw['field']['source']['reference_key'] ?? '') === 'employment.business_address'
+                && ($draw['field']['printed_item'] ?? '') === 'address_lines',
+        );
+        $this->assertSame('LOT 9 PASAR', $officeLines['text'] ?? null);
     }
 
     public function test_opening_the_pdf_stamps_the_date_without_rewriting_the_file(): void

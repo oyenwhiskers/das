@@ -8,7 +8,7 @@
                 <dl class="flex flex-wrap items-center gap-x-6 gap-y-2">
                     <div>
                         <dt class="sr-only">Current status</dt>
-                        <dd class="text-sm font-semibold text-slate-900">{{ match ($customer->employment_status) { 'employed' => 'Employed', 'self_employed' => 'Self-Employed', 'unemployed' => 'Unemployed', 'retired' => 'Retired', 'other' => $customer->employment_status_other ?: 'Other', default => 'Not specified' } }}</dd>
+                        <dd class="text-sm font-semibold text-slate-900">{{ match ($customer->employment_status) { 'employed' => 'Employed', 'self_employed' => 'Self-Employed', 'retired' => 'Retired', 'other' => $customer->employment_status_other ? 'Others — '.$customer->employment_status_other : 'Others', 'unemployed' => 'Unemployed (not on Form 3)', default => 'Not specified' } }}</dd>
                     </div>
                     @if ($customer->employment_status === 'retired' && $customer->retirement_date)
                         <div>
@@ -23,8 +23,8 @@
             <div class="px-4 py-3 sm:px-5">
                 <form wire:submit="saveStatus" class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                     <div class="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
-                        <div><x-input-label for="employment-status" value="Employment Status" class="sr-only" /><select id="employment-status" wire:model.live="employmentStatus" class="block w-full rounded-md border-slate-300 text-sm"><option value="">Not specified</option><option value="employed">Employed</option><option value="self_employed">Self-Employed</option><option value="unemployed">Unemployed</option><option value="retired">Retired</option><option value="other">Other</option></select><x-input-error :messages="$errors->get('employmentStatus')" class="mt-1" /></div>
-                        @if ($employmentStatus === 'other')<div><x-input-label for="employment-other" value="Describe Status" /><x-text-input id="employment-other" wire:model="employmentStatusOther" class="mt-1 block w-full" /><x-input-error :messages="$errors->get('employmentStatusOther')" class="mt-1" /></div>@endif
+                        <div><x-input-label for="employment-status" value="Employment Status" class="sr-only" /><select id="employment-status" wire:model.live="employmentStatus" class="block w-full rounded-md border-slate-300 text-sm"><option value="">Not specified</option><option value="employed">Employed</option><option value="self_employed">Self-Employed</option><option value="retired">Retired</option><option value="other">Others (please specify)</option></select><x-input-error :messages="$errors->get('employmentStatus')" class="mt-1" /></div>
+                        @if ($employmentStatus === 'other')<div><x-input-label for="employment-other" value="Others (please specify)" /><x-text-input id="employment-other" wire:model="employmentStatusOther" class="mt-1 block w-full" maxlength="255" required /><x-input-error :messages="$errors->get('employmentStatusOther')" class="mt-1" /></div>@endif
                         @if ($employmentStatus === 'retired')<div><x-input-label for="retirement-date" value="Retirement Date" /><x-text-input id="retirement-date" type="date" wire:model="retirementDate" class="mt-1 block w-full" /><x-input-error :messages="$errors->get('retirementDate')" class="mt-1" /></div>@endif
                     </div>
                     <div class="flex shrink-0 justify-end gap-3"><button type="button" x-on:click="if (!dirty || await confirmAction({ title: 'Discard unsaved changes?', text: 'Your changes have not been saved.', confirmButtonText: 'Discard changes' })) { dirty = false; $wire.cancel() }" class="text-sm text-slate-600">Cancel</button><x-primary-button wire:loading.attr="disabled" wire:target="saveStatus">Save Status</x-primary-button></div>
@@ -113,7 +113,11 @@
                                 @foreach ($fields as $field => $label)
                                     @if ($field === 'end_date' && $form['is_current']) @continue @endif
                                     <div><x-input-label :for="'employment-'.$field" :value="$label" />
-                                        @if ($field === 'arrangement')<select id="employment-arrangement" wire:model="form.arrangement" class="mt-1 block w-full rounded-md border-slate-300 text-sm"><option value="">Select arrangement</option><option value="employee">Employee</option><option value="self_employed">Self-Employed</option><option value="contractor">Contractor</option><option value="business_owner">Business Owner</option><option value="other">Other</option></select>
+                                        @if ($field === 'arrangement')
+                                            <select id="employment-arrangement" wire:model.live="form.arrangement" class="mt-1 block w-full rounded-md border-slate-300 text-sm"><option value="">Select arrangement</option><option value="employed">Employed</option><option value="self_employed">Self-Employed</option><option value="retired">Retired</option><option value="other">Others (please specify)</option></select>
+                                            @if (($form['arrangement'] ?? '') === 'other')
+                                                <div class="mt-2"><x-input-label for="employment-arrangement-other" value="Others (please specify)" /><x-text-input id="employment-arrangement-other" wire:model="form.arrangement_other" class="mt-1 block w-full" maxlength="255" /><x-input-error :messages="$errors->get('form.arrangement_other')" class="mt-1" /></div>
+                                            @endif
                                         @else<x-text-input :id="'employment-'.$field" :type="in_array($field, ['start_date', 'end_date']) ? 'date' : 'text'" :wire:model="'form.'.$field" class="mt-1 block w-full" />@endif
                                         <x-input-error :messages="$errors->get('form.'.$field)" class="mt-1" />
                                     </div>
