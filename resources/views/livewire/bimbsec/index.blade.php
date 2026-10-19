@@ -42,33 +42,37 @@
                 </div>
             @else
                 <div class="overflow-x-auto">
-                    <table class="w-full table-fixed divide-y divide-slate-200 text-sm">
-                        <colgroup>
-                            <col class="w-12" />
-                            <col />
-                            <col class="w-48" />
-                            <col class="w-32" />
-                            <col class="w-28" />
-                        </colgroup>
+                    <table class="min-w-full divide-y divide-slate-200 text-sm font-normal">
                         <thead class="bg-slate-50">
                             <tr>
-                                <th class="px-4 py-2.5 text-left">
+                                <th scope="col" class="px-4 py-2.5 text-left">
                                     <input type="checkbox" @checked($pageSelected) wire:click="togglePage(@js($pageIds))" aria-label="Select all customers on this page" class="rounded border-slate-300 text-navy-800 focus:ring-navy-500" />
                                 </th>
-                                <th class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Customer name</th>
-                                <th class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">NRIC / passport</th>
-                                <th class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
-                                <th class="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Actions</th>
+                                <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Customer name</th>
+                                <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">NRIC / passport</th>
+                                <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
+                                <th scope="col" class="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Actions</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-100">
+                        <tbody class="divide-y divide-slate-100 text-sm text-slate-800">
                             @foreach ($customers as $customer)
                                 @php
                                     $application = $customer->bimbsecApplications->first(fn ($row) => $row->document !== null) ?? $customer->bimbsecApplications->first();
                                     $issues = collect($fit[$customer->id]['issues'] ?? []);
                                     $blocked = (bool) ($fit[$customer->id]['blocked'] ?? false);
                                 @endphp
-                                <tr @class(['bg-amber-50' => $blocked])
+                                <tr
+                                    @class([
+                                        'cursor-pointer focus-within:bg-slate-50/80',
+                                        'bg-amber-50 hover:bg-amber-100/70' => $blocked,
+                                        'hover:bg-slate-50/80' => ! $blocked,
+                                    ])
+                                    role="link"
+                                    tabindex="0"
+                                    aria-label="View {{ $customer->full_legal_name }}"
+                                    wire:click="openCustomer({{ $customer->id }})"
+                                    x-on:keydown.enter.prevent="$wire.openCustomer({{ $customer->id }})"
+                                    x-on:keydown.space.prevent="$wire.openCustomer({{ $customer->id }})"
                                     @if ($issues->isNotEmpty())
                                         x-data="{ show: false, top: 0, left: 0 }"
                                         x-on:mouseenter="show = true"
@@ -84,10 +88,10 @@
                                         x-on:mouseleave="show = false"
                                     @endif
                                 >
-                                    <td class="px-4 py-3">
+                                    <td class="px-4 py-3 align-middle" @click.stop @keydown.stop>
                                         <input type="checkbox" @checked(in_array($customer->id, $selected, true)) wire:click="toggle({{ $customer->id }})" aria-label="Select {{ $customer->full_legal_name }}" class="rounded border-slate-300 text-navy-800 focus:ring-navy-500" />
                                     </td>
-                                    <td class="px-4 py-3 font-medium text-slate-900">
+                                    <td class="px-4 py-3 align-middle">
                                         {{ $customer->full_legal_name }}
                                         @if ($issues->isNotEmpty())
                                             <template x-teleport="body">
@@ -103,8 +107,8 @@
                                             </template>
                                         @endif
                                     </td>
-                                    <td class="whitespace-nowrap px-4 py-3 text-slate-700">{{ $customer->primary_identification_number ?: '—' }}</td>
-                                    <td class="whitespace-nowrap px-4 py-3 align-middle">
+                                    <td class="px-4 py-3 align-middle whitespace-nowrap">{{ $customer->primary_identification_number ?: '—' }}</td>
+                                    <td class="px-4 py-3 align-middle whitespace-nowrap">
                                         <span @class([
                                             'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
                                             'bg-emerald-50 text-emerald-700' => $customer->isActive(),
@@ -113,11 +117,8 @@
                                             {{ $customer->status->label() }}
                                         </span>
                                     </td>
-                                    <td class="whitespace-nowrap px-4 py-3 text-right">
-                                        <button type="button" wire:click="openCustomer({{ $customer->id }})" title="View PDF" aria-label="View PDF" class="inline-flex h-8 w-8 items-center justify-center rounded-md text-navy-800 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-500">
-                                            <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>
-                                        </button>
-                                        <button type="button" title="Print" aria-label="Print" class="inline-flex h-8 w-8 items-center justify-center rounded-md text-navy-800 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-500"
+                                    <td class="px-4 py-3 align-middle whitespace-nowrap text-right" @click.stop @keydown.stop>
+                                        <button type="button" title="Print" aria-label="Print" class="inline-flex items-center justify-center rounded-md p-0.5 text-navy-800 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-500"
                                             @if (! $blocked && $application?->document?->allowsPrint())
                                                 x-on:click="printPdf(@js(route('bimbsec.print', [$customer, $application])))"
                                             @else
