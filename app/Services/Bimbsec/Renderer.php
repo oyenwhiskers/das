@@ -280,9 +280,8 @@ class Renderer
         foreach (array_slice($rows, 0, $max) as $index => $row) {
             $height = (float) ($heights[$index] ?? 10);
             if ($pdf->GetStringWidth($row) > $width + 0.5) {
+                // Still print: staff see the overrun and can shorten the value.
                 $warnings[] = $this->overflow($field, mb_strlen($row), max(1, (int) floor($width / max($size * 0.45, 1))));
-
-                continue;
             }
             $pdf->SetXY((float) $rect[0], $y);
             $pdf->Cell($width, $height, $row, 0, 0, 'L');

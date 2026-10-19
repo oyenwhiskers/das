@@ -220,6 +220,43 @@ class BimbsecModuleTest extends TestCase
         $this->assertSame(['9876543210'], $draws->first(fn (array $draw): bool => ($draw['field']['printed_item'] ?? '') === 'account_number')['rows'] ?? null);
     }
 
+    public function test_a_long_bank_name_still_prints_with_an_attention_warning(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = $this->customer($user, 'ALI BIN ABU', '900101011234');
+        $customer->bankAccounts()->create([
+            'bank_name' => 'RHB BANK ISLAMIC BERHAD',
+            'bank_country' => 'Malaysia',
+            'branch_address' => '',
+            'account_type' => 'savings',
+            'account_number' => '16301500112375',
+            'account_holder_name' => 'ALI BIN ABU',
+            'ownership' => 'sole',
+            'is_primary' => true,
+            'is_active' => true,
+            'identity_hash' => CustomerBankAccount::identityHash('RHB BANK ISLAMIC BERHAD', 'Malaysia', '16301500112375'),
+        ]);
+
+        $resolved = app(Resolver::class)->resolve($customer->fresh(), []);
+        $this->assertSame(
+            ['RHB BANK ISLAMIC BERHAD'],
+            collect($resolved['draws'])->first(fn (array $draw): bool => ($draw['field']['printed_item'] ?? '') === 'bank')['rows'] ?? null,
+        );
+
+        $application = $customer->bimbsecApplications()->create([
+            'choices' => BimbsecApplication::normalizeChoices([]),
+            'created_by' => $user->id,
+        ]);
+        $document = app(Generator::class)->generate($application, $user);
+
+        $this->assertFalse($document->print_blocked);
+        $this->assertTrue(collect($document->warnings)->contains(
+            fn (array $warning): bool => ($warning['level'] ?? '') === 'attention'
+                && str_contains((string) ($warning['message'] ?? ''), 'too long for the form')
+                && str_contains(strtolower((string) ($warning['label'] ?? '')), 'bank'),
+        ));
+    }
+
     public function test_a_long_name_stays_locked_until_it_is_shortened_on_the_profile(): void
     {
         $user = User::factory()->staff()->create();
