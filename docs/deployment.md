@@ -20,11 +20,23 @@ HTTPS stops at Dokploy. The app trusts forwarded proxy headers.
 - Port: `80`
 - Health check path: `/up`
 
-Persistent volume on the web service:
+### Persistent volume (required for uploads)
 
-- Mount path: `/app/storage/app`
+Without this, every redeploy wipes uploaded PDFs. The database still shows scans as Completed, but Preview returns **404 | Not Found**.
 
-That path holds uploaded scans and generated PDFs. Do not mount `/app/storage`. The BIMBSEC templates live in `storage/templates` inside the image and would be hidden by a mount of the whole storage directory.
+Where to go in Dokploy:
+
+1. Open the **DAS** application (the web service that runs this Dockerfile).
+2. Open the service → **Advanced** → **Mounts** (or **Volumes**, depending on Dokploy version).
+3. Add a volume mount:
+   - **Mount path:** `/app/storage/app`
+   - Volume type: bind or named volume (either is fine; keep the same mount across redeploys).
+4. Save, then **Redeploy** / restart the service.
+5. Re-upload any document that was scanned before the volume existed. Old files cannot come back.
+
+That path holds uploaded scans and generated PDFs. Do **not** mount `/app/storage`. The BIMBSEC templates live in `storage/templates` inside the image and would be hidden by a mount of the whole storage directory.
+
+After a successful upload, the file should appear under `/app/storage/app/private/document-scans/` inside the container.
 
 ## Environment
 

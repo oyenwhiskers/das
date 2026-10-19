@@ -144,7 +144,8 @@ class DocumentReaderTest extends TestCase
             ->assertSee('Download original')
             ->assertSee('Preview')
             ->assertSee(route('documents.file', [$scan, 'download' => 1]), false)
-            ->assertSee('x-if="preview"', false);
+            ->assertSee(route('documents.file', $scan), false)
+            ->assertSee('target="_blank"', false);
 
         $this->assertFalse(Storage::disk('public')->exists($scan->storage_path));
     }
