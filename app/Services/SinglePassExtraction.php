@@ -19,7 +19,7 @@ use UnexpectedValueException;
 
 class SinglePassExtraction
 {
-    public const PROMPT_VERSION = '10';
+    public const PROMPT_VERSION = '14';
 
     public const CONTRACT = '2.0';
 
@@ -111,6 +111,14 @@ class SinglePassExtraction
 
                     return;
                 }
+                if ($this->underfilledBankSlice($piece, $start, $end, $mode)
+                    && $this->splitPages($queue, $scan, $start, $end)) {
+                    $unresolved[] = ['warning' => 'Pages '.$start.'-'.$end.' returned fewer applicants than pages and were re-read per page.'];
+                    $total = $done + count($queue);
+                    $this->writeProgress($scan, $done, $total, $queue[0] ?? null);
+
+                    continue;
+                }
                 $meta ??= $piece;
                 $unresolved = array_merge($unresolved, $piece['unresolved']);
                 foreach ($piece['records'] as $record) {
@@ -184,7 +192,7 @@ class SinglePassExtraction
             .'Read '.$pages.' and fill only the fields printed on these pages. Return sparse JSON. Contract '.self::CONTRACT.'. Schema hash '.$snapshot->hash.'. '
             .'contract_version must be the exact string '.self::CONTRACT.', not a page number and not the legal contract on the page. '
             .$found
-            .'Use only those field ids. One record_ref is one applicant. A spouse, child, employer, witness, or next of kin stays inside that applicant record. '
+            .'Use only those field ids. One record_ref is one applicant. Use a short record_ref such as applicant_3 or p12_a, never a full legal name. A spouse, child, employer, witness, or next of kin stays inside that applicant record. '
             .'For each filled value include field_id, entity_ref, entity_role, source_page, and a short evidence_text quote from that page. '
             .'State provided means the document shows the value. State explicit_negative means an explicit No, false, or unticked negative. '
             .'Omit unanswered, not_provided, and not_applicable choices, including blank ticks. Use ambiguous or unreadable with a null value when the mark or text is unclear. '
@@ -195,6 +203,7 @@ class SinglePassExtraction
             .'A next-of-kin or family address is not an employer. Leave employer fields blank unless the form names an employer. '
             .'An employer, bank, account number, or income printed on the page is its own field. '
             .'When a Bank Reference or bank block prints Bank, Branch, Account type, and Account number, emit each filled printed line on its matching bank_accounts[] field under the same row_ref. Do not stop after bank name and account number if branch is printed. For account_type, emit only when one of savings, current, or other is clearly selected, not when the page only prints the options label savings/current/others. '
+            .'On a bank statement or passbook, treat the header as a bank block: emit bank_name, account_number, account_holder_name, and branch_address when printed, under one row_ref. Map printed account-type labels to the enum: savings-like including Savings-i to savings, current-like to current, any other clear type to other; omit account_type when it is not printed. The printed account-holder or customer name on the statement must emit customer.full_legal_name; the same text may also fill bank_accounts[].account_holder_name. Do not leave customer.full_legal_name blank when a holder name is printed. Put the account-holder or correspondence address into addresses[mailing] line, postcode, city, state, and country as printed; never put that address on addresses[residential] or bank_accounts[].branch_address. Put bank branch or bank office text into branch_address only. When employment status or arrangement is self_employed, also emit that same correspondence address on employments[] address_line_1, address_line_2, postcode, city, state, and country. When not self_employed, do not put the statement address on employment. Do not emit transaction table rows as profile fields. Each distinct statement header is a new record; do not skip a printed account holder on these pages. '
             .'The printed heading "Spouse/Next of kin" is a label, not proof of marriage. Set relationships[].relationship to spouse only when customer.marital_status is Married (or the form clearly names husband/wife/spouse). Opposite gender alone is not enough. When marital status is Single, Divorced, Widowed, or blank, or both people are the same gender, set relationships[].relationship to other and relationships[].other_relationship to Next of kin. An NRIC with an odd last digit is male and an even last digit is female. '
             .'Copy repeatable field ids exactly, including the []. Put the row number only in row_ref. Do not write [0] or [1] inside a field id. '
             .'Repeatable fields need a stable row_ref. Leave observations that fit no listed field in unresolved. '
@@ -301,7 +310,11 @@ class SinglePassExtraction
                 $record = $this->shiftPages($record, $start, $end);
             }
             $ref = is_array($record) ? ($record['record_ref'] ?? null) : null;
-            if (! is_array($record) || ! is_string($ref) || trim($ref) === '' || strlen($ref) > 30 || isset($records[$ref])
+            if (is_array($record) && is_string($ref) && trim($ref) !== '') {
+                $ref = $this->normalizeRecordRef($ref);
+                $record['record_ref'] = $ref;
+            }
+            if (! is_array($record) || ! is_string($ref) || trim($ref) === '' || isset($records[$ref])
                 || ! is_array($record['values'] ?? null) || ! array_is_list($record['values'])) {
                 $unresolved[] = ['warning' => 'A structurally invalid profile record was rejected.'];
 
@@ -335,6 +348,42 @@ class SinglePassExtraction
         }
 
         return $meta + ['records' => $records, 'unresolved' => $unresolved];
+    }
+
+    private function normalizeRecordRef(string $ref): string
+    {
+        $ref = trim($ref);
+        if ($ref === '' || strlen($ref) <= 30) {
+            return $ref;
+        }
+        $safe = preg_replace('/[^A-Za-z0-9]+/', '_', $ref) ?? '';
+        $safe = trim($safe, '_');
+        if ($safe === '') {
+            $safe = 'applicant';
+        }
+
+        return substr($safe, 0, 21).'_'.substr(sha1($ref), 0, 8);
+    }
+
+    /** @param  array{document_type: ?string, title: ?string, records: array<string, array<string, mixed>>}  $piece */
+    private function underfilledBankSlice(array $piece, int $start, ?int $end, string $mode): bool
+    {
+        if ($mode !== 'slice' || $end === null || $end <= $start || count($piece['records']) >= ($end - $start + 1)) {
+            return false;
+        }
+        $label = strtolower(trim((string) ($piece['document_type'] ?? '').' '.(string) ($piece['title'] ?? '')));
+        if (str_contains($label, 'bank statement') || str_contains($label, 'passbook')) {
+            return true;
+        }
+        foreach ($piece['records'] as $record) {
+            foreach ($record['values'] ?? [] as $value) {
+                if (is_array($value) && str_starts_with((string) ($value['field_id'] ?? ''), 'bank_accounts[]')) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /** @param array<string, mixed> $response */

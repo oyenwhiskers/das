@@ -690,10 +690,169 @@ class SinglePassExtractionTest extends TestCase
         $fields = $pass->fieldList($snapshot);
         $prompt = $pass->prompt($snapshot, 1, 2);
 
+        $this->assertSame('14', SinglePassExtraction::PROMPT_VERSION);
         $this->assertStringContainsString('bank_accounts[].branch_address', $fields);
         $this->assertStringContainsString('When a Bank Reference or bank block prints Bank, Branch, Account type, and Account number', $prompt);
         $this->assertStringContainsString('Do not stop after bank name and account number if branch is printed', $prompt);
+        $this->assertStringContainsString('On a bank statement or passbook, treat the header as a bank block', $prompt);
+        $this->assertStringContainsString('The printed account-holder or customer name on the statement must emit customer.full_legal_name', $prompt);
+        $this->assertStringContainsString('Do not leave customer.full_legal_name blank when a holder name is printed', $prompt);
+        $this->assertStringContainsString('Put the account-holder or correspondence address into addresses[mailing]', $prompt);
+        $this->assertStringContainsString('never put that address on addresses[residential]', $prompt);
+        $this->assertStringContainsString('When employment status or arrangement is self_employed, also emit that same correspondence address on employments[]', $prompt);
+        $this->assertStringContainsString('Do not emit transaction table rows as profile fields', $prompt);
+        $this->assertStringContainsString('Use a short record_ref such as applicant_3 or p12_a, never a full legal name', $prompt);
+        $this->assertStringContainsString('Each distinct statement header is a new record; do not skip a printed account holder on these pages', $prompt);
         $this->assertStringContainsString('Profile fill prompt '.SinglePassExtraction::PROMPT_VERSION, $prompt);
+    }
+
+    public function test_statement_account_holder_name_is_shown_when_full_legal_name_was_omitted(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $scan = $this->scan($staff);
+        $payload = $this->payload([[
+            'record_ref' => 'applicant_1', 'anchor' => 'Statement', 'source_pages' => [1], 'warnings' => [],
+            'values' => [
+                $this->value('bank_accounts[].account_holder_name', 'provided', 'MOHD NASIR BIN MOHD ALI', 'MOHD NASIR BIN MOHD ALI', 'acct-1'),
+                $this->value('bank_accounts[].account_number', 'provided', '164137-005431', '164137-005431', 'acct-1'),
+                $this->value('bank_accounts[].bank_name', 'provided', 'Maybank Islamic', 'Maybank Islamic', 'acct-1'),
+            ],
+        ]]);
+        $payload['document_type'] = 'Bank Statement';
+        $payload['title'] = 'Account Statement';
+        $this->fake($payload);
+
+        app(SinglePassExtraction::class)->run($scan, app(GeminiDocumentReader::class));
+
+        $this->actingAs($staff)->get(route('documents.show', $scan->fresh()))
+            ->assertOk()
+            ->assertSee('MOHD NASIR BIN MOHD ALI')
+            ->assertDontSee('Unnamed applicant');
+    }
+
+    public function test_a_long_name_record_ref_is_normalized_and_kept(): void
+    {
+        $snapshot = CustomerProfileSchema::snapshot();
+        $pass = app(SinglePassExtraction::class);
+        $longRef = 'MOHD AZAROOL FIRDAUS BIN MOHD SABRI';
+        $this->assertGreaterThan(30, strlen($longRef));
+        $response = [
+            'contract_version' => '2.0', 'schema_hash' => $snapshot->hash,
+            'document_type' => 'Bank Statement', 'title' => 'Statement', 'summary' => 'One holder.',
+            'readable' => true, 'limitations' => null,
+            'records' => [[
+                'record_ref' => $longRef, 'source_pages' => [1], 'warnings' => [],
+                'values' => [
+                    $this->value('customer.full_legal_name', 'provided', $longRef, $longRef),
+                    $this->value('bank_accounts[].bank_name', 'provided', 'Maybank', 'Maybank', 'acct-1'),
+                    $this->value('bank_accounts[].account_number', 'provided', '1234567890', '1234567890', 'acct-1'),
+                ],
+            ]],
+            'unresolved' => [],
+        ];
+
+        $accepted = $pass->accept($response, $snapshot->schema(), $snapshot->hash, 1, 1);
+        $ref = array_key_first($accepted['records']);
+        $values = collect($accepted['records'][$ref]['values'])->pluck('value', 'field_id');
+
+        $this->assertNotNull($ref);
+        $this->assertLessThanOrEqual(30, strlen((string) $ref));
+        $this->assertNotSame($longRef, $ref);
+        $this->assertSame($longRef, $values['customer.full_legal_name']);
+        $this->assertSame('Maybank', $values['bank_accounts[].bank_name']);
+    }
+
+    public function test_an_underfilled_multi_page_batch_is_re_read_per_page(): void
+    {
+        $scan = $this->scan();
+        config()->set('document_scanner.pages_per_batch', 2);
+        app()->instance(PdfPageBatches::class, new class extends PdfPageBatches
+        {
+            public function make($scan, int $size): array
+            {
+                if ($size === 1) {
+                    return ['count' => 2, 'batches' => [1 => '%PDF-p1', 2 => '%PDF-p2']];
+                }
+
+                return ['count' => 2, 'batches' => [1 => '%PDF-1-2']];
+            }
+        });
+        $statement = function (array $records): array {
+            $payload = $this->payload($records);
+            $payload['document_type'] = 'Bank Statement';
+            $payload['title'] = 'BASIC SAVINGS ACCOUNT-I';
+
+            return $payload;
+        };
+        Http::preventStrayRequests();
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::sequence()
+            ->push(['status' => 'completed', 'output_text' => json_encode($statement([[
+                'record_ref' => 'r1', 'source_pages' => [1], 'warnings' => [],
+                'values' => [
+                    $this->value('customer.full_legal_name', 'provided', 'Only First', 'Only First'),
+                    $this->value('bank_accounts[].account_number', 'provided', '111', '111', 'acct-1'),
+                ],
+            ]]))])
+            ->push(['status' => 'completed', 'output_text' => json_encode($statement([[
+                'record_ref' => 'r1', 'source_pages' => [1], 'warnings' => [],
+                'values' => [$this->value('customer.full_legal_name', 'provided', 'Person One', 'Person One')],
+            ]]))])
+            ->push(['status' => 'completed', 'output_text' => json_encode($statement([[
+                'record_ref' => 'r2', 'source_pages' => [1], 'warnings' => [],
+                'values' => [$this->value('customer.full_legal_name', 'provided', 'Person Two', 'Person Two', null, 'person-2', 'Applicant', 1)],
+            ]]))]),
+        ]);
+
+        app(SinglePassExtraction::class)->run($scan, app(GeminiDocumentReader::class));
+
+        $names = $scan->extractedProfiles()->get()->map(
+            fn ($profile) => collect($profile->original_projection['values'])->firstWhere('field_id', 'customer.full_legal_name')['value'] ?? null
+        )->all();
+        $this->assertEqualsCanonicalizing(['Person One', 'Person Two'], $names);
+        $this->assertContains(
+            'Pages 1-2 returned fewer applicants than pages and were re-read per page.',
+            array_column($scan->fresh()->profile_unresolved, 'warning')
+        );
+        Http::assertSentCount(3);
+        $this->assertNotContains('Only First', $names);
+    }
+
+    public function test_a_bank_statement_shaped_sparse_response_is_accepted(): void
+    {
+        $snapshot = CustomerProfileSchema::snapshot();
+        $pass = app(SinglePassExtraction::class);
+        $response = [
+            'contract_version' => '2.0', 'schema_hash' => $snapshot->hash,
+            'document_type' => 'Bank Statement', 'title' => 'Maybank Statement', 'summary' => 'One account statement.',
+            'readable' => true, 'limitations' => null,
+            'records' => [[
+                'record_ref' => 'r1', 'source_pages' => [1], 'warnings' => [],
+                'values' => [
+                    $this->value('customer.full_legal_name', 'provided', 'Amina Noor', 'Amina Noor'),
+                    $this->value('bank_accounts[].bank_name', 'provided', 'Maybank', 'Maybank', 'acct-1'),
+                    $this->value('bank_accounts[].account_number', 'provided', '1234567890', '1234567890', 'acct-1'),
+                    $this->value('bank_accounts[].account_holder_name', 'provided', 'Amina Noor', 'Amina Noor', 'acct-1'),
+                    $this->value('bank_accounts[].account_type', 'provided', 'savings', 'Savings-i', 'acct-1'),
+                    $this->value('bank_accounts[].branch_address', 'provided', 'Jalan Ampang', 'Jalan Ampang', 'acct-1'),
+                    $this->value('addresses[mailing].line_1', 'provided', '12 Jalan Melati', '12 Jalan Melati'),
+                    $this->value('addresses[mailing].postcode', 'provided', '50000', '50000'),
+                    $this->value('addresses[mailing].city', 'provided', 'Kuala Lumpur', 'Kuala Lumpur'),
+                    $this->value('addresses[mailing].state', 'provided', 'Wilayah Persekutuan', 'Wilayah Persekutuan'),
+                    $this->value('addresses[mailing].country', 'provided', 'Malaysia', 'Malaysia'),
+                ],
+            ]],
+            'unresolved' => [],
+        ];
+
+        $accepted = $pass->accept($response, $snapshot->schema(), $snapshot->hash, 1, 1);
+        $values = collect($accepted['records']['r1']['values'])->pluck('value', 'field_id');
+
+        $this->assertSame('Bank Statement', $accepted['document_type']);
+        $this->assertSame('Maybank', $values['bank_accounts[].bank_name']);
+        $this->assertSame('savings', $values['bank_accounts[].account_type']);
+        $this->assertSame('Jalan Ampang', $values['bank_accounts[].branch_address']);
+        $this->assertSame('12 Jalan Melati', $values['addresses[mailing].line_1']);
+        $this->assertSame('Malaysia', $values['addresses[mailing].country']);
     }
 
     public function test_an_empty_terms_batch_may_use_the_page_number_as_its_contract_version(): void

@@ -7,6 +7,7 @@ use App\Enums\CustomerStatus;
 use App\Livewire\Concerns\NotifiesBrowser;
 use App\Models\Customer;
 use App\Services\CustomerActivityLogger;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -71,14 +72,10 @@ class Index extends Component
             : [...$this->selected, $customerId];
     }
 
-    /** @param  list<int>  $ids */
-    public function togglePage(array $ids): void
+    public function toggleAll(): void
     {
-        $ids = array_map(intval(...), $ids);
-        $allSelected = $ids !== [] && collect($ids)->every(fn (int $id): bool => in_array($id, $this->selected, true));
-        $this->selected = $allSelected
-            ? array_values(array_filter($this->selected, fn (int $id): bool => ! in_array($id, $ids, true)))
-            : array_values(array_unique([...$this->selected, ...$ids]));
+        $ids = $this->filteredQuery()->pluck('id')->map(fn ($id): int => (int) $id)->all();
+        $this->selected = $ids !== [] && count(array_diff($ids, $this->selected)) === 0 ? [] : $ids;
     }
 
     public function clearSelection(): void
@@ -133,11 +130,8 @@ class Index extends Component
 
         $hasFilters = filled($this->search) || $this->status !== 'all';
 
-        $customers = Customer::query()
+        $customers = $this->filteredQuery()
             ->withProfileCompletion()
-            ->search($this->search)
-            ->when($this->status === 'active', fn ($query) => $query->where('status', CustomerStatus::Active))
-            ->when($this->status === 'archived', fn ($query) => $query->where('status', CustomerStatus::Archived))
             ->when($this->sort === 'name_asc', fn ($query) => $query->orderBy('full_legal_name'))
             ->when($this->sort === 'name_desc', fn ($query) => $query->orderByDesc('full_legal_name'))
             ->when($this->sort === 'name', fn ($query) => $query->orderBy('full_legal_name'))
@@ -145,13 +139,19 @@ class Index extends Component
             ->when($this->sort === 'updated' || $this->sort === '', fn ($query) => $query->latest('updated_at'))
             ->paginate(15);
 
-        $pageIds = $customers->getCollection()->pluck('id')->map(fn ($id): int => (int) $id)->all();
-
         return view('livewire.customers.index', [
             'customers' => $customers,
             'hasFilters' => $hasFilters,
-            'pageIds' => $pageIds,
-            'pageSelected' => $pageIds !== [] && collect($pageIds)->every(fn (int $id): bool => in_array($id, $this->selected, true)),
+            'allSelected' => $customers->total() > 0 && count($this->selected) === $customers->total(),
         ])->layout('layouts.app');
+    }
+
+    /** @return Builder<Customer> */
+    private function filteredQuery(): Builder
+    {
+        return Customer::query()
+            ->search($this->search)
+            ->when($this->status === 'active', fn ($query) => $query->where('status', CustomerStatus::Active))
+            ->when($this->status === 'archived', fn ($query) => $query->where('status', CustomerStatus::Archived));
     }
 }

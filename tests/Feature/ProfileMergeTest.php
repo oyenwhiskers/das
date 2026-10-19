@@ -8,6 +8,7 @@ use App\Enums\IdentificationType;
 use App\Livewire\Documents\Show;
 use App\Models\Customer;
 use App\Models\CustomerBankAccount;
+use App\Models\CustomerEmployment;
 use App\Models\DocumentScan;
 use App\Models\ExtractedProfile;
 use App\Models\User;
@@ -390,6 +391,46 @@ class ProfileMergeTest extends TestCase
         $this->assertSame('Kept Name', $customer->fresh()->full_legal_name);
     }
 
+    public function test_auto_match_falls_back_to_name_when_identification_is_missing(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->create(['full_legal_name' => 'Mohd Nasir Bin Mohd Ali']);
+        [$scan, $profile] = $this->reviewed('MOHD NASIR BIN MOHD ALI', [
+            $this->value('bank_accounts[].bank_name', 'Maybank', 'acct-1'),
+            $this->value('bank_accounts[].account_number', '123', 'acct-1'),
+        ], 'Bank Statement', 'Account Statement');
+
+        Livewire::actingAs($staff)->test(Show::class, ['documentScan' => $scan])
+            ->call('autoMatch', $profile->id)
+            ->assertSet('matchCustomerId', (string) $customer->id)
+            ->assertSet('recommendCreate', false)
+            ->assertSee('Recommended from name MOHD NASIR BIN MOHD ALI.')
+            ->assertHasNoErrors();
+    }
+
+    public function test_auto_match_lets_the_user_choose_when_several_share_the_name(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $first = Customer::factory()->create(['full_legal_name' => 'Amina Noor']);
+        $second = Customer::factory()->create(['full_legal_name' => 'Amina Noor']);
+        [$scan, $profile] = $this->reviewed('Amina Noor', [
+            $this->value('bank_accounts[].bank_name', 'Maybank', 'acct-1'),
+            $this->value('bank_accounts[].account_number', '123', 'acct-1'),
+        ], 'Bank Statement', 'Account Statement');
+
+        Livewire::actingAs($staff)->test(Show::class, ['documentScan' => $scan])
+            ->call('autoMatch', $profile->id)
+            ->assertSet('matchProfileId', $profile->id)
+            ->assertSet('matchCustomerId', '')
+            ->assertSet('customerQuery', 'AMINA NOOR')
+            ->assertSee('More than one customer is named AMINA NOOR. Select which one to match.')
+            ->assertSee($first->reference)
+            ->assertSee($second->reference)
+            ->call('selectMatchCustomer', $second->id)
+            ->assertSet('matchCustomerId', (string) $second->id)
+            ->assertHasNoErrors();
+    }
+
     public function test_auto_match_all_writes_every_recommended_applicant_with_the_chosen_strategy(): void
     {
         $staff = User::factory()->staff()->create();
@@ -570,15 +611,128 @@ class ProfileMergeTest extends TestCase
         $this->assertSame(1, Customer::query()->where('full_legal_name', 'AMINA NOOR')->count());
     }
 
+    public function test_bank_statement_mailing_matching_residential_sets_same_as_residential(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->create(['full_legal_name' => 'Amina Noor', 'race' => 'Malay', 'country_of_residence' => 'Malaysia']);
+        $customer->addresses()->create([
+            'type' => AddressType::Residential,
+            'line_1' => '12 Jalan Melati', 'line_2' => null, 'postcode' => '50000',
+            'city' => 'Kuala Lumpur', 'state' => 'Wilayah Persekutuan', 'country' => 'Malaysia',
+            'same_as_residential' => false,
+        ]);
+        [, $profile] = $this->reviewed($customer->full_legal_name, [
+            $this->value('addresses[mailing].line_1', '12 Jalan Melati'),
+            $this->value('addresses[mailing].postcode', '50000'),
+            $this->value('addresses[mailing].city', 'Kuala Lumpur'),
+            $this->value('addresses[mailing].state', 'Wilayah Persekutuan'),
+            $this->value('addresses[mailing].country', 'Malaysia'),
+        ], 'Bank Statement', 'BASIC SAVINGS ACCOUNT-I');
+
+        $this->commit($staff, $profile, $customer);
+
+        $mailing = $customer->fresh()->addresses()->where('type', AddressType::Mailing)->first();
+        $this->assertNotNull($mailing);
+        $this->assertTrue((bool) $mailing->same_as_residential);
+        $this->assertSame('12 Jalan Melati', $mailing->line_1);
+    }
+
+    public function test_bank_statement_fills_self_employed_employment_address_from_mailing(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->create([
+            'full_legal_name' => 'Amina Noor', 'race' => 'Malay', 'country_of_residence' => 'Malaysia',
+            'employment_status' => 'self_employed',
+        ]);
+        $employment = CustomerEmployment::factory()->selfEmployed()->create([
+            'customer_id' => $customer->id,
+            'is_primary' => true,
+            'is_current' => true,
+            'address_line_1' => null,
+            'city' => null,
+            'postcode' => null,
+            'state' => null,
+            'country' => null,
+        ]);
+        [, $profile] = $this->reviewed($customer->full_legal_name, [
+            $this->value('addresses[mailing].line_1', 'Lot 9 Pasar'),
+            $this->value('addresses[mailing].city', 'Tanah Merah'),
+            $this->value('addresses[mailing].postcode', '17500'),
+            $this->value('addresses[mailing].state', 'Kelantan'),
+            $this->value('addresses[mailing].country', 'Malaysia'),
+            $this->value('employments[].arrangement', 'self_employed', 'job-1'),
+            $this->value('employments[].employer_name', 'Pasar Besar', 'job-1'),
+            $this->value('employments[].occupation', 'Trader', 'job-1'),
+        ], 'Bank Statement', 'Account Statement');
+
+        $preview = app(ProfileMergePreview::class)->make($profile->fresh(), $customer->fresh(), 'fill_empty', [
+            'employments|job-1' => (string) $employment->id,
+        ], []);
+        $employmentOp = collect($preview['operations'])->firstWhere('type', 'employments');
+        $this->assertNotNull($employmentOp);
+        $this->assertSame('Lot 9 Pasar', $employmentOp['payload']['address_line_1']);
+        $this->assertSame('Tanah Merah', $employmentOp['payload']['city']);
+
+        app(MergeExtractedProfile::class)->commit(
+            $profile->fresh(),
+            $customer->fresh(),
+            $staff,
+            'fill_empty',
+            (string) str()->uuid(),
+            $preview['baseline'],
+            ['employments|job-1' => (string) $employment->id],
+            [],
+        );
+
+        $employment->refresh();
+        $this->assertSame('Lot 9 Pasar', $employment->address_line_1);
+        $this->assertSame('Tanah Merah', $employment->city);
+    }
+
+    public function test_bank_statement_does_not_fill_employed_office_from_mailing(): void
+    {
+        $customer = Customer::factory()->create([
+            'full_legal_name' => 'Amina Noor', 'race' => 'Malay', 'country_of_residence' => 'Malaysia',
+            'employment_status' => 'employed',
+        ]);
+        $employment = CustomerEmployment::factory()->create([
+            'customer_id' => $customer->id,
+            'arrangement' => 'employed',
+            'employer_name' => 'Old Employer',
+            'occupation' => 'Clerk',
+            'is_primary' => true,
+            'is_current' => true,
+            'address_line_1' => null,
+            'city' => null,
+        ]);
+        [, $profile] = $this->reviewed($customer->full_legal_name, [
+            $this->value('addresses[mailing].line_1', 'Lot 9 Pasar'),
+            $this->value('addresses[mailing].city', 'Tanah Merah'),
+            $this->value('employments[].arrangement', 'employed', 'job-1'),
+            $this->value('employments[].employer_name', 'Maybank', 'job-1'),
+            $this->value('employments[].occupation', 'Clerk', 'job-1'),
+        ], 'Bank Statement', 'Account Statement');
+
+        $preview = app(ProfileMergePreview::class)->make($profile->fresh(), $customer->fresh(), 'overwrite', [
+            'employments|job-1' => (string) $employment->id,
+        ], []);
+        $employmentOp = collect($preview['operations'])->firstWhere('type', 'employments');
+        $this->assertNotNull($employmentOp);
+        $this->assertSame('', (string) ($employmentOp['payload']['address_line_1'] ?? ''));
+        $this->assertSame('Maybank', $employmentOp['payload']['employer_name']);
+    }
+
     /** @param  list<array<string, mixed>>  $values
      * @return array{0: DocumentScan, 1: ExtractedProfile} */
-    private function reviewed(string $name, array $values): array
+    private function reviewed(string $name, array $values, ?string $documentType = null, ?string $documentTitle = null): array
     {
         Queue::fake();
         $snapshot = CustomerProfileSchema::snapshot();
         $scan = DocumentScan::factory()->create([
             'status' => DocumentScanStatus::Completed, 'readable' => true, 'mime_type' => 'image/png',
             'profile_schema_hash' => $snapshot->hash,
+            'document_type' => $documentType,
+            'document_title' => $documentTitle,
             'record_plan' => [['anchor' => 'Applicant', 'regions' => [['page_number' => 1, 'bbox' => null]]]],
         ]);
         app(StoreDocumentFindings::class)->store($scan, DocumentFindingsFixtures::identity($scan->id));

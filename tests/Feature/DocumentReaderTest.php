@@ -124,16 +124,27 @@ class DocumentReaderTest extends TestCase
         $this->actingAs($inactive)->get(route('documents.file', $scan))->assertRedirect(route('login'));
     }
 
-    public function test_authorized_staff_can_download_a_private_original(): void
+    public function test_authorized_staff_can_download_and_preview_a_private_original(): void
     {
         Storage::fake('local');
         $staff = User::factory()->staff()->create();
         $scan = DocumentScan::factory()->for($staff, 'uploader')->create();
         Storage::disk('local')->put($scan->storage_path, '%PDF-1.4 private');
 
-        $this->actingAs($staff)->get(route('documents.file', $scan))
+        $this->actingAs($staff)->get(route('documents.file', [$scan, 'download' => 1]))
             ->assertOk()
             ->assertHeader('content-disposition', 'attachment; filename=sample.pdf');
+
+        $this->actingAs($staff)->get(route('documents.file', $scan))
+            ->assertOk()
+            ->assertHeader('content-disposition', 'inline; filename=sample.pdf');
+
+        $this->actingAs($staff)->get(route('documents.show', $scan))
+            ->assertOk()
+            ->assertSee('Download original')
+            ->assertSee('Preview')
+            ->assertSee(route('documents.file', [$scan, 'download' => 1]), false)
+            ->assertSee('x-if="preview"', false);
 
         $this->assertFalse(Storage::disk('public')->exists($scan->storage_path));
     }

@@ -18,6 +18,7 @@ class ProfileMergePreview
      * @return array<string, mixed> */
     public function make(ExtractedProfile $profile, Customer $customer, string $strategy, array $targets, array $excluded): array
     {
+        $profile->loadMissing('documentScan');
         $customer->load([
             'identifications', 'contacts', 'addresses', 'relationships.relatedPerson', 'employments', 'bankAccounts',
             'taxIdentification', 'taxResidencies', 'fatcaDeclarations', 'financialDeclarations', 'investmentProfiles',
@@ -93,7 +94,7 @@ class ProfileMergePreview
             $resolved[$key]['blocked'] = $blocked;
         }
         $identity = $this->identityBlock($provided->all(), $customer);
-        $operations = $identity === null ? $this->operations($customer, $lines, $provided->all(), $resolved) : [];
+        $operations = $identity === null ? $this->operations($customer, $profile, $lines, $provided->all(), $resolved) : [];
 
         return [
             'identity' => $identity,
@@ -149,11 +150,12 @@ class ProfileMergePreview
      * @param  list<array<string, mixed>>  $provided
      * @param  array<string, array<string, mixed>>  $resolved
      * @return list<array<string, mixed>> */
-    private function operations(Customer $customer, array $lines, array $provided, array $resolved): array
+    private function operations(Customer $customer, ExtractedProfile $profile, array $lines, array $provided, array $resolved): array
     {
         $included = collect($lines)->where('included', true);
         $proposed = collect($provided)->keyBy(fn (array $value): string => $this->lineKey($value));
         $operations = [];
+        $statement = BankStatementProfileRules::isStatementScan($profile->documentScan);
         $changesFor = function (string $module, ?string $rowKey = null) use ($included, $proposed): array {
             return $included->filter(function (array $line) use ($module, $rowKey): bool {
                 return $this->module($line['field_id']) === $module && $line['row_key'] === $rowKey;
@@ -169,12 +171,18 @@ class ProfileMergePreview
         if ($changes = $changesFor('contacts')) {
             $operations[] = ['type' => 'contact', 'payload' => $this->overlay($this->contacts($customer), $included, $proposed, 'contacts'), 'changes' => $changes];
         }
+        $addressPayload = null;
         if ($changes = $changesFor('addresses')) {
-            $operations[] = ['type' => 'address', 'payload' => $this->overlay($this->addresses($customer), $included, $proposed, 'addresses'), 'changes' => $changes];
+            $addressPayload = $this->overlay($this->addresses($customer), $included, $proposed, 'addresses');
+            if ($statement) {
+                $addressPayload = $this->applyStatementMailingSameAs($addressPayload);
+            }
+            $operations[] = ['type' => 'address', 'payload' => $addressPayload, 'changes' => $changes];
         }
         if ($changes = $changesFor('employment_status')) {
             $operations[] = ['type' => 'employment_status', 'payload' => $this->overlay($this->employmentStatus($customer), $included, $proposed, 'employment_status'), 'changes' => $changes];
         }
+        $mailingParts = $this->mailingPartsFromPayload($addressPayload ?? $this->addresses($customer), $customer, $included, $proposed);
         foreach ($resolved as $rowKey => $row) {
             $module = explode('|', $rowKey, 2)[0];
             $changes = $changesFor($module, $rowKey);
@@ -182,7 +190,12 @@ class ProfileMergePreview
                 continue;
             }
             $id = $row['target'] === 'new' ? null : $row['target'];
-            $operations[] = ['type' => $module, 'id' => $id, 'payload' => $this->rowPayload($customer, $module, $id, $included, $proposed, $rowKey), 'changes' => $changes];
+            $payload = $this->rowPayload($customer, $module, $id, $included, $proposed, $rowKey);
+            if ($statement && $module === 'employments'
+                && BankStatementProfileRules::customerIsSelfEmployed($customer, is_string($payload['arrangement'] ?? null) ? $payload['arrangement'] : null)) {
+                $payload = BankStatementProfileRules::copyMailingIntoEmploymentIfBlank($payload, $mailingParts);
+            }
+            $operations[] = ['type' => $module, 'id' => $id, 'payload' => $payload, 'changes' => $changes];
         }
         foreach (['tin', 'fatca', 'financial', 'investment', 'brokerage_declaration'] as $module) {
             if ($changes = $changesFor($module)) {
@@ -196,6 +209,113 @@ class ProfileMergePreview
         }
 
         return $operations;
+    }
+
+    /** @param  array<string, mixed>  $payload
+     * @return array<string, mixed> */
+    private function applyStatementMailingSameAs(array $payload): array
+    {
+        $residential = [
+            'line_1' => $payload['residential_line_1'] ?? '',
+            'line_2' => $payload['residential_line_2'] ?? '',
+            'postcode' => $payload['residential_postcode'] ?? '',
+            'city' => $payload['residential_city'] ?? '',
+            'state' => $payload['residential_state'] ?? '',
+            'country' => $payload['residential_country'] ?? '',
+        ];
+        $mailing = [
+            'line_1' => $payload['mailing_line_1'] ?? '',
+            'line_2' => $payload['mailing_line_2'] ?? '',
+            'postcode' => $payload['mailing_postcode'] ?? '',
+            'city' => $payload['mailing_city'] ?? '',
+            'state' => $payload['mailing_state'] ?? '',
+            'country' => $payload['mailing_country'] ?? '',
+        ];
+        if (! BankStatementProfileRules::hasAddress($mailing)) {
+            return $payload;
+        }
+        if (! BankStatementProfileRules::hasAddress($residential)) {
+            $payload['same_as_residential'] = false;
+
+            return $payload;
+        }
+        if (BankStatementProfileRules::addressesEqual($residential, $mailing)) {
+            $payload['same_as_residential'] = true;
+            foreach (['mailing_line_1', 'mailing_line_2', 'mailing_postcode', 'mailing_city', 'mailing_state', 'mailing_country'] as $key) {
+                $payload[$key] = '';
+            }
+
+            return $payload;
+        }
+        $payload['same_as_residential'] = false;
+
+        return $payload;
+    }
+
+    /**
+     * @param  array<string, mixed>  $addressPayload
+     * @param  Collection<int, array<string, mixed>>  $included
+     * @param  Collection<string, array<string, mixed>>  $proposed
+     * @return array{line_1: mixed, line_2: mixed, postcode: mixed, city: mixed, state: mixed, country: mixed}
+     */
+    private function mailingPartsFromPayload(array $addressPayload, Customer $customer, $included, $proposed): array
+    {
+        $parts = [
+            'line_1' => $addressPayload['mailing_line_1'] ?? '',
+            'line_2' => $addressPayload['mailing_line_2'] ?? '',
+            'postcode' => $addressPayload['mailing_postcode'] ?? '',
+            'city' => $addressPayload['mailing_city'] ?? '',
+            'state' => $addressPayload['mailing_state'] ?? '',
+            'country' => $addressPayload['mailing_country'] ?? '',
+        ];
+        if (($addressPayload['same_as_residential'] ?? false) === true) {
+            $parts = [
+                'line_1' => $addressPayload['residential_line_1'] ?? '',
+                'line_2' => $addressPayload['residential_line_2'] ?? '',
+                'postcode' => $addressPayload['residential_postcode'] ?? '',
+                'city' => $addressPayload['residential_city'] ?? '',
+                'state' => $addressPayload['residential_state'] ?? '',
+                'country' => $addressPayload['residential_country'] ?? '',
+            ];
+        }
+        if (BankStatementProfileRules::hasAddress($parts)) {
+            return $parts;
+        }
+        foreach ($included as $line) {
+            if (! str_starts_with((string) $line['field_id'], 'addresses[mailing].')) {
+                continue;
+            }
+            $leaf = substr((string) $line['field_id'], strlen('addresses[mailing].'));
+            if ($leaf === 'same_as_residential') {
+                continue;
+            }
+            $parts[$leaf] = $proposed[$line['key']]['value'] ?? $parts[$leaf] ?? '';
+        }
+        if (BankStatementProfileRules::hasAddress($parts)) {
+            return $parts;
+        }
+        $mailing = $customer->addresses->firstWhere('type', AddressType::Mailing);
+        if ($mailing?->same_as_residential) {
+            $residential = $customer->addresses->firstWhere('type', AddressType::Residential);
+
+            return [
+                'line_1' => $residential?->line_1 ?? '',
+                'line_2' => $residential?->line_2 ?? '',
+                'postcode' => $residential?->postcode ?? '',
+                'city' => $residential?->city ?? '',
+                'state' => $residential?->state ?? '',
+                'country' => $residential?->country ?? '',
+            ];
+        }
+
+        return [
+            'line_1' => $mailing?->line_1 ?? '',
+            'line_2' => $mailing?->line_2 ?? '',
+            'postcode' => $mailing?->postcode ?? '',
+            'city' => $mailing?->city ?? '',
+            'state' => $mailing?->state ?? '',
+            'country' => $mailing?->country ?? '',
+        ];
     }
 
     /** @param  array<string, mixed>  $base

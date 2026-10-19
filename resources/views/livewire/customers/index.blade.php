@@ -108,7 +108,7 @@
                         <thead class="bg-slate-50">
                             <tr>
                                 <th scope="col" class="px-4 py-2.5 text-left">
-                                    <input type="checkbox" @checked($pageSelected) wire:click="togglePage(@js($pageIds))" aria-label="Select all customers on this page" class="rounded border-slate-300 text-navy-800 focus:ring-navy-500" />
+                                    <input type="checkbox" @checked($allSelected) wire:click="toggleAll" aria-label="Select all customers" class="rounded border-slate-300 text-navy-800 focus:ring-navy-500" />
                                 </th>
                                 <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">#</th>
                                 <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500" aria-sort="{{ $sort === 'name_asc' ? 'ascending' : ($sort === 'name_desc' ? 'descending' : 'none') }}">
@@ -179,8 +179,8 @@
 
                 {{-- Mobile cards --}}
                 <div class="flex items-center gap-2 border-b border-slate-100 px-4 py-2 md:hidden">
-                    <input type="checkbox" @checked($pageSelected) wire:click="togglePage(@js($pageIds))" aria-label="Select all customers on this page" class="rounded border-slate-300 text-navy-800 focus:ring-navy-500" />
-                    <span class="text-sm text-slate-600">Select page</span>
+                    <input type="checkbox" @checked($allSelected) wire:click="toggleAll" aria-label="Select all customers" class="rounded border-slate-300 text-navy-800 focus:ring-navy-500" />
+                    <span class="text-sm text-slate-600">Select all</span>
                 </div>
                 <ul class="divide-y divide-slate-100 md:hidden" role="list">
                     @foreach ($customers as $customer)

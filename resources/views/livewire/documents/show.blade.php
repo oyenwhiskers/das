@@ -17,7 +17,21 @@
                 <div><dt class="text-slate-500">Model</dt><dd class="mt-1 font-medium text-slate-800">{{ $scan->gemini_model ?? '—' }}</dd></div>
                 <div><dt class="text-slate-500">Completed</dt><dd class="mt-1 font-medium text-slate-800">{{ $scan->processing_completed_at?->timezone(config('app.timezone'))->format('d/m/Y, h:i A') ?? '—' }}</dd></div>
             </dl>
-            <a href="{{ route('documents.file', $scan) }}" class="mt-5 inline-flex rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-navy-800 hover:bg-slate-50">Download original</a>
+            <div class="mt-5" x-data="{ preview: false }">
+                <div class="flex flex-wrap gap-2">
+                    <a href="{{ route('documents.file', [$scan, 'download' => 1]) }}" class="inline-flex rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-navy-800 hover:bg-slate-50">Download original</a>
+                    @if ($scan->mime_type === 'application/pdf' || str_starts_with((string) $scan->mime_type, 'image/'))
+                        <button type="button" x-on:click="preview = !preview" class="inline-flex rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-navy-800 hover:bg-slate-50" x-text="preview ? 'Hide preview' : 'Preview'">Preview</button>
+                    @else
+                        <a href="{{ route('documents.file', $scan) }}" target="_blank" rel="noopener noreferrer" class="inline-flex rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-navy-800 hover:bg-slate-50">Preview</a>
+                    @endif
+                </div>
+                @if ($scan->mime_type === 'application/pdf' || str_starts_with((string) $scan->mime_type, 'image/'))
+                    <template x-if="preview">
+                        <iframe title="Original document preview" src="{{ route('documents.file', $scan) }}" class="mt-4 h-[75vh] w-full rounded-lg border border-slate-200 bg-white"></iframe>
+                    </template>
+                @endif
+            </div>
         </section>
 
         @php
@@ -501,7 +515,7 @@
                                 <li x-show="filter === 'all' || filter === '{{ $row['create'] ? 'new' : 'existing' }}'" x-cloak class="grid gap-3 rounded-md border border-slate-200 px-3 py-3 sm:grid-cols-[1fr_auto] sm:items-center">
                                     <div class="min-w-0">
                                         <p class="truncate text-sm font-medium text-navy-900">{{ $row['heading'] }}</p>
-                                        <p class="mt-0.5 text-xs text-slate-500">Identification {{ $row['number'] }}</p>
+                                        <p class="mt-0.5 text-xs text-slate-500">{{ $row['number'] !== '' ? 'Identification '.$row['number'] : 'Matched by name' }}</p>
                                     </div>
                                     <div class="sm:max-w-xs sm:text-right">
                                         @if ($row['create'])

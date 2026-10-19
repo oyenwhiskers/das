@@ -12,6 +12,7 @@ use App\Models\CustomerIdentification;
 use App\Models\CustomerProfileSchemaSnapshot;
 use App\Models\DocumentScan;
 use App\Models\ExtractedProfile;
+use App\Services\BankStatementProfileRules;
 use App\Services\CustomerCreator;
 use App\Services\CustomerProfileSchema;
 use App\Services\MergeExtractedProfile;
@@ -222,24 +223,49 @@ class Show extends Component
     {
         $this->openMatch($profileId);
         $number = CustomerIdentification::normalizeNumber($this->applicantIdentification($profileId));
-        if ($number === null) {
-            $this->closeMatch();
-            throw ValidationException::withMessages(['match' => 'This applicant has no identification number to match.']);
+        if ($number !== null) {
+            $customers = $this->customersWithIdentification($number);
+            if ($customers->count() > 1) {
+                $this->closeMatch();
+                throw ValidationException::withMessages(['match' => 'More than one customer has identification number '.$number.'. Choose the customer with Match.']);
+            }
+            if ($customers->isEmpty()) {
+                $this->authorize('create', Customer::class);
+                $name = $this->applicantName($profileId);
+                if ($name === null) {
+                    $this->closeMatch();
+                    throw ValidationException::withMessages(['match' => 'No customer has identification number '.$number.', and this applicant has no name to create.']);
+                }
+                $this->recommendCreate = true;
+                $this->matchRecommendation = 'No customer has identification number '.$number.'. Create '.$name.' and match this applicant.';
+
+                return;
+            }
+            $customer = $customers->first();
+            $this->authorize('update', $customer);
+            $this->matchCustomerId = (string) $customer->id;
+            $this->customerQuery = $customer->reference;
+            $this->matchRecommendation = 'Recommended from identification number '.$number.'. Choose a strategy, then match.';
+
+            return;
         }
-        $customers = $this->customersWithIdentification($number);
-        if ($customers->count() > 1) {
+        $name = $this->applicantName($profileId);
+        if ($name === null) {
             $this->closeMatch();
-            throw ValidationException::withMessages(['match' => 'More than one customer has identification number '.$number.'. Choose the customer with Match.']);
+            throw ValidationException::withMessages(['match' => 'This applicant has no identification number or name to match.']);
+        }
+        $customers = $this->customersWithName($name);
+        if ($customers->count() > 1) {
+            $this->customerQuery = $name;
+            $this->matchCustomerId = '';
+            $this->matchRecommendation = 'More than one customer is named '.$name.'. Select which one to match.';
+
+            return;
         }
         if ($customers->isEmpty()) {
             $this->authorize('create', Customer::class);
-            $name = $this->applicantName($profileId);
-            if ($name === null) {
-                $this->closeMatch();
-                throw ValidationException::withMessages(['match' => 'No customer has identification number '.$number.', and this applicant has no name to create.']);
-            }
             $this->recommendCreate = true;
-            $this->matchRecommendation = 'No customer has identification number '.$number.'. Create '.$name.' and match this applicant.';
+            $this->matchRecommendation = 'No customer matches the name '.$name.'. Create '.$name.' and match this applicant.';
 
             return;
         }
@@ -247,7 +273,7 @@ class Show extends Component
         $this->authorize('update', $customer);
         $this->matchCustomerId = (string) $customer->id;
         $this->customerQuery = $customer->reference;
-        $this->matchRecommendation = 'Recommended from identification number '.$number.'. Choose a strategy, then match.';
+        $this->matchRecommendation = 'Recommended from name '.$name.'. Choose a strategy, then match.';
     }
 
     public function autoMatchAll(): void
@@ -263,31 +289,65 @@ class Show extends Component
             }
             $heading = is_string($card['heading'] ?? null) && $card['heading'] !== '' ? $card['heading'] : 'Unnamed applicant';
             $number = CustomerIdentification::normalizeNumber($this->applicantIdentification($profileId));
-            if ($number === null) {
-                $skipped[] = $heading.': no identification number.';
+            if ($number !== null) {
+                $customers = $this->customersWithIdentification($number);
+                if ($customers->count() > 1) {
+                    $skipped[] = $heading.': more than one customer has identification number '.$number.'.';
+
+                    continue;
+                }
+                if ($customers->isEmpty()) {
+                    $name = $this->applicantName($profileId);
+                    if ($name === null) {
+                        $skipped[] = $heading.': no customer has identification number '.$number.', and this applicant has no name to create.';
+
+                        continue;
+                    }
+                    $this->authorize('create', Customer::class);
+                    $rows[] = [
+                        'profile_id' => $profileId,
+                        'heading' => $heading !== 'Unnamed applicant' ? $heading : $name,
+                        'customer_id' => 0,
+                        'customer_name' => 'Create '.$name,
+                        'number' => $number,
+                        'create' => true,
+                    ];
+
+                    continue;
+                }
+                $customer = $customers->first();
+                $this->authorize('update', $customer);
+                $rows[] = [
+                    'profile_id' => $profileId,
+                    'heading' => $heading,
+                    'customer_id' => $customer->id,
+                    'customer_name' => (string) $customer->full_legal_name,
+                    'number' => $number,
+                    'create' => false,
+                ];
 
                 continue;
             }
-            $customers = $this->customersWithIdentification($number);
+            $name = $this->applicantName($profileId);
+            if ($name === null) {
+                $skipped[] = $heading.': no identification number or name.';
+
+                continue;
+            }
+            $customers = $this->customersWithName($name);
             if ($customers->count() > 1) {
-                $skipped[] = $heading.': more than one customer has identification number '.$number.'.';
+                $skipped[] = $heading.': more than one customer is named '.$name.'. Use Auto-Match to choose which one.';
 
                 continue;
             }
             if ($customers->isEmpty()) {
-                $name = $this->applicantName($profileId);
-                if ($name === null) {
-                    $skipped[] = $heading.': no customer has identification number '.$number.', and this applicant has no name to create.';
-
-                    continue;
-                }
                 $this->authorize('create', Customer::class);
                 $rows[] = [
                     'profile_id' => $profileId,
                     'heading' => $heading !== 'Unnamed applicant' ? $heading : $name,
                     'customer_id' => 0,
                     'customer_name' => 'Create '.$name,
-                    'number' => $number,
+                    'number' => '',
                     'create' => true,
                 ];
 
@@ -300,7 +360,7 @@ class Show extends Component
                 'heading' => $heading,
                 'customer_id' => $customer->id,
                 'customer_name' => (string) $customer->full_legal_name,
-                'number' => $number,
+                'number' => '',
                 'create' => false,
             ];
         }
@@ -556,6 +616,29 @@ class Show extends Component
             ->get();
     }
 
+    /** @return Collection<int, Customer> */
+    private function customersWithName(string $name)
+    {
+        $normalized = $this->normalizeMatchName($name);
+        $query = Customer::query()->where('status', CustomerStatus::Active);
+        foreach (preg_split('/\s+/', $normalized, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $part) {
+            if (mb_strlen($part) < 2) {
+                continue;
+            }
+            $query->where('full_legal_name', 'like', '%'.str_replace(['%', '_'], ['\\%', '\\_'], $part).'%');
+        }
+
+        return $query->orderBy('id')->limit(25)->get()
+            ->filter(fn (Customer $customer): bool => $this->normalizeMatchName((string) $customer->full_legal_name) === $normalized)
+            ->take(2)
+            ->values();
+    }
+
+    private function normalizeMatchName(string $name): string
+    {
+        return strtolower(trim(preg_replace('/\s+/', ' ', $name) ?? ''));
+    }
+
     /** @param  array<string, mixed>  $built */
     private function matchRefusal(array $built): string
     {
@@ -806,6 +889,14 @@ class Show extends Component
         $name = app(ProfileProjection::class)->repairBrokenFfLigature(trim($heading));
         if ($name === '' || preg_match('/^(?:applicant[_-]?\d+|r\d+|p\d+)$/i', $name) === 1) {
             $name = '';
+        }
+        if ($name === '') {
+            foreach ($filled as $row) {
+                if (($row['field_id'] ?? '') === 'customer.full_legal_name' && is_string($row['value'] ?? null) && trim($row['value']) !== '') {
+                    $name = trim($row['value']);
+                    break;
+                }
+            }
         }
 
         return [
@@ -1061,9 +1152,12 @@ class Show extends Component
             }
         }
         if ($hasBankAccount) {
-            $holder = trim((string) ($byId['customer.full_legal_name']['value'] ?? ''));
-            if ($holder !== '') {
-                $derived['bank_accounts[].account_holder_name'] = $holder;
+            $legalName = trim((string) ($byId['customer.full_legal_name']['value'] ?? ''));
+            $accountHolder = trim((string) ($byId['bank_accounts[].account_holder_name']['value'] ?? ''));
+            if ($legalName !== '') {
+                $derived['bank_accounts[].account_holder_name'] = $legalName;
+            } elseif (BankStatementProfileRules::isStatementScan($this->documentScan) && $accountHolder !== '') {
+                $derived['customer.full_legal_name'] = $accountHolder;
             }
             $derived['bank_accounts[].bank_country'] = 'Malaysia';
             $derived['bank_accounts[].is_active'] = 'Yes';
@@ -1087,7 +1181,8 @@ class Show extends Component
             }
         }
         $same = strtolower((string) ($byId['addresses[mailing].same_as_residential']['value'] ?? ''));
-        if (! $mailingFilled && ! in_array($same, ['no', 'false', '0'], true)) {
+        $statement = BankStatementProfileRules::isStatementScan($this->documentScan);
+        if (! $mailingFilled && ! in_array($same, ['no', 'false', '0'], true) && ! $statement) {
             $copied = false;
             foreach ($parts as $part) {
                 $value = $byId['addresses[residential].'.$part]['value'] ?? null;
@@ -1102,6 +1197,48 @@ class Show extends Component
             }
             if ($copied) {
                 $derived['addresses[mailing].same_as_residential'] = 'Yes';
+            }
+        }
+        if ($statement && $mailingFilled && ! isset($byId['addresses[mailing].same_as_residential'])) {
+            $residential = [];
+            $mailing = [];
+            foreach ($parts as $part) {
+                $residential[$part] = $byId['addresses[residential].'.$part]['value'] ?? ($derived['addresses[residential].'.$part] ?? '');
+                $mailing[$part] = $byId['addresses[mailing].'.$part]['value'] ?? '';
+            }
+            if (BankStatementProfileRules::addressesEqual($residential, $mailing)) {
+                $derived['addresses[mailing].same_as_residential'] = 'Yes';
+            }
+        }
+        if ($statement) {
+            $status = strtolower((string) ($byId['customer.employment_status']['value'] ?? ($derived['customer.employment_status'] ?? '')));
+            $arrangement = strtolower((string) ($byId['employments[].arrangement']['value'] ?? ''));
+            $selfEmployed = $status === 'self_employed' || $arrangement === 'self_employed';
+            if ($selfEmployed && $mailingFilled) {
+                $map = [
+                    'address_line_1' => 'line_1',
+                    'address_line_2' => 'line_2',
+                    'postcode' => 'postcode',
+                    'city' => 'city',
+                    'state' => 'state',
+                    'country' => 'country',
+                ];
+                $employmentAddressBlank = true;
+                foreach (array_keys($map) as $field) {
+                    if (isset($byId['employments[].'.$field])) {
+                        $employmentAddressBlank = false;
+                        break;
+                    }
+                }
+                if ($employmentAddressBlank) {
+                    foreach ($map as $employmentField => $mailField) {
+                        $value = $byId['addresses[mailing].'.$mailField]['value'] ?? null;
+                        if ($value === null || $value === '') {
+                            continue;
+                        }
+                        $derived['employments[].'.$employmentField] = $value;
+                    }
+                }
             }
         }
         foreach ($derived as $fieldId => $value) {

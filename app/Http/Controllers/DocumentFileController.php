@@ -15,10 +15,15 @@ class DocumentFileController extends Controller
 
         abort_unless(Storage::disk('local')->exists($documentScan->storage_path), 404);
 
-        return Storage::disk('local')->download($documentScan->storage_path, $documentScan->original_filename, [
-            'Content-Type' => $documentScan->mime_type,
-            'Cache-Control' => 'private, no-store',
-            'X-Content-Type-Options' => 'nosniff',
-        ]);
+        return Storage::disk('local')->response(
+            $documentScan->storage_path,
+            $documentScan->original_filename,
+            [
+                'Content-Type' => $documentScan->mime_type,
+                'Cache-Control' => 'private, no-store',
+                'X-Content-Type-Options' => 'nosniff',
+            ],
+            request()->boolean('download') ? 'attachment' : 'inline',
+        );
     }
 }

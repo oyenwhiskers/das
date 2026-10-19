@@ -542,4 +542,15 @@ class CustomerManagementTest extends TestCase
         $this->assertModelExists($other);
         $this->assertDatabaseMissing('customer_relationships', ['id' => $relationship->id]);
     }
+
+    public function test_select_all_includes_customers_on_every_page(): void
+    {
+        $user = User::factory()->staff()->create();
+        Customer::factory()->for($user, 'creator')->count(16)->create();
+
+        Livewire::actingAs($user)
+            ->test(Index::class)
+            ->call('toggleAll')
+            ->assertCount('selected', 16);
+    }
 }
