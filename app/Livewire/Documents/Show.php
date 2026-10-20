@@ -81,34 +81,59 @@ class Show extends Component
         $scan = $this->documentScan->fresh();
         if (in_array($scan->status, [DocumentScanStatus::Pending, DocumentScanStatus::Processing], true)) {
             $this->stopScan($scan);
+            $scan = $scan->fresh();
         }
-        $this->retryScan();
+        $this->startScanAgain($scan);
     }
 
     public function retryScan(): void
     {
         $this->authorize('view', $this->documentScan);
+        $this->startScanAgain($this->documentScan->fresh());
+    }
 
-        $scan = $this->documentScan->fresh();
-
-        if ($scan->status !== DocumentScanStatus::Failed || ! Storage::disk('local')->exists($scan->storage_path)) {
+    private function startScanAgain(DocumentScan $scan): void
+    {
+        if (! in_array($scan->status, [DocumentScanStatus::Failed, DocumentScanStatus::Completed], true)
+            || ! Storage::disk('local')->exists($scan->storage_path)) {
             return;
         }
 
-        $updated = DocumentScan::query()->whereKey($scan->id)
-            ->where('status', DocumentScanStatus::Failed->value)
-            ->update([
-                'status' => DocumentScanStatus::Pending->value,
-                'processing_error' => null,
-                'processing_started_at' => null,
-                'processing_completed_at' => null,
-            ]);
+        $updated = 0;
+        DB::transaction(function () use ($scan, &$updated): void {
+            $scan->findings()->delete();
+            $scan->extractedProfiles()->delete();
+            $updated = DocumentScan::query()->whereKey($scan->id)
+                ->whereIn('status', [DocumentScanStatus::Failed->value, DocumentScanStatus::Completed->value])
+                ->update([
+                    'status' => DocumentScanStatus::Pending->value,
+                    'processing_error' => null,
+                    'processing_started_at' => null,
+                    'processing_completed_at' => null,
+                    'gemini_model' => null,
+                    'document_type' => null,
+                    'document_title' => null,
+                    'summary' => null,
+                    'readable' => null,
+                    'limitations' => null,
+                    'extraction_status' => 'not_started',
+                    'extraction_error' => null,
+                    'record_plan' => null,
+                    'profile_schema_hash' => null,
+                    'profile_status' => 'not_started',
+                    'profile_error' => null,
+                    'profile_unresolved' => null,
+                    'ai_responses' => null,
+                ]);
+        });
 
         if ($updated !== 1) {
             return;
         }
 
         Storage::disk('local')->delete('document-scans/'.$scan->id.'/read-progress.json');
+        Storage::disk('local')->deleteDirectory('document-scans/'.$scan->id.'/profile-batches');
+        app(UniqueLock::class)->release(new ProcessDocumentScan($scan->id));
 
         try {
             ProcessDocumentScan::dispatch($scan->id);

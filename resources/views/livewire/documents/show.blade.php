@@ -20,6 +20,7 @@
             <div class="mt-5 flex flex-wrap gap-2">
                 <a href="{{ route('documents.file', [$scan, 'download' => 1]) }}" class="inline-flex rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-navy-800 hover:bg-slate-50">Download original</a>
                 <a href="{{ route('documents.file', $scan) }}" target="_blank" rel="noopener noreferrer" class="inline-flex rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-navy-800 hover:bg-slate-50">Preview</a>
+                <button type="button" wire:click="rescan" wire:loading.attr="disabled" class="inline-flex rounded-md bg-navy-800 px-3 py-2 text-sm font-medium text-white hover:bg-navy-900 disabled:opacity-50">Rescan</button>
             </div>
         </section>
 

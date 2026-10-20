@@ -619,6 +619,57 @@ class BimbsecModuleTest extends TestCase
             ->assertDontSee('Print and download still use this file');
     }
 
+    public function test_a_linked_next_of_kin_without_preferred_fills_bimbsec(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = $this->customer($user, 'ALI BIN ABU', '900101011234');
+        $kin = $this->customer($user, 'AHMAD BIN ALI', '800101011111');
+        $kin->update(['primary_email' => 'ahmad@example.com']);
+        $kin->contacts()->create([
+            'type' => ContactType::Home,
+            'value' => '0345678901',
+            'normalized_value' => '0345678901',
+            'is_primary' => false,
+        ]);
+        $kin->employments()->create([
+            'employer_name' => 'Kin Employer Sdn Bhd',
+            'occupation' => 'Engineer',
+            'city' => 'Shah Alam',
+            'state' => 'Selangor',
+            'postcode' => '40000',
+            'country' => 'Malaysia',
+            'is_primary' => true,
+            'is_current' => true,
+        ]);
+        $customer->relationships()->create([
+            'related_customer_id' => $kin->id,
+            'relationship' => 'father',
+            'is_next_of_kin' => true,
+            'is_primary_next_of_kin' => false,
+            'active_identity_key' => "{$customer->id}:customer:{$kin->id}",
+        ]);
+        $application = $customer->bimbsecApplications()->create([
+            'choices' => BimbsecApplication::normalizeChoices([]),
+            'created_by' => $user->id,
+        ]);
+
+        $blob = json_encode(app(Resolver::class)->resolve($customer->fresh(), [])['draws'], JSON_THROW_ON_ERROR);
+        $this->assertStringContainsString('AHMAD BIN ALI', $blob);
+        $this->assertStringContainsString('800101011111', $blob);
+        $this->assertStringContainsString('Engineer', $blob);
+
+        Livewire::actingAs($user)->test(Show::class, ['customer' => $customer->fresh(), 'application' => $application])
+            ->assertSet('kin_linked', true)
+            ->assertSet('kin_editable', false)
+            ->assertSet('kin_occupation', 'Engineer')
+            ->assertSet('kin_employer_city', 'Shah Alam')
+            ->assertSet('kin_employer_state', 'Selangor')
+            ->assertSet('kin_employer_postcode', '40000')
+            ->assertSet('kin_home_telephone', '0345678901')
+            ->assertSet('kin_email', 'ahmad@example.com')
+            ->assertDontSee('Choose one spouse or next of kin above');
+    }
+
     private function pdfContains(string $pdf, string $text): bool
     {
         if (str_contains($pdf, $text)) {

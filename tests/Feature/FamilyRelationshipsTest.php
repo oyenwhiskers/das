@@ -101,7 +101,13 @@ class FamilyRelationshipsTest extends TestCase
             ->call('add')->set('source', 'customer')->set('linkedCustomerId', (string) $spouse->id)
             ->set('relationship', 'spouse')->set('isNextOfKin', true)->call('save')->assertHasNoErrors();
 
-        $this->assertDatabaseHas('customer_relationships', ['customer_id' => $customer->id, 'related_customer_id' => $spouse->id, 'related_person_id' => null]);
+        $this->assertDatabaseHas('customer_relationships', [
+            'customer_id' => $customer->id,
+            'related_customer_id' => $spouse->id,
+            'related_person_id' => null,
+            'is_next_of_kin' => true,
+            'is_primary_next_of_kin' => true,
+        ]);
         $this->assertDatabaseCount('related_people', 0);
 
         $component->call('add')->set('source', 'customer')->set('linkedCustomerId', (string) $spouse->id)

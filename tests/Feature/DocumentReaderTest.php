@@ -143,6 +143,7 @@ class DocumentReaderTest extends TestCase
             ->assertOk()
             ->assertSee('Download original')
             ->assertSee('Preview')
+            ->assertSee('Rescan')
             ->assertSee(route('documents.file', [$scan, 'download' => 1]), false)
             ->assertSee(route('documents.file', $scan), false)
             ->assertSee('target="_blank"', false);
@@ -475,6 +476,57 @@ class DocumentReaderTest extends TestCase
 
         $this->assertSame(DocumentScanStatus::Pending, $scan->fresh()->status);
         $this->assertNull($scan->fresh()->processing_error);
+        Queue::assertPushed(ProcessDocumentScan::class, fn (ProcessDocumentScan $job): bool => $job->documentScanId === $scan->id);
+    }
+
+    public function test_rescan_clears_a_completed_document_and_queues_another(): void
+    {
+        Storage::fake('local');
+        Queue::fake([ProcessDocumentScan::class]);
+        $staff = User::factory()->staff()->create();
+        $scan = DocumentScan::factory()->for($staff, 'uploader')->create([
+            'status' => DocumentScanStatus::Completed,
+            'document_type' => 'application',
+            'document_title' => 'Old title',
+            'summary' => 'Old summary',
+            'readable' => true,
+            'extraction_status' => 'completed',
+            'profile_status' => 'completed',
+            'profile_schema_hash' => 'abc',
+            'ai_responses' => [['body' => ['x' => 1]]],
+            'processing_completed_at' => now(),
+        ]);
+        Storage::disk('local')->put($scan->storage_path, '%PDF-1.4 original');
+        Storage::disk('local')->put('document-scans/'.$scan->id.'/profile-batches/old.json', '{}');
+        $scan->findings()->create([
+            'observations' => ['fields' => [], 'tables' => [], 'content_blocks' => []],
+            'schema_version' => '1',
+        ]);
+        $scan->extractedProfiles()->create([
+            'record_ref' => 'p0001',
+            'source_pages' => [1],
+            'field_schema_hash' => str_repeat('a', 64),
+            'field_schema_version' => '1',
+            'prompt_version' => '16',
+            'contract_version' => '2.0',
+            'original_projection' => ['values' => []],
+            'reviewed_projection' => ['values' => []],
+        ]);
+
+        Livewire::actingAs($staff)->test(Show::class, ['documentScan' => $scan])
+            ->assertSee('Rescan')
+            ->call('rescan');
+
+        $fresh = $scan->fresh();
+        $this->assertSame(DocumentScanStatus::Pending, $fresh->status);
+        $this->assertNull($fresh->document_title);
+        $this->assertSame('not_started', $fresh->extraction_status);
+        $this->assertSame('not_started', $fresh->profile_status);
+        $this->assertNull($fresh->ai_responses);
+        $this->assertFalse($fresh->findings()->exists());
+        $this->assertSame(0, $fresh->extractedProfiles()->count());
+        $this->assertSame('%PDF-1.4 original', Storage::disk('local')->get($scan->storage_path));
+        Storage::disk('local')->assertMissing('document-scans/'.$scan->id.'/profile-batches/old.json');
         Queue::assertPushed(ProcessDocumentScan::class, fn (ProcessDocumentScan $job): bool => $job->documentScanId === $scan->id);
     }
 

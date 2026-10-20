@@ -287,15 +287,27 @@ class Show extends Component
         $choices['relationship_id'] = $this->relationship_id === '' ? null : $this->relationship_id;
         $relationship = $resolver->subjects($this->customer, $choices)['relationship'];
         $person = $relationship?->relatedPerson;
+        $linked = $relationship?->relatedCustomer;
         $this->relationship_record_id = $relationship?->id;
         $this->kin_linked = $relationship?->related_customer_id !== null;
         $this->kin_editable = $person !== null;
-        $this->kin_occupation = (string) $person?->occupation;
-        $this->kin_employer_city = (string) $person?->employer_city;
-        $this->kin_employer_state = (string) $person?->employer_state;
-        $this->kin_employer_postcode = (string) $person?->employer_postcode;
-        $this->kin_home_telephone = (string) $person?->home_telephone;
-        $this->kin_email = (string) $person?->email;
+        if ($linked instanceof Customer) {
+            $job = $linked->employments->first(fn (CustomerEmployment $row): bool => $row->is_primary && $row->is_current)
+                ?? $linked->employments->first();
+            $this->kin_occupation = (string) $job?->occupation;
+            $this->kin_employer_city = (string) $job?->city;
+            $this->kin_employer_state = (string) $job?->state;
+            $this->kin_employer_postcode = (string) $job?->postcode;
+            $this->kin_home_telephone = (string) $linked->contacts->firstWhere('type', ContactType::Home)?->value;
+            $this->kin_email = (string) $linked->primary_email;
+        } else {
+            $this->kin_occupation = (string) $person?->occupation;
+            $this->kin_employer_city = (string) $person?->employer_city;
+            $this->kin_employer_state = (string) $person?->employer_state;
+            $this->kin_employer_postcode = (string) $person?->employer_postcode;
+            $this->kin_home_telephone = (string) $person?->home_telephone;
+            $this->kin_email = (string) $person?->email;
+        }
     }
 
     private function writeProfile(CustomerProfileWrites $writes, CustomerActivityLogger $activity, Customer $customer, User $user): void

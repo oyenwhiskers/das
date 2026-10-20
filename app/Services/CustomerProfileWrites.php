@@ -300,6 +300,15 @@ class CustomerProfileWrites
         if ($errors !== []) {
             throw ValidationException::withMessages($errors);
         }
+        if ($validated['isNextOfKin'] && ! $validated['isPrimaryNextOfKin']) {
+            $hasOtherPrimary = $customer->relationships()
+                ->where('is_primary_next_of_kin', true)
+                ->when($record?->exists, fn ($query) => $query->whereKeyNot($record->id))
+                ->exists();
+            if (! $hasOtherPrimary) {
+                $validated['isPrimaryNextOfKin'] = true;
+            }
+        }
 
         try {
             DB::transaction(function () use ($customer, $validated, $source, $record, $actor): void {

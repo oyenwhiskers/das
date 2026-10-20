@@ -166,6 +166,10 @@ class Resolver
         if ($spouses->count() === 0 && $kin->count() === 1) {
             return $kin->first();
         }
+        $nok = $relationships->where('is_next_of_kin', true)->values();
+        if ($spouses->count() === 0 && $nok->count() === 1) {
+            return $nok->first();
+        }
         if ($relationships->isNotEmpty()) {
             $this->warn('attention', 'Spouse or next of kin', 'More than one related person could fill this section. Choose one on this application. The family section was left blank.', null);
         }

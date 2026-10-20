@@ -225,6 +225,32 @@
                 <summary class="cursor-pointer text-sm font-semibold text-navy-900">Spouse or next of kin</summary>
                 @if ($kin_linked)
                     <p class="mt-3 text-sm text-slate-600">This person is another customer. Edit their occupation and contact on that customer profile.</p>
+                    <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                        <div>
+                            <label class="text-xs font-medium text-slate-500" for="kin_occupation">Occupation</label>
+                            <input id="kin_occupation" value="{{ $kin_occupation }}" readonly class="mt-1 w-full rounded-md border-slate-300 bg-slate-50 text-sm" />
+                        </div>
+                        <div>
+                            <label class="text-xs font-medium text-slate-500" for="kin_home_telephone">Home telephone</label>
+                            <input id="kin_home_telephone" value="{{ $kin_home_telephone }}" readonly class="mt-1 w-full rounded-md border-slate-300 bg-slate-50 text-sm" />
+                        </div>
+                        <div>
+                            <label class="text-xs font-medium text-slate-500" for="kin_email">Email</label>
+                            <input id="kin_email" value="{{ $kin_email }}" readonly class="mt-1 w-full rounded-md border-slate-300 bg-slate-50 text-sm" />
+                        </div>
+                        <div>
+                            <label class="text-xs font-medium text-slate-500" for="kin_employer_city">Employer city</label>
+                            <input id="kin_employer_city" value="{{ $kin_employer_city }}" readonly class="mt-1 w-full rounded-md border-slate-300 bg-slate-50 text-sm" />
+                        </div>
+                        <div>
+                            <label class="text-xs font-medium text-slate-500" for="kin_employer_state">Employer state</label>
+                            <input id="kin_employer_state" value="{{ $kin_employer_state }}" readonly class="mt-1 w-full rounded-md border-slate-300 bg-slate-50 text-sm" />
+                        </div>
+                        <div>
+                            <label class="text-xs font-medium text-slate-500" for="kin_employer_postcode">Employer postcode</label>
+                            <input id="kin_employer_postcode" value="{{ $kin_employer_postcode }}" readonly class="mt-1 w-full rounded-md border-slate-300 bg-slate-50 text-sm" />
+                        </div>
+                    </div>
                 @elseif ($kin_editable)
                     <div class="mt-3 grid gap-3 sm:grid-cols-2">
                         <div>
