@@ -8,17 +8,25 @@
 @endphp
 
 <div class="bg-[#F8FAFC] py-4 sm:py-5" x-data="{
-    activeTab: (() => { const tabs = { personal: 'personal', relationships: 'relationships', work: 'work', financial: 'financial', investment: 'investment', tax: 'tax', compliance: 'compliance', 'data-source': 'data-source', 'work-finance': 'work' }; const selected = tabs[new URLSearchParams(window.location.search).get('tab')]; return selected ? selected : 'personal'; })(),
-    tabOrder: ['personal', 'relationships', 'work', 'financial', 'investment', 'tax', 'compliance', 'data-source'],
+    activeTab: (() => { const tabs = { personal: 'personal', relationships: 'relationships', work: 'work', financial: 'financial', investment: 'investment', tax: 'tax', compliance: 'compliance', attachments: 'attachments', 'data-source': 'data-source', 'work-finance': 'work' }; const selected = tabs[new URLSearchParams(window.location.search).get('tab')]; return selected ? selected : 'personal'; })(),
+    tabOrder: ['personal', 'relationships', 'work', 'financial', 'investment', 'tax', 'compliance', 'attachments', 'data-source'],
     activityOpen: false,
+    moreOpen: false,
     dirty: false,
     openActivity() {
+        this.moreOpen = false;
         this.activityOpen = true;
         this.$nextTick(() => this.$refs.closeActivity.focus());
     },
     closeActivity() {
         this.activityOpen = false;
-        this.$nextTick(() => this.$refs.viewActivity.focus());
+        this.$nextTick(() => this.$refs.moreMenu.focus());
+    },
+    async openBimbsec() {
+        if (this.dirty && ! await confirmAction({ title: 'Discard unsaved changes?', text: 'Your changes have not been saved.', confirmButtonText: 'Discard changes' })) return;
+        this.dirty = false;
+        this.moreOpen = false;
+        await $wire.openBimbsec();
     },
     async switchTab(tab) {
         if (tab === this.activeTab) return;
@@ -101,7 +109,18 @@
                     </div>
 
                     <div class="flex flex-wrap items-center gap-2 shrink-0">
-                        <button type="button" x-ref="viewActivity" x-on:click="openActivity()" :aria-expanded="activityOpen.toString()" aria-controls="customer-activity-modal" class="rounded-md px-3 py-2 text-sm font-medium text-navy-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-500">View Activity</button>
+                        <div class="relative" x-on:click.outside="moreOpen = false" x-on:keydown.escape.window="if (moreOpen) moreOpen = false">
+                            <button type="button" x-ref="moreMenu" x-on:click="moreOpen = ! moreOpen" :aria-expanded="moreOpen.toString()" aria-haspopup="menu" aria-controls="customer-more-menu" class="inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-navy-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-500">
+                                More
+                                <svg class="h-3.5 w-3.5 text-slate-400 transition-transform" :class="{ 'rotate-180': moreOpen }" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                                </svg>
+                            </button>
+                            <div id="customer-more-menu" role="menu" x-cloak x-show="moreOpen" x-transition class="absolute end-0 z-50 mt-2 w-44 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5">
+                                <button type="button" role="menuitem" x-on:click="openActivity()" :aria-expanded="activityOpen.toString()" aria-controls="customer-activity-modal" class="block w-full px-4 py-2 text-start text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none">View Activity</button>
+                                <button type="button" role="menuitem" x-on:click="openBimbsec()" class="block w-full px-4 py-2 text-start text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none">BIMBSEC</button>
+                            </div>
+                        </div>
                         @if ($customer->isArchived())
                             <button type="button"
                                     x-on:click.prevent="if (await confirmAction({ title: 'Restore customer?', text: dirty ? 'Unsaved changes will be discarded. This customer will be set back to Active.' : 'This customer will be set back to Active.', confirmButtonText: 'Restore' })) { if ($wire.editingSection) await $wire.cancelEdit(); dirty = false; $wire.restore() }"
@@ -128,12 +147,12 @@
                 $sectionCompletion = $customer->profileSectionCompletion();
             @endphp
             <div class="border-b border-slate-200" role="tablist" aria-label="Customer profile sections" x-on:keydown.arrow-right.prevent="moveTab(1)" x-on:keydown.arrow-left.prevent="moveTab(-1)">
-                <div class="flex flex-wrap gap-1">
-                    @foreach (['personal' => 'Personal', 'relationships' => 'Relationships', 'work' => 'Work Information', 'financial' => 'Financial Information', 'investment' => 'Investment', 'tax' => 'Tax & Residency', 'compliance' => 'Compliance', 'data-source' => 'Data Source'] as $tab => $label)
+                <div class="-mb-px flex flex-nowrap gap-1 overflow-x-auto">
+                    @foreach (['personal' => 'Personal', 'relationships' => 'Relationships', 'work' => 'Work Information', 'financial' => 'Financial Information', 'investment' => 'Investment', 'tax' => 'Tax & Residency', 'compliance' => 'Compliance', 'attachments' => 'Attachments', 'data-source' => 'Data Source'] as $tab => $label)
                         @php
                             $sectionPercent = $sectionCompletion[$tab] ?? null;
                         @endphp
-                        <button type="button" x-ref="{{ $tab }}Tab" id="tab-{{ $tab }}" role="tab" aria-controls="panel-{{ $tab }}" :aria-selected="activeTab === '{{ $tab }}'" :tabindex="activeTab === '{{ $tab }}' ? 0 : -1" @click="switchTab('{{ $tab }}')" class="inline-flex items-center gap-1.5 border-b-2 px-3 py-3 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-500" :class="activeTab === '{{ $tab }}' ? 'border-navy-700 text-navy-900' : 'border-transparent text-slate-600 hover:text-navy-900'">
+                        <button type="button" x-ref="{{ $tab }}Tab" id="tab-{{ $tab }}" role="tab" aria-controls="panel-{{ $tab }}" :aria-selected="activeTab === '{{ $tab }}'" :tabindex="activeTab === '{{ $tab }}' ? 0 : -1" @click="switchTab('{{ $tab }}')" class="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-500" :class="activeTab === '{{ $tab }}' ? 'border-navy-700 text-navy-900' : 'border-transparent text-slate-600 hover:text-navy-900'">
                             <span>{{ $label }}</span>
                             @if ($sectionPercent !== null && $sectionPercent >= 100)
                                 <svg class="h-3.5 w-3.5 text-emerald-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg>
@@ -160,6 +179,11 @@
 
 
             <div id="panel-personal" role="tabpanel" aria-labelledby="tab-personal" x-show="activeTab === 'personal'" x-cloak class="space-y-4">
+                    @php
+                        $bimbsecFit = in_array($editingSection, ['personal', 'contact', 'address'], true)
+                            ? app(\App\Services\Bimbsec\Catalog::class)
+                            : null;
+                    @endphp
                     {{-- Personal --}}
                     <section
                         id="personal"
@@ -192,6 +216,7 @@
                                     <div>
                                         <x-input-label for="full_legal_name" value="Full Legal Name *" />
                                         <x-text-input wire:model="full_legal_name" id="full_legal_name" class="mt-1 block w-full" required />
+                                        <x-bimbsec-fit-hint :max="$bimbsecFit?->cellCapacity('personal.legal_name', 'Name of applicant')" for="full_legal_name" />
                                         <x-input-error :messages="$errors->get('full_legal_name')" class="mt-2" />
                                     </div>
                                     <div>
@@ -206,6 +231,7 @@
                                     <div>
                                         <x-input-label for="identification_number" value="Identification Number" />
                                         <x-text-input wire:model.live.debounce.300ms="identification_number" id="identification_number" class="mt-1 block w-full" />
+                                        <x-bimbsec-fit-hint :max="$bimbsecFit?->cellCapacity('identification.current_nric_or_passport', 'New NRIC/Passport/Registration No.')" for="identification_number" />
                                         <p class="mt-1 text-xs text-slate-500">NRIC date of birth, gender, and nationality suggestions are unverified. Check and correct them before saving.</p>
                                         <x-input-error :messages="$errors->get('identification_number')" class="mt-2" />
                                     </div>
@@ -219,6 +245,7 @@
                                     <div>
                                         <x-input-label for="old_nric" value="Old NRIC" />
                                         <x-text-input wire:model="old_nric" id="old_nric" class="mt-1 block w-full" />
+                                        <x-bimbsec-fit-hint :max="$bimbsecFit?->cellCapacity('identification.old_nric', 'Old NRIC')" for="old_nric" />
                                     </div>
                                     <div>
                                         <x-input-label for="date_of_birth" value="Date of Birth" />
@@ -312,21 +339,25 @@
                                         <div>
                                             <x-input-label for="mobile" value="Mobile Number" />
                                             <x-text-input wire:model="mobile" id="mobile" class="mt-1 block w-full" />
+                                            <x-bimbsec-fit-hint :max="$bimbsecFit?->cellCapacity('contact.mobile_phone', 'Mobile telephone number')" for="mobile" />
                                             <x-input-error :messages="$errors->get('mobile')" class="mt-2" />
                                         </div>
                                         <div>
                                             <x-input-label for="home_telephone" value="Home Telephone" />
                                             <x-text-input wire:model="home_telephone" id="home_telephone" class="mt-1 block w-full" />
+                                            <x-bimbsec-fit-hint :max="$bimbsecFit?->cellCapacity('contact.home_phone', 'Home telephone number')" for="home_telephone" />
                                             <x-input-error :messages="$errors->get('home_telephone')" class="mt-2" />
                                         </div>
                                         <div>
                                             <x-input-label for="email" value="Email Address" />
                                             <x-text-input wire:model="email" id="email" type="email" class="mt-1 block w-full" />
+                                            <x-bimbsec-fit-hint :max="$bimbsecFit?->cellCapacity('contact.email', 'E-mail address')" for="email" />
                                             <x-input-error :messages="$errors->get('email')" class="mt-2" />
                                         </div>
                                         @if ($social !== '')<div>
                                             <x-input-label for="social" value="Legacy social contact (platform unknown)" />
                                             <x-text-input wire:model="social" id="social" class="mt-1 block w-full" />
+                                            <x-bimbsec-fit-hint :max="$bimbsecFit?->cellCapacity('contact.social_account', 'Facebook/Instagram/Twitter account')" for="social" />
                                         </div>@endif
                                         @foreach (['facebook' => 'Facebook', 'instagram' => 'Instagram', 'twitter' => 'Twitter / X'] as $platform => $label)
                                             <div><x-input-label :for="'social-'.$platform" :value="$label.' account'" /><x-text-input :id="'social-'.$platform" :wire:model="'socialAccounts.'.$platform" class="mt-1 block w-full" /><x-input-error :messages="$errors->get('socialAccounts.'.$platform)" class="mt-1" /></div>
@@ -379,22 +410,27 @@
                                             <div class="sm:col-span-2">
                                                 <x-input-label for="residential_line_2" value="Address Line 2" />
                                                 <x-text-input wire:model="residential_line_2" id="residential_line_2" class="mt-1 block w-full" />
+                                                <x-bimbsec-fit-hint :max="$bimbsecFit?->cellCapacity('addresses.residential', 'address_lines')" :ids="['residential_line_1', 'residential_line_2']" together />
                                             </div>
                                             <div>
                                                 <x-input-label for="residential_city" value="City" />
                                                 <x-text-input wire:model="residential_city" id="residential_city" class="mt-1 block w-full" />
+                                                <x-bimbsec-fit-hint :max="$bimbsecFit?->cellCapacity('addresses.residential', 'city')" for="residential_city" />
                                             </div>
                                             <div>
                                                 <x-input-label for="residential_state" value="State" />
                                                 <x-text-input wire:model="residential_state" id="residential_state" class="mt-1 block w-full" />
+                                                <x-bimbsec-fit-hint :max="$bimbsecFit?->cellCapacity('addresses.residential', 'state')" for="residential_state" />
                                             </div>
                                             <div>
                                                 <x-input-label for="residential_postcode" value="Postcode" />
                                                 <x-text-input wire:model="residential_postcode" id="residential_postcode" class="mt-1 block w-full" />
+                                                <x-bimbsec-fit-hint :max="$bimbsecFit?->cellCapacity('addresses.residential', 'postcode')" for="residential_postcode" />
                                             </div>
                                             <div>
                                                 <x-input-label for="residential_country" value="Country" />
                                                 <x-text-input wire:model="residential_country" id="residential_country" class="mt-1 block w-full" />
+                                                <x-bimbsec-fit-hint :max="$bimbsecFit?->cellCapacity('addresses.residential', 'country')" for="residential_country" />
                                             </div>
                                             <div>
                                                 <x-input-label for="occupancy_status" value="Property Occupancy" />
@@ -427,22 +463,27 @@
                                                 <div class="sm:col-span-2">
                                                     <x-input-label for="mailing_line_2" value="Address Line 2" />
                                                     <x-text-input wire:model="mailing_line_2" id="mailing_line_2" class="mt-1 block w-full" />
+                                                    <x-bimbsec-fit-hint :max="$bimbsecFit?->cellCapacity('addresses.mailing', 'address_lines')" :ids="['mailing_line_1', 'mailing_line_2']" together />
                                                 </div>
                                                 <div>
                                                     <x-input-label for="mailing_city" value="City" />
                                                     <x-text-input wire:model="mailing_city" id="mailing_city" class="mt-1 block w-full" />
+                                                    <x-bimbsec-fit-hint :max="$bimbsecFit?->cellCapacity('addresses.mailing', 'city')" for="mailing_city" />
                                                 </div>
                                                 <div>
                                                     <x-input-label for="mailing_state" value="State" />
                                                     <x-text-input wire:model="mailing_state" id="mailing_state" class="mt-1 block w-full" />
+                                                    <x-bimbsec-fit-hint :max="$bimbsecFit?->cellCapacity('addresses.mailing', 'state')" for="mailing_state" />
                                                 </div>
                                                 <div>
                                                     <x-input-label for="mailing_postcode" value="Postcode" />
                                                     <x-text-input wire:model="mailing_postcode" id="mailing_postcode" class="mt-1 block w-full" />
+                                                    <x-bimbsec-fit-hint :max="$bimbsecFit?->cellCapacity('addresses.mailing', 'postcode')" for="mailing_postcode" />
                                                 </div>
                                                 <div>
                                                     <x-input-label for="mailing_country" value="Country" />
                                                     <x-text-input wire:model="mailing_country" id="mailing_country" class="mt-1 block w-full" />
+                                                    <x-bimbsec-fit-hint :max="$bimbsecFit?->cellCapacity('addresses.mailing', 'country')" for="mailing_country" />
                                                 </div>
                                             </div>
                                         </div>
@@ -499,6 +540,10 @@
             <div id="panel-compliance" role="tabpanel" aria-labelledby="tab-compliance" x-show="activeTab === 'compliance'" x-cloak class="space-y-4">
                 <livewire:customers.compliance :customer="$customer" :key="'compliance-'.$customer->id" />
             </div>
+            <div id="panel-attachments" role="tabpanel" aria-labelledby="tab-attachments" x-show="activeTab === 'attachments'" x-cloak class="space-y-4">
+                <livewire:customers.attachments :customer="$customer" :key="'attachments-'.$customer->id" />
+            </div>
+
             <div id="panel-data-source" role="tabpanel" aria-labelledby="tab-data-source" x-show="activeTab === 'data-source'" x-cloak class="space-y-4">
                 <livewire:customers.data-source :customer="$customer" :key="'data-source-'.$customer->id" />
             </div>

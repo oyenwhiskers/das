@@ -86,7 +86,7 @@ class BimbsecModuleTest extends TestCase
         $ali->bankAccounts()->create([
             'bank_name' => 'MAYBANK',
             'bank_country' => 'Malaysia',
-            'account_type' => 'savings',
+            'account_type' => 'SAVINGS',
             'account_number' => '123456789012',
             'account_holder_name' => 'ALI BIN ABU',
             'ownership' => '',
@@ -108,7 +108,7 @@ class BimbsecModuleTest extends TestCase
         $other->bankAccounts()->create([
             'bank_name' => 'CIMB',
             'bank_country' => 'Malaysia',
-            'account_type' => 'savings',
+            'account_type' => 'SAVINGS',
             'account_number' => '999',
             'account_holder_name' => 'SITI BINTI OMAR',
             'ownership' => 'joint',
@@ -204,7 +204,7 @@ class BimbsecModuleTest extends TestCase
             'bank_name' => 'CIMB',
             'bank_country' => 'Malaysia',
             'branch_address' => 'KL Main',
-            'account_type' => 'savings',
+            'account_type' => 'SAVINGS',
             'account_number' => '9876543210',
             'account_holder_name' => 'ALI BIN ABU',
             'ownership' => 'sole',
@@ -228,7 +228,7 @@ class BimbsecModuleTest extends TestCase
             'bank_name' => 'RHB BANK ISLAMIC BERHAD',
             'bank_country' => 'Malaysia',
             'branch_address' => '',
-            'account_type' => 'savings',
+            'account_type' => 'SAVINGS',
             'account_number' => '16301500112375',
             'account_holder_name' => 'ALI BIN ABU',
             'ownership' => 'sole',
@@ -472,6 +472,16 @@ class BimbsecModuleTest extends TestCase
         ]);
     }
 
+    public function test_catalog_exposes_character_cell_capacities_used_by_renderer(): void
+    {
+        $catalog = app(Catalog::class);
+
+        $this->assertSame(64, $catalog->cellCapacity('personal.legal_name', 'Name of applicant'));
+        $this->assertSame(15, $catalog->cellCapacity('identification.current_nric_or_passport', 'New NRIC/Passport/Registration No.'));
+        $this->assertSame(64, $catalog->cellCapacity('addresses.residential', 'address_lines'));
+        $this->assertNull($catalog->cellCapacity('tax.malaysian_tin', 'tin'));
+    }
+
     public function test_bulk_merge_keeps_order_and_reports_a_failure_without_a_final_pdf(): void
     {
         $user = User::factory()->staff()->create();
@@ -619,7 +629,7 @@ class BimbsecModuleTest extends TestCase
             ->assertDontSee('Print and download still use this file');
     }
 
-    public function test_a_linked_next_of_kin_without_preferred_fills_bimbsec(): void
+    public function test_a_sole_relationship_fills_bimbsec_even_when_not_marked_active(): void
     {
         $user = User::factory()->staff()->create();
         $customer = $this->customer($user, 'ALI BIN ABU', '900101011234');
@@ -644,7 +654,7 @@ class BimbsecModuleTest extends TestCase
         $customer->relationships()->create([
             'related_customer_id' => $kin->id,
             'relationship' => 'father',
-            'is_next_of_kin' => true,
+            'is_next_of_kin' => false,
             'is_primary_next_of_kin' => false,
             'active_identity_key' => "{$customer->id}:customer:{$kin->id}",
         ]);
@@ -668,6 +678,33 @@ class BimbsecModuleTest extends TestCase
             ->assertSet('kin_home_telephone', '0345678901')
             ->assertSet('kin_email', 'ahmad@example.com')
             ->assertDontSee('Choose one spouse or next of kin above');
+    }
+
+    public function test_active_relationship_is_used_when_multiple_exist(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = $this->customer($user, 'ALI BIN ABU', '900101011234');
+        $customer->update(['marital_status' => 'Married']);
+        $spouse = RelatedPerson::factory()->create(['full_legal_name' => 'SITI BINTI OMAR', 'mobile' => '0123456789']);
+        $brother = RelatedPerson::factory()->create(['full_legal_name' => 'AHMAD BIN ALI', 'mobile' => '0133456789']);
+        $customer->relationships()->create([
+            'related_person_id' => $spouse->id,
+            'relationship' => 'spouse',
+            'is_next_of_kin' => false,
+            'is_primary_next_of_kin' => false,
+            'active_identity_key' => "{$customer->id}:person:{$spouse->id}",
+        ]);
+        $customer->relationships()->create([
+            'related_person_id' => $brother->id,
+            'relationship' => 'brother',
+            'is_next_of_kin' => true,
+            'is_primary_next_of_kin' => true,
+            'active_identity_key' => "{$customer->id}:person:{$brother->id}",
+        ]);
+
+        $blob = json_encode(app(Resolver::class)->resolve($customer->fresh(), [])['draws'], JSON_THROW_ON_ERROR);
+        $this->assertStringContainsString('AHMAD BIN ALI', $blob);
+        $this->assertStringNotContainsString('SITI BINTI OMAR', $blob);
     }
 
     private function pdfContains(string $pdf, string $text): bool

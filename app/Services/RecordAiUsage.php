@@ -8,7 +8,7 @@ use Illuminate\Http\Client\Response;
 
 class RecordAiUsage
 {
-    public function record(DocumentScan $scan, ?Response $response): void
+    public function record(?DocumentScan $scan, ?Response $response): void
     {
         $usage = $response?->json('usage');
         $input = $this->tokens($usage, 'total_input_tokens');
@@ -24,7 +24,7 @@ class RecordAiUsage
         }
 
         AiUsage::query()->create([
-            'document_scan_id' => $scan->id,
+            'document_scan_id' => $scan?->id,
             'model' => $model,
             'http_status' => $response?->status(),
             'input_tokens' => $input,

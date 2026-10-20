@@ -6,6 +6,7 @@ use App\Enums\AddressType;
 use App\Enums\ContactType;
 use App\Models\Customer;
 use App\Models\CustomerBankAccount;
+use App\Models\CustomerContact;
 use App\Models\CustomerIdentification;
 use App\Models\CustomerProfileSchemaSnapshot;
 use App\Models\ExtractedProfile;
@@ -181,8 +182,22 @@ class ProfileMergePreview
             }
             $operations[] = ['type' => 'address', 'payload' => $addressPayload, 'changes' => $changes];
         }
+        $proposedEmployer = $this->proposedModuleValue($included, $proposed, 'employments[].employer_name');
+        $proposedArrangement = $this->proposedModuleValue($included, $proposed, 'employments[].arrangement');
         if ($changes = $changesFor('employment_status')) {
-            $operations[] = ['type' => 'employment_status', 'payload' => $this->overlay($this->employmentStatus($customer), $included, $proposed, 'employment_status'), 'changes' => $changes];
+            $statusPayload = $this->overlay($this->employmentStatus($customer), $included, $proposed, 'employment_status');
+            $statusKind = BankStatementProfileRules::resolveApplicantEmploymentKind(
+                is_string($statusPayload['employmentStatus'] ?? null) ? $statusPayload['employmentStatus'] : null,
+                is_string($proposedArrangement) ? $proposedArrangement : null,
+                is_string($proposedEmployer) ? $proposedEmployer : null,
+            );
+            if (BankStatementProfileRules::clearEmploymentKind(
+                is_string($statusPayload['employmentStatus'] ?? null) ? $statusPayload['employmentStatus'] : null,
+                is_string($proposedArrangement) ? $proposedArrangement : null,
+            ) === null) {
+                $statusPayload['employmentStatus'] = $statusKind;
+            }
+            $operations[] = ['type' => 'employment_status', 'payload' => $statusPayload, 'changes' => $changes];
         }
         $addressBase = $addressPayload ?? $this->addresses($customer);
         $mailingParts = $this->mailingPartsFromPayload($addressBase, $customer, $included, $proposed);
@@ -195,11 +210,20 @@ class ProfileMergePreview
             }
             $id = $row['target'] === 'new' ? null : $row['target'];
             $payload = $this->rowPayload($customer, $module, $id, $included, $proposed, $rowKey);
-            if ($module === 'employments'
-                && BankStatementProfileRules::customerIsSelfEmployed($customer, is_string($payload['arrangement'] ?? null) ? $payload['arrangement'] : null)) {
-                $payload = BankStatementProfileRules::copyAddressIntoEmploymentBlanks($payload, $residentialParts);
-                if ($statement) {
-                    $payload = BankStatementProfileRules::copyAddressIntoEmploymentBlanks($payload, $mailingParts);
+            if ($module === 'employments') {
+                $status = $this->proposedModuleValue($included, $proposed, 'customer.employment_status')
+                    ?? $customer->employment_status;
+                $arrangement = is_string($payload['arrangement'] ?? null) ? $payload['arrangement'] : null;
+                $employer = is_string($payload['employer_name'] ?? null) ? $payload['employer_name'] : null;
+                $kind = BankStatementProfileRules::resolveApplicantEmploymentKind($status, $arrangement, $employer);
+                if (BankStatementProfileRules::clearEmploymentKind($status, $arrangement) === null) {
+                    $payload['arrangement'] = $kind;
+                }
+                if ($kind === 'self_employed') {
+                    $payload = BankStatementProfileRules::copyAddressIntoEmploymentBlanks($payload, $residentialParts);
+                    if ($statement) {
+                        $payload = BankStatementProfileRules::copyAddressIntoEmploymentBlanks($payload, $mailingParts);
+                    }
                 }
             }
             if ($module === 'relationships'
@@ -699,7 +723,7 @@ class ProfileMergePreview
             $base[$this->inputKey($line['field_id'])] = $proposed[$line['key']]['value'];
         }
         if ($module === 'relationships' && blank($base['relationship'] ?? null)) {
-            if (filled($base['otherRelationship'] ?? null) || ($base['isNextOfKin'] ?? false)) {
+            if (filled($base['otherRelationship'] ?? null) || ($base['isActive'] ?? false) || ($base['isNextOfKin'] ?? false)) {
                 $base['relationship'] = 'other';
                 if (blank($base['otherRelationship'] ?? null)) {
                     $base['otherRelationship'] = 'Next of kin';
@@ -762,8 +786,8 @@ class ProfileMergePreview
             'employerAddress' => $person?->employer_address ?? '', 'employerAddressLine1' => $person?->employer_address_line_1 ?? '',
             'employerAddressLine2' => $person?->employer_address_line_2 ?? '', 'employerCity' => $person?->employer_city ?? '',
             'employerState' => $person?->employer_state ?? '', 'employerPostcode' => $person?->employer_postcode ?? '',
-            'employerCountry' => $person?->employer_country ?? '', 'isNextOfKin' => (bool) ($relationship?->is_next_of_kin ?? false),
-            'isPrimaryNextOfKin' => (bool) ($relationship?->is_primary_next_of_kin ?? false),
+            'employerCountry' => $person?->employer_country ?? '',
+            'isActive' => (bool) ($relationship?->is_primary_next_of_kin ?? false),
         ];
 
         return $payload;
@@ -942,6 +966,13 @@ class ProfileMergePreview
                 && CustomerIdentification::normalizeNumber($left) === CustomerIdentification::normalizeNumber($right);
         }
 
+        if ($fieldId !== null && $this->isPhoneField($fieldId)) {
+            $left = is_string($current) ? CustomerContact::normalizeValue(ContactType::Mobile, $current) : null;
+            $right = is_string($proposed) ? CustomerContact::normalizeValue(ContactType::Mobile, $proposed) : null;
+
+            return filled($left) && $left === $right;
+        }
+
         return $this->canonical($current) === $this->canonical($proposed);
     }
 
@@ -949,6 +980,17 @@ class ProfileMergePreview
     {
         return $fieldId === 'primary_identification.number'
             || str_ends_with($fieldId, '.identification_number');
+    }
+
+    private function isPhoneField(string $fieldId): bool
+    {
+        return str_contains($fieldId, 'contacts[mobile]')
+            || str_contains($fieldId, 'contacts[home]')
+            || str_ends_with($fieldId, '.mobile')
+            || str_ends_with($fieldId, '.home_telephone')
+            || str_ends_with($fieldId, '.general_telephone')
+            || str_ends_with($fieldId, '.direct_telephone')
+            || str_ends_with($fieldId, '.fax');
     }
 
     private function canonical(mixed $value): string
@@ -1005,6 +1047,20 @@ class ProfileMergePreview
         return null;
     }
 
+    /**
+     * @param  Collection<int, array<string, mixed>>  $included
+     * @param  Collection<string, array<string, mixed>>  $proposed
+     */
+    private function proposedModuleValue($included, $proposed, string $fieldId): mixed
+    {
+        $line = $included->first(fn (array $row): bool => ($row['field_id'] ?? null) === $fieldId);
+        if ($line === null) {
+            return null;
+        }
+
+        return $proposed[$line['key']]['value'] ?? null;
+    }
+
     private function inputKey(string $fieldId): array|string
     {
         return match ($fieldId) {
@@ -1048,7 +1104,7 @@ class ProfileMergePreview
             'relationships[].relationship' => 'relationship',
             'relationships[].other_relationship' => 'otherRelationship',
             'relationships[].is_next_of_kin' => 'isNextOfKin',
-            'relationships[].is_primary_next_of_kin' => 'isPrimaryNextOfKin',
+            'relationships[].is_primary_next_of_kin' => 'isActive',
             'relationships[].related_person.full_legal_name' => 'fullLegalName',
             'relationships[].related_person.identification_type' => 'identificationType',
             'relationships[].related_person.identification_number' => 'identificationNumber',

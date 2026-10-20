@@ -7,10 +7,14 @@ use App\Models\Customer;
 use App\Models\CustomerEmployment;
 use App\Services\CustomerActivityLogger;
 use App\Services\CustomerProfileWrites;
+use App\Services\EmploymentIndustryLookup;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use RuntimeException;
+use Throwable;
 
 class WorkFinance extends Component
 {
@@ -146,6 +150,46 @@ class WorkFinance extends Component
         $this->cancel();
         $this->dispatch('employment-updated');
         $this->notifySuccess('Employment information saved.');
+    }
+
+    public function searchIndustry(EmploymentIndustryLookup $lookup): void
+    {
+        $this->authorize('update', $this->customer);
+        $this->resetErrorBag();
+        if (trim((string) ($this->form['employer_name'] ?? '')) === '') {
+            throw ValidationException::withMessages(['form.employer_name' => 'Enter an employer name before searching industry.']);
+        }
+
+        try {
+            $result = $lookup->suggest([
+                'employer_name' => $this->form['employer_name'],
+                'occupation' => $this->form['occupation'] ?? '',
+                'arrangement' => $this->form['arrangement'] ?? '',
+                'registration_number' => $this->form['registration_number'] ?? '',
+                'city' => $this->form['city'] ?? '',
+                'state' => $this->form['state'] ?? '',
+                'country' => $this->form['country'] ?? '',
+            ]);
+        } catch (RuntimeException $exception) {
+            $this->notifyError($exception->getMessage());
+
+            return;
+        } catch (Throwable $exception) {
+            report($exception);
+            $this->notifyError('Industry search failed.');
+
+            return;
+        }
+
+        if ($result['industry'] === null && $result['sub_industry'] === null) {
+            $this->notifyError('Could not determine industry from the employer details.');
+
+            return;
+        }
+
+        $this->form['industry'] = $result['industry'] ?? '';
+        $this->form['sub_industry'] = $result['sub_industry'] ?? '';
+        $this->notifySuccess('Industry suggestion ready. Review and save when correct.');
     }
 
     private function employment(int $id): CustomerEmployment

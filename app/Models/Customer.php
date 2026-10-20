@@ -233,6 +233,11 @@ class Customer extends Model
         return $this->hasMany(ExtractedProfileMerge::class);
     }
 
+    public function attachmentScans(): HasMany
+    {
+        return $this->hasMany(AttachmentScan::class);
+    }
+
     public function deleteWithDependents(): void
     {
         DB::transaction(function (): void {

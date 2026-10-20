@@ -56,7 +56,7 @@ class CustomerProfileSchema
             'relationship' => ['spouse', 'father', 'mother', 'son', 'daughter', 'brother', 'sister', 'other'],
             'employment_status' => ['employed', 'self_employed', 'retired', 'other'],
             'arrangement' => ['employed', 'self_employed', 'retired', 'other'],
-            'bank_account_type' => ['savings', 'current', 'other'],
+            'bank_account_type' => ['SAVINGS', 'CURRENT', 'OTHER'],
             'bank_ownership' => ['sole', 'joint', 'other'],
             'missing_tin_reason' => ['A', 'B', 'C'],
             'yes_no' => ['yes', 'no'],

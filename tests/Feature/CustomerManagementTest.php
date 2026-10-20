@@ -6,6 +6,8 @@ use App\Enums\IdentificationType;
 use App\Livewire\Customers\Create;
 use App\Livewire\Customers\Index;
 use App\Livewire\Customers\Show;
+use App\Models\BimbsecApplication;
+use App\Models\BimbsecDocument;
 use App\Models\Customer;
 use App\Models\CustomerIdentification;
 use App\Models\CustomerPepAssociation;
@@ -199,6 +201,28 @@ class CustomerManagementTest extends TestCase
         ]);
     }
 
+    public function test_personal_edit_shows_bimbsec_fit_hint_and_still_saves_when_over_limit(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($user, 'creator')->create([
+            'full_legal_name' => 'Ahmad Bin Ali',
+        ]);
+        $long = str_repeat('A', 70);
+
+        Livewire::actingAs($user)
+            ->test(Show::class, ['customer' => $customer])
+            ->call('editSection', 'personal')
+            ->assertSee('BIMBSEC form fits 64 characters')
+            ->set('full_legal_name', $long)
+            ->call('savePersonal')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('customers', [
+            'id' => $customer->id,
+            'full_legal_name' => $long,
+        ]);
+    }
+
     public function test_clearing_customer_race_restores_malay_default(): void
     {
         $user = User::factory()->staff()->create();
@@ -232,6 +256,34 @@ class CustomerManagementTest extends TestCase
         $this->assertSame('hairaa.fb', $accounts->get('facebook')->value);
         $this->assertSame('hairaa.ig', $accounts->get('instagram')->value);
         $this->assertSame('hairaa.x', $accounts->get('twitter')->value);
+    }
+
+    public function test_contact_phones_are_stored_without_punctuation(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->create(['primary_mobile' => null]);
+
+        Livewire::actingAs($staff)->test(Show::class, ['customer' => $customer])
+            ->call('editSection', 'contact')
+            ->set('mobile', '012-883 4419')
+            ->set('home_telephone', '03-7721 4400')
+            ->call('saveContact')
+            ->assertHasNoErrors();
+
+        $customer->refresh();
+        $this->assertSame('0128834419', $customer->primary_mobile);
+        $this->assertDatabaseHas('customer_contacts', [
+            'customer_id' => $customer->id,
+            'type' => 'mobile',
+            'value' => '0128834419',
+            'normalized_value' => '0128834419',
+        ]);
+        $this->assertDatabaseHas('customer_contacts', [
+            'customer_id' => $customer->id,
+            'type' => 'home',
+            'value' => '0377214400',
+            'normalized_value' => '0377214400',
+        ]);
     }
 
     public function test_other_property_status_requires_and_preserves_description(): void
@@ -279,7 +331,10 @@ class CustomerManagementTest extends TestCase
             ->assertSee('tab-personal')
             ->assertSee('tab-relationships')
             ->assertSee(" : 'personal'", false)
+            ->assertSee('More')
+            ->assertSee('customer-more-menu')
             ->assertSee('View Activity')
+            ->assertSee('openBimbsec()')
             ->assertSee('customer-activity-modal')
             ->assertSee('900101121234')
             ->assertSee('Not provided')
@@ -293,6 +348,35 @@ class CustomerManagementTest extends TestCase
             ->assertSet('identification_number', '900101121234')
             ->call('cancelEdit')
             ->assertSet('identification_number', '');
+    }
+
+    public function test_profile_more_menu_opens_bimbsec_detail(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($user, 'creator')->create();
+        $application = $customer->bimbsecApplications()->create([
+            'choices' => BimbsecApplication::normalizeChoices([]),
+            'created_by' => $user->id,
+            'updated_by' => $user->id,
+        ]);
+        BimbsecDocument::query()->create([
+            'bimbsec_application_id' => $application->id,
+            'customer_id' => $customer->id,
+            'source_hash' => str_repeat('a', 64),
+            'template_sha256' => str_repeat('b', 64),
+            'mapping_sha256' => str_repeat('c', 64),
+            'storage_path' => 'bimbsec/applications/test.pdf',
+            'page_count' => 1,
+            'warnings' => [],
+            'print_blocked' => false,
+            'generated_by' => $user->id,
+            'generated_at' => now(),
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(Show::class, ['customer' => $customer->fresh()])
+            ->call('openBimbsec')
+            ->assertRedirect(route('bimbsec.show', [$customer, $application]));
     }
 
     public function test_archived_customer_can_be_restored_from_profile(): void

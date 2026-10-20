@@ -2,7 +2,26 @@
     <div class="w-full px-4 sm:px-6 lg:px-8 xl:px-10 space-y-5">
         <div>
             <a href="{{ route('documents.index') }}" wire:navigate class="text-sm font-medium text-navy-800 hover:underline">← All documents</a>
-            <h1 class="mt-3 break-all text-xl sm:text-2xl font-semibold text-navy-900">{{ $scan->original_filename }}</h1>
+            @if ($editingFilename)
+                <form wire:submit="saveFilename" class="mt-3 flex flex-wrap items-end gap-2">
+                    <div class="min-w-0 flex-1">
+                        <x-input-label for="filename" value="Filename" class="sr-only" />
+                        <x-text-input wire:model="filename" id="filename" class="block w-full text-xl sm:text-2xl font-semibold" required maxlength="255" />
+                        <x-input-error :messages="$errors->get('filename')" class="mt-2" />
+                    </div>
+                    <button type="submit" wire:loading.attr="disabled" class="inline-flex rounded-md bg-navy-800 px-3 py-2 text-sm font-medium text-white hover:bg-navy-900 disabled:opacity-50">Save</button>
+                    <button type="button" wire:click="cancelRename" class="inline-flex rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-navy-800 hover:bg-slate-50">Cancel</button>
+                </form>
+            @else
+                <div class="mt-3 flex flex-wrap items-center gap-3">
+                    <h1 class="break-all text-xl sm:text-2xl font-semibold text-navy-900">{{ $scan->original_filename }}</h1>
+                    <button type="button" wire:click="editFilename" aria-label="Rename" title="Rename" class="inline-flex shrink-0 items-center justify-center rounded-md p-1.5 text-navy-700 hover:bg-slate-50 hover:text-navy-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-500">
+                        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 0 1 2.652 2.652L9.832 16.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.805.805-2.685a4.5 4.5 0 0 1 1.13-1.897L16.862 4.487Zm0 0L19.5 7.125M18 13.5V19.5a2.25 2.25 0 0 1-2.25 2.25h-11.25A2.25 2.25 0 0 1 2.25 19.5v-11.25A2.25 2.25 0 0 1 4.5 6h6" />
+                        </svg>
+                    </button>
+                </div>
+            @endif
             <p class="mt-1 text-sm text-slate-500">Uploaded by {{ $scan->uploader?->name ?? 'Unknown' }} on {{ $scan->created_at->timezone(config('app.timezone'))->format('d/m/Y, h:i A') }}</p>
         </div>
 
@@ -484,38 +503,54 @@
             @php
                 $existingCount = collect($matchAllRows)->where('create', false)->count();
                 $newCount = collect($matchAllRows)->where('create', true)->count();
+                $selectedCount = count($matchAllSelected);
             @endphp
             <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div class="absolute inset-0 bg-slate-900/40" wire:click="closeMatchAll"></div>
                 <div role="dialog" aria-modal="true" aria-labelledby="match-all-title" x-data="{ filter: 'all' }" class="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
                     <div class="border-b border-slate-200 px-5 py-4">
                         <h3 id="match-all-title" class="text-base font-semibold text-navy-900">Auto-Match all</h3>
-                        <p class="mt-1 text-sm text-slate-600">Review who will be updated and who will be created, then choose a strategy.</p>
-                        <div class="mt-3 flex flex-wrap gap-2" role="group" aria-label="Filter applicants">
-                            <button type="button" x-on:click="filter = 'all'" :class="filter === 'all' ? 'border-navy-800 bg-navy-800 text-white' : 'border-slate-300 bg-white text-slate-700'" class="inline-flex h-8 items-center gap-2 rounded-full border px-3 text-sm font-medium">All <span class="rounded-full bg-white/20 px-1.5 text-xs" :class="filter === 'all' ? 'bg-white/20' : 'bg-slate-100'">{{ $existingCount + $newCount }}</span></button>
-                            <button type="button" x-on:click="filter = 'existing'" :class="filter === 'existing' ? 'border-emerald-700 bg-emerald-700 text-white' : 'border-emerald-200 bg-emerald-50 text-emerald-800'" class="inline-flex h-8 items-center gap-2 rounded-full border px-3 text-sm font-medium">Existing <span class="rounded-full px-1.5 text-xs" :class="filter === 'existing' ? 'bg-white/20' : 'bg-white'">{{ $existingCount }}</span></button>
-                            <button type="button" x-on:click="filter = 'new'" :class="filter === 'new' ? 'border-amber-700 bg-amber-700 text-white' : 'border-amber-200 bg-amber-50 text-amber-900'" class="inline-flex h-8 items-center gap-2 rounded-full border px-3 text-sm font-medium">New <span class="rounded-full px-1.5 text-xs" :class="filter === 'new' ? 'bg-white/20' : 'bg-white'">{{ $newCount }}</span></button>
+                        <p class="mt-1 text-sm text-slate-600">Tick who to include, then choose a strategy.</p>
+                        <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
+                            <div class="flex flex-wrap gap-2" role="group" aria-label="Filter applicants">
+                                <button type="button" x-on:click="filter = 'all'" :class="filter === 'all' ? 'border-navy-800 bg-navy-800 text-white' : 'border-slate-300 bg-white text-slate-700'" class="inline-flex h-8 items-center gap-2 rounded-full border px-3 text-sm font-medium">All <span class="rounded-full px-1.5 text-xs" :class="filter === 'all' ? 'bg-white/20' : 'bg-slate-100'">{{ $existingCount + $newCount }}</span></button>
+                                <button type="button" x-on:click="filter = 'existing'" :class="filter === 'existing' ? 'border-emerald-700 bg-emerald-700 text-white' : 'border-emerald-200 bg-emerald-50 text-emerald-800'" class="inline-flex h-8 items-center gap-2 rounded-full border px-3 text-sm font-medium">Existing <span class="rounded-full px-1.5 text-xs" :class="filter === 'existing' ? 'bg-white/20' : 'bg-white'">{{ $existingCount }}</span></button>
+                                <button type="button" x-on:click="filter = 'new'" :class="filter === 'new' ? 'border-amber-700 bg-amber-700 text-white' : 'border-amber-200 bg-amber-50 text-amber-900'" class="inline-flex h-8 items-center gap-2 rounded-full border px-3 text-sm font-medium">New <span class="rounded-full px-1.5 text-xs" :class="filter === 'new' ? 'bg-white/20' : 'bg-white'">{{ $newCount }}</span></button>
+                            </div>
+                            <div class="flex items-center gap-3 text-sm">
+                                <span class="font-medium text-navy-900">{{ $selectedCount }} selected</span>
+                                <button type="button" x-on:click="$wire.selectAllMatchAll(filter)" class="font-medium text-navy-800 hover:underline">Tick all</button>
+                                <button type="button" x-on:click="$wire.clearMatchAllSelection(filter)" class="font-medium text-slate-600 hover:underline">Untick all</button>
+                            </div>
                         </div>
                     </div>
                     <div class="space-y-4 overflow-y-auto px-5 py-4">
                         <p x-show="filter === 'existing' && {{ $existingCount }} === 0" x-cloak class="rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">No applicant matches an existing customer.</p>
                         <p x-show="filter === 'new' && {{ $newCount }} === 0" x-cloak class="rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">No applicant needs a new customer.</p>
-                        <ul class="space-y-2">
+                        <ul class="space-y-2" role="list" aria-label="Applicants to match">
                             @foreach ($matchAllRows as $row)
-                                <li x-show="filter === 'all' || filter === '{{ $row['create'] ? 'new' : 'existing' }}'" x-cloak class="grid gap-3 rounded-md border border-slate-200 px-3 py-3 sm:grid-cols-[1fr_auto] sm:items-center">
-                                    <div class="min-w-0">
-                                        <p class="truncate text-sm font-medium text-navy-900">{{ $row['heading'] }}</p>
-                                        <p class="mt-0.5 text-xs text-slate-500">{{ $row['number'] !== '' ? 'Identification '.$row['number'] : 'Matched by name' }}</p>
-                                    </div>
-                                    <div class="sm:max-w-xs sm:text-right">
-                                        @if ($row['create'])
-                                            <p class="text-xs font-semibold uppercase tracking-wide text-amber-800">New customer</p>
-                                            <p class="mt-0.5 text-sm text-slate-700">Not in the customer list. A customer will be created.</p>
-                                        @else
-                                            <p class="text-xs font-semibold uppercase tracking-wide text-emerald-800">Existing customer</p>
-                                            <p class="mt-0.5 text-sm font-medium text-slate-900">{{ $row['customer_name'] }}</p>
-                                        @endif
-                                    </div>
+                                @php $checked = in_array((string) $row['profile_id'], array_map('strval', $matchAllSelected), true); @endphp
+                                <li x-show="filter === 'all' || filter === '{{ $row['create'] ? 'new' : 'existing' }}'" x-cloak>
+                                    <label @class([
+                                        'grid cursor-pointer gap-3 rounded-md border px-3 py-3 transition-colors sm:grid-cols-[auto_1fr_auto] sm:items-center',
+                                        'border-navy-300 bg-navy-50' => $checked,
+                                        'border-slate-200 bg-white hover:border-slate-300' => ! $checked,
+                                    ])>
+                                        <input type="checkbox" wire:model.live="matchAllSelected" value="{{ $row['profile_id'] }}" class="mt-0.5 rounded border-slate-300 text-navy-800 focus:ring-navy-800 sm:mt-0" />
+                                        <div class="min-w-0">
+                                            <p class="truncate text-sm font-medium text-navy-900">{{ $row['heading'] }}</p>
+                                            <p class="mt-0.5 text-xs text-slate-500">{{ $row['number'] !== '' ? 'Identification '.$row['number'] : 'Matched by name' }}</p>
+                                        </div>
+                                        <div class="sm:max-w-xs sm:text-right">
+                                            @if ($row['create'])
+                                                <p class="text-xs font-semibold uppercase tracking-wide text-amber-800">New customer</p>
+                                                <p class="mt-0.5 text-sm text-slate-700">Not in the customer list. A customer will be created.</p>
+                                            @else
+                                                <p class="text-xs font-semibold uppercase tracking-wide text-emerald-800">Existing customer</p>
+                                                <p class="mt-0.5 text-sm font-medium text-slate-900">{{ $row['customer_name'] }}</p>
+                                            @endif
+                                        </div>
+                                    </label>
                                 </li>
                             @endforeach
                         </ul>
@@ -540,9 +575,11 @@
                                 <option value="replace_all">Replace all</option>
                             </select>
                         </div>
-                        <div class="flex justify-end gap-3">
-                            <button type="button" wire:click="closeMatchAll" class="text-sm text-slate-600">Cancel</button>
-                            <button type="button" x-on:click="matchWithLoader($wire, 'confirmMatchAll', 'Matching applicants')" wire:loading.attr="disabled" wire:target="confirmMatchAll" class="rounded-md bg-navy-800 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">Match all</button>
+                        <div class="flex items-center justify-end gap-3">
+                            <button type="button" wire:click="closeMatchAll" class="text-sm text-slate-600 hover:text-slate-800">Cancel</button>
+                            <button type="button" x-on:click="matchWithLoader($wire, 'confirmMatchAll', 'Matching applicants')" wire:loading.attr="disabled" wire:target="confirmMatchAll" @disabled($selectedCount === 0) class="rounded-md bg-navy-800 px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">
+                                {{ $selectedCount === 0 ? 'Select applicants' : ($selectedCount === count($matchAllRows) ? 'Match all '.$selectedCount : 'Match '.$selectedCount.' selected') }}
+                            </button>
                         </div>
                     </div>
                 </div>

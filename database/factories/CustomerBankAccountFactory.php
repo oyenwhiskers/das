@@ -25,7 +25,7 @@ class CustomerBankAccountFactory extends Factory
             'bank_name' => 'Maybank',
             'bank_country' => 'Malaysia',
             'branch_address' => null,
-            'account_type' => 'savings',
+            'account_type' => 'SAVINGS',
             'account_number' => $number,
             'account_holder_name' => fake()->name(),
             'ownership' => 'sole',

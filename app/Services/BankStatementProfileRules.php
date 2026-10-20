@@ -75,6 +75,41 @@ class BankStatementProfileRules
     }
 
     /**
+     * Clear applicant employment enum from status and/or arrangement. Prefers arrangement when both set.
+     *
+     * @return 'employed'|'self_employed'|'retired'|'other'|null
+     */
+    public static function clearEmploymentKind(?string $status, ?string $arrangement): ?string
+    {
+        $allowed = ['employed', 'self_employed', 'retired', 'other'];
+        $arrangement = strtolower(trim((string) $arrangement));
+        if (in_array($arrangement, $allowed, true)) {
+            return $arrangement;
+        }
+        $status = strtolower(trim((string) $status));
+        if (in_array($status, $allowed, true)) {
+            return $status;
+        }
+
+        return null;
+    }
+
+    /**
+     * Applicant employment kind: keep a clear tick; when confusing, employer filled → employed, else self_employed.
+     *
+     * @return 'employed'|'self_employed'|'retired'|'other'
+     */
+    public static function resolveApplicantEmploymentKind(?string $status, ?string $arrangement, ?string $employerName): string
+    {
+        $clear = self::clearEmploymentKind($status, $arrangement);
+        if ($clear !== null) {
+            return $clear;
+        }
+
+        return filled(trim((string) $employerName)) ? 'employed' : 'self_employed';
+    }
+
+    /**
      * Self-employed: fill blank office/business address parts from a source address.
      *
      * @param  array{line_1?: mixed, line_2?: mixed, postcode?: mixed, city?: mixed, state?: mixed, country?: mixed}  $source

@@ -71,9 +71,7 @@ class FamilyRelationships extends Component
 
     public string $employerCountry = '';
 
-    public bool $isNextOfKin = false;
-
-    public bool $isPrimaryNextOfKin = false;
+    public bool $isActive = false;
 
     public function mount(Customer $customer): void
     {
@@ -107,8 +105,7 @@ class FamilyRelationships extends Component
         $this->linkedCustomerId = (string) ($record->related_customer_id ?? '');
         $this->relationship = $record->relationship;
         $this->otherRelationship = $record->other_relationship ?? '';
-        $this->isNextOfKin = $record->is_next_of_kin;
-        $this->isPrimaryNextOfKin = $record->is_primary_next_of_kin;
+        $this->isActive = $record->is_primary_next_of_kin;
 
         if ($person) {
             $this->fullLegalName = $person->full_legal_name;
@@ -140,13 +137,6 @@ class FamilyRelationships extends Component
         $this->resetForm();
     }
 
-    public function updatedIsNextOfKin(): void
-    {
-        if (! $this->isNextOfKin) {
-            $this->isPrimaryNextOfKin = false;
-        }
-    }
-
     public function save(CustomerActivityLogger $logger): void
     {
         $this->authorize('update', $this->customer);
@@ -175,8 +165,7 @@ class FamilyRelationships extends Component
             'employerState' => $this->employerState,
             'employerPostcode' => $this->employerPostcode,
             'employerCountry' => $this->employerCountry,
-            'isNextOfKin' => $this->isNextOfKin,
-            'isPrimaryNextOfKin' => $this->isPrimaryNextOfKin,
+            'isActive' => $this->isActive,
         ], auth()->user(), $record);
 
         $this->resetForm();

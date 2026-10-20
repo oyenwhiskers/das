@@ -47,4 +47,37 @@ class Catalog
     {
         return $this->data['fields'];
     }
+
+    /**
+     * Exact character-cell capacity for a form box (same count Renderer uses).
+     * Null when the field is free-text, a table row, or not character cells.
+     */
+    public function cellCapacity(string $referenceKey, string $printedItem): ?int
+    {
+        return $this->cellCapacities()[$referenceKey.'|'.$printedItem] ?? null;
+    }
+
+    /** @return array<string, int> */
+    public function cellCapacities(): array
+    {
+        return once(function (): array {
+            $caps = [];
+            foreach ($this->fields() as $field) {
+                if (($field['placement']['type'] ?? '') !== 'character_cells') {
+                    continue;
+                }
+                $capacity = 0;
+                foreach ($field['placement']['rows'] ?? [] as $row) {
+                    $capacity += (int) ($row['count'] ?? 0);
+                }
+                if ($capacity < 1) {
+                    continue;
+                }
+                $key = ($field['source']['reference_key'] ?? '').'|'.($field['printed_item'] ?? '');
+                $caps[$key] = $capacity;
+            }
+
+            return $caps;
+        });
+    }
 }

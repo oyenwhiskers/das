@@ -1,8 +1,11 @@
 <?php
 
+use App\Http\Controllers\AttachmentFileController;
 use App\Http\Controllers\BimbsecFileController;
 use App\Http\Controllers\DocumentFileController;
 use App\Livewire\AiUsage\Index as AiUsageIndex;
+use App\Livewire\Attachments\Index as AttachmentsIndex;
+use App\Livewire\Attachments\Show as AttachmentsShow;
 use App\Livewire\Bimbsec\BatchShow as BimbsecBatchShow;
 use App\Livewire\Bimbsec\Index as BimbsecIndex;
 use App\Livewire\Bimbsec\Show as BimbsecShow;
@@ -33,6 +36,10 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/documents', DocumentsIndex::class)->name('documents.index');
     Route::get('/documents/{documentScan}', DocumentsShow::class)->name('documents.show');
     Route::get('/documents/{documentScan}/file', DocumentFileController::class)->name('documents.file');
+
+    Route::get('/attachments', AttachmentsIndex::class)->name('attachments.index');
+    Route::get('/attachments/{attachmentScan}', AttachmentsShow::class)->name('attachments.show');
+    Route::get('/attachments/{attachmentScan}/file', AttachmentFileController::class)->name('attachments.file');
 
     Route::view('profile', 'profile')->name('profile');
 

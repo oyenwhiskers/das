@@ -75,8 +75,8 @@ class CustomerDuplicateChecker
             $normalizedMobile = CustomerContact::normalizeValue(ContactType::Mobile, $mobile);
 
             $matches = Customer::query()
-                ->where(function ($query) use ($normalizedMobile, $mobile): void {
-                    $query->where('primary_mobile', $mobile)
+                ->where(function ($query) use ($normalizedMobile): void {
+                    $query->where('primary_mobile', $normalizedMobile)
                         ->orWhereHas('contacts', function ($contactQuery) use ($normalizedMobile): void {
                             $contactQuery->where('type', ContactType::Mobile)
                                 ->where('normalized_value', $normalizedMobile);

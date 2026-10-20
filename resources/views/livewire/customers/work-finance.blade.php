@@ -108,17 +108,50 @@
                 <form wire:submit="save" class="flex min-h-0 flex-col">
                     <div class="min-h-0 space-y-6 overflow-y-auto px-4 py-5 sm:px-6">
                         @if ($selectedId)<p class="rounded-md bg-slate-50 p-3 text-xs text-slate-600">For a new employer, add another record and mark this one as previous. Edit this record to update or correct its details.</p>@endif
+                        @php
+                            $bimbsecFit = app(\App\Services\Bimbsec\Catalog::class);
+                            $employmentFit = [
+                                'occupation' => $bimbsecFit->cellCapacity('employment.occupation_designation', 'Occupation/Designation'),
+                                'employer_name' => $bimbsecFit->cellCapacity('employment.employer_name', 'Employer/Firm'),
+                                'registration_number' => $bimbsecFit->cellCapacity('employment.business_registration_no', 'Company/Business Registration No.'),
+                                'industry' => $bimbsecFit->cellCapacity('employment.industry', 'Industry'),
+                                'sub_industry' => $bimbsecFit->cellCapacity('employment.sub_industry', 'Sub-industry'),
+                                'general_telephone' => $bimbsecFit->cellCapacity('employment.employer_general_phone', 'Employer Phone No. (General)'),
+                                'direct_telephone' => $bimbsecFit->cellCapacity('employment.office_direct_phone', 'Office Telephone No. (DID)'),
+                                'fax' => $bimbsecFit->cellCapacity('employment.fax', 'Fax No.'),
+                                'city' => $bimbsecFit->cellCapacity('employment.business_address', 'city'),
+                                'state' => $bimbsecFit->cellCapacity('employment.business_address', 'state'),
+                                'postcode' => $bimbsecFit->cellCapacity('employment.business_address', 'postcode'),
+                                'country' => $bimbsecFit->cellCapacity('employment.business_address', 'country'),
+                            ];
+                        @endphp
                         @foreach (['Employment details' => ['arrangement' => 'Employment Arrangement', 'occupation' => 'Occupation / Designation', 'employer_name' => 'Employer / Business Name', 'registration_number' => 'Business Registration Number', 'industry' => 'Industry', 'sub_industry' => 'Sub-Industry', 'start_date' => 'Start Date', 'end_date' => 'End Date'], 'Employer contact' => ['general_telephone' => 'General Telephone', 'direct_telephone' => 'Office Direct Telephone (DID)', 'fax' => 'Fax Number'], 'Office / business address' => ['address_line_1' => 'Address Line 1', 'address_line_2' => 'Address Line 2', 'city' => 'City', 'state' => 'State', 'postcode' => 'Postcode', 'country' => 'Country']] as $group => $fields)
                             <fieldset class="space-y-3">@if ($group !== 'Employment details')<legend class="text-sm font-semibold text-slate-800">{{ $group }}</legend>@endif<div class="grid gap-4 sm:grid-cols-2">
                                 @foreach ($fields as $field => $label)
                                     @if ($field === 'end_date' && $form['is_current']) @continue @endif
-                                    <div><x-input-label :for="'employment-'.$field" :value="$label" />
+                                    <div @class(['sm:col-span-2' => in_array($field, ['address_line_1', 'address_line_2', 'industry'], true)])>
+                                        @if ($field === 'industry')
+                                            <div class="flex items-end justify-between gap-3">
+                                                <x-input-label :for="'employment-'.$field" :value="$label" />
+                                                <button type="button" wire:click="searchIndustry" wire:loading.attr="disabled" wire:target="searchIndustry" class="shrink-0 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                                                    <span wire:loading.remove wire:target="searchIndustry">Search</span>
+                                                    <span wire:loading wire:target="searchIndustry">Searching…</span>
+                                                </button>
+                                            </div>
+                                        @else
+                                            <x-input-label :for="'employment-'.$field" :value="$label" />
+                                        @endif
                                         @if ($field === 'arrangement')
                                             <select id="employment-arrangement" wire:model.live="form.arrangement" class="mt-1 block w-full rounded-md border-slate-300 text-sm"><option value="">Select arrangement</option><option value="employed">Employed</option><option value="self_employed">Self-Employed</option><option value="retired">Retired</option><option value="other">Others (please specify)</option></select>
                                             @if (($form['arrangement'] ?? '') === 'other')
                                                 <div class="mt-2"><x-input-label for="employment-arrangement-other" value="Others (please specify)" /><x-text-input id="employment-arrangement-other" wire:model="form.arrangement_other" class="mt-1 block w-full" maxlength="255" /><x-input-error :messages="$errors->get('form.arrangement_other')" class="mt-1" /></div>
                                             @endif
                                         @else<x-text-input :id="'employment-'.$field" :type="in_array($field, ['start_date', 'end_date']) ? 'date' : 'text'" :wire:model="'form.'.$field" class="mt-1 block w-full" />@endif
+                                        @if ($field === 'address_line_2')
+                                            <x-bimbsec-fit-hint :max="$bimbsecFit->cellCapacity('employment.business_address', 'address_lines')" :ids="['employment-address_line_1', 'employment-address_line_2']" together />
+                                        @elseif (isset($employmentFit[$field]))
+                                            <x-bimbsec-fit-hint :max="$employmentFit[$field]" :for="'employment-'.$field" />
+                                        @endif
                                         <x-input-error :messages="$errors->get('form.'.$field)" class="mt-1" />
                                     </div>
                                 @endforeach

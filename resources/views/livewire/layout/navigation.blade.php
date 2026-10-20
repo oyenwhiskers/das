@@ -17,6 +17,7 @@ new class extends Component
     $customersActive = request()->routeIs('customers.*');
     $usersActive = request()->routeIs('users.*');
     $documentsActive = request()->routeIs('documents.*');
+    $attachmentsActive = request()->routeIs('attachments.*');
     $bimbsecActive = request()->routeIs('bimbsec.*');
     $aiUsageActive = request()->routeIs('ai-usage.*');
 @endphp
@@ -33,10 +34,16 @@ new class extends Component
         <nav class="flex-1 space-y-5 overflow-y-auto px-3 py-4" aria-label="Main">
             <div>
                 <p class="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Input</p>
-                <a href="{{ route('documents.index') }}" wire:navigate @class(['flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition', 'bg-navy-50 text-navy-900' => $documentsActive, 'text-slate-600 hover:bg-slate-50 hover:text-slate-900' => ! $documentsActive])>
-                    <svg class="h-4 w-4 shrink-0 opacity-80" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.75h6l3.75 3.75v12.75H7.5a3 3 0 01-3-3V6.75a3 3 0 013-3zM13.5 3.75V7.5h3.75M8.25 12h6.75m-6.75 3.75h6.75" /></svg>
-                    Scan Document
-                </a>
+                <div class="space-y-1">
+                    <a href="{{ route('documents.index') }}" wire:navigate @class(['flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition', 'bg-navy-50 text-navy-900' => $documentsActive, 'text-slate-600 hover:bg-slate-50 hover:text-slate-900' => ! $documentsActive])>
+                        <svg class="h-4 w-4 shrink-0 opacity-80" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.75h6l3.75 3.75v12.75H7.5a3 3 0 01-3-3V6.75a3 3 0 013-3zM13.5 3.75V7.5h3.75M8.25 12h6.75m-6.75 3.75h6.75" /></svg>
+                        Scan Document
+                    </a>
+                    <a href="{{ route('attachments.index') }}" wire:navigate @class(['flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition', 'bg-navy-50 text-navy-900' => $attachmentsActive, 'text-slate-600 hover:bg-slate-50 hover:text-slate-900' => ! $attachmentsActive])>
+                        <svg class="h-4 w-4 shrink-0 opacity-80" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" /></svg>
+                        Scan Attachment
+                    </a>
+                </div>
             </div>
 
             <div>
@@ -195,7 +202,10 @@ new class extends Component
             <nav class="flex-1 space-y-5 overflow-y-auto px-3 py-4" aria-label="Main">
                 <div>
                     <p class="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Input</p>
-                    <a href="{{ route('documents.index') }}" wire:navigate @click="sidebarOpen = false" @class(['flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium', 'bg-navy-50 text-navy-900' => $documentsActive, 'text-slate-600 hover:bg-slate-50' => ! $documentsActive])>Scan Document</a>
+                    <div class="space-y-1">
+                        <a href="{{ route('documents.index') }}" wire:navigate @click="sidebarOpen = false" @class(['flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium', 'bg-navy-50 text-navy-900' => $documentsActive, 'text-slate-600 hover:bg-slate-50' => ! $documentsActive])>Scan Document</a>
+                        <a href="{{ route('attachments.index') }}" wire:navigate @click="sidebarOpen = false" @class(['flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium', 'bg-navy-50 text-navy-900' => $attachmentsActive, 'text-slate-600 hover:bg-slate-50' => ! $attachmentsActive])>Scan Attachment</a>
+                    </div>
                 </div>
                 <div>
                     <p class="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Customers</p>

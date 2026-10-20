@@ -9,6 +9,7 @@ use App\Models\CustomerAddress;
 use App\Models\User;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -251,5 +252,72 @@ class EmploymentInformationTest extends TestCase
             ->call('cancel')
             ->assertDontSee('id="employment-status"', escape: false)
             ->assertSee('+ Add Employment');
+    }
+
+    public function test_industry_search_fills_industry_and_sub_industry_from_employer_details(): void
+    {
+        config()->set('services.gemini.api_key', 'test-key');
+        config()->set('services.gemini.model', 'gemini-3.1-flash-lite');
+        Http::preventStrayRequests();
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response([
+            'status' => 'completed',
+            'output_text' => json_encode(['industry' => 'Manufacturing', 'sub_industry' => 'Aluminium']),
+        ])]);
+
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($staff, 'creator')->create();
+
+        Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer])
+            ->call('add')
+            ->set('form.employer_name', 'JEY ALUMINIUM BERHAD')
+            ->set('form.occupation', 'Business')
+            ->call('searchIndustry')
+            ->assertHasNoErrors()
+            ->assertSet('form.industry', 'Manufacturing')
+            ->assertSet('form.sub_industry', 'Aluminium')
+            ->assertDispatched('notify', type: 'success');
+
+        Http::assertSent(fn ($request): bool => ($request['tools'][0]['type'] ?? null) === 'google_search'
+            && str_contains((string) $request['input'], 'JEY ALUMINIUM BERHAD')
+            && str_contains((string) $request['input'], 'Business'));
+    }
+
+    public function test_industry_search_requires_employer_name(): void
+    {
+        Http::fake();
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($staff, 'creator')->create();
+
+        Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer])
+            ->call('add')
+            ->set('form.employer_name', '')
+            ->call('searchIndustry')
+            ->assertHasErrors('form.employer_name');
+
+        Http::assertNothingSent();
+    }
+
+    public function test_industry_search_leaves_fields_when_uncertain(): void
+    {
+        config()->set('services.gemini.api_key', 'test-key');
+        config()->set('services.gemini.model', 'gemini-3.1-flash-lite');
+        Http::preventStrayRequests();
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response([
+            'status' => 'completed',
+            'output_text' => json_encode(['industry' => null, 'sub_industry' => null]),
+        ])]);
+
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($staff, 'creator')->create();
+
+        Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer])
+            ->call('add')
+            ->set('form.employer_name', 'Unknown Co')
+            ->set('form.industry', 'Existing')
+            ->set('form.sub_industry', 'Keep')
+            ->call('searchIndustry')
+            ->assertSet('form.industry', 'Existing')
+            ->assertSet('form.sub_industry', 'Keep')
+            ->assertDispatched('notify', type: 'error');
     }
 }

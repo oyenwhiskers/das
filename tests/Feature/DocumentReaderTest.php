@@ -613,4 +613,30 @@ class DocumentReaderTest extends TestCase
         Storage::disk('local')->assertMissing('document-scans/drop.pdf');
         Storage::disk('local')->assertMissing('document-scans/'.$drop->id.'/extraction-batches/1.json');
     }
+
+    public function test_scanned_document_filename_can_be_renamed(): void
+    {
+        Storage::fake('local');
+        $staff = User::factory()->staff()->create();
+        $scan = DocumentScan::factory()->for($staff, 'uploader')->create([
+            'original_filename' => 'statement.pdf',
+            'storage_path' => 'document-scans/opaque.pdf',
+        ]);
+        Storage::disk('local')->put($scan->storage_path, '%PDF-1.4 original');
+
+        Livewire::actingAs($staff)->test(Show::class, ['documentScan' => $scan])
+            ->assertSee('Rename')
+            ->call('editFilename')
+            ->assertSet('editingFilename', true)
+            ->assertSet('filename', 'statement.pdf')
+            ->set('filename', 'folder/client-a.pdf')
+            ->call('saveFilename')
+            ->assertSet('editingFilename', false)
+            ->assertSee('client-a.pdf')
+            ->assertDontSee('statement.pdf');
+
+        $this->assertSame('client-a.pdf', $scan->fresh()->original_filename);
+        $this->assertSame('document-scans/opaque.pdf', $scan->fresh()->storage_path);
+        Storage::disk('local')->assertExists('document-scans/opaque.pdf');
+    }
 }

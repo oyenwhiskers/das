@@ -8,8 +8,10 @@ use App\Enums\CustomerActivityAction;
 use App\Enums\CustomerStatus;
 use App\Enums\IdentificationType;
 use App\Livewire\Concerns\NotifiesBrowser;
+use App\Models\BimbsecApplication;
 use App\Models\Customer;
 use App\Models\CustomerContact;
+use App\Services\Bimbsec\Generator;
 use App\Services\CustomerActivityLogger;
 use App\Services\CustomerDuplicateChecker;
 use App\Services\CustomerProfileWrites;
@@ -252,6 +254,20 @@ class Show extends Component
         $this->editingSection = null;
         $this->clearSensitiveFormValues();
         $this->notifySuccess('Address information saved.');
+    }
+
+    public function openBimbsec(Generator $generator): void
+    {
+        $this->authorize('view', $this->customer);
+        $application = $this->customer->currentBimbsecApplication() ?? $this->customer->bimbsecApplications()->create([
+            'choices' => BimbsecApplication::normalizeChoices([]),
+            'created_by' => auth()->id(),
+            'updated_by' => auth()->id(),
+        ]);
+        if ($application->document === null) {
+            $generator->generate($application, auth()->user());
+        }
+        $this->redirect(route('bimbsec.show', [$this->customer, $application]));
     }
 
     public function delete(): void

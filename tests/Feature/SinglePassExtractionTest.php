@@ -712,7 +712,7 @@ class SinglePassExtractionTest extends TestCase
         $fields = $pass->fieldList($snapshot);
         $prompt = $pass->prompt($snapshot, 1, 2);
 
-        $this->assertSame('16', SinglePassExtraction::PROMPT_VERSION);
+        $this->assertSame('18', SinglePassExtraction::PROMPT_VERSION);
         $this->assertStringContainsString('bank_accounts[].branch_address', $fields);
         $this->assertStringContainsString('When a Bank Reference or bank block prints Bank, Branch, Account type, and Account number', $prompt);
         $this->assertStringContainsString('Do not stop after bank name and account number if branch is printed', $prompt);
@@ -728,7 +728,31 @@ class SinglePassExtractionTest extends TestCase
         $this->assertStringContainsString('Do not emit transaction table rows as profile fields', $prompt);
         $this->assertStringContainsString('Use a short record_ref such as applicant_3 or p12_a, never a full legal name', $prompt);
         $this->assertStringContainsString('Each distinct statement header is a new record; do not skip a printed account holder on these pages', $prompt);
+        $this->assertStringNotContainsString('recommend them only for the same employment row when printed employment details give a clear industry signal', $prompt);
+        $this->assertStringContainsString('employments[].industry | Industry | string | Industry of applicant\'s employer', $fields);
         $this->assertStringContainsString('Profile fill prompt '.SinglePassExtraction::PROMPT_VERSION, $prompt);
+    }
+
+    public function test_printed_industry_values_are_kept(): void
+    {
+        $scan = $this->scan();
+        $this->fake($this->payload([[
+            'record_ref' => 'applicant_1', 'anchor' => 'Application', 'source_pages' => [1], 'warnings' => [],
+            'values' => [
+                $this->value('customer.full_legal_name', 'provided', 'Amina Noor', 'Amina Noor'),
+                $this->value('employments[].employer_name', 'provided', 'Maybank Islamic Berhad', 'Maybank Islamic Berhad', 'job-1'),
+                $this->value('employments[].occupation', 'provided', 'Accountant', 'Accountant', 'job-1'),
+                $this->value('employments[].industry', 'provided', 'Professional Services', 'Industry: Professional Services', 'job-1'),
+                $this->value('employments[].sub_industry', 'provided', 'Accounting', 'Sub-industry: Accounting', 'job-1'),
+            ],
+        ]]));
+
+        app(SinglePassExtraction::class)->run($scan, app(GeminiDocumentReader::class));
+
+        $values = collect($scan->extractedProfiles()->sole()->original_projection['values'])->pluck('value', 'field_id');
+        $this->assertSame('Professional Services', $values['employments[].industry']);
+        $this->assertSame('Accounting', $values['employments[].sub_industry']);
+        Http::assertSent(fn ($request): bool => ! str_contains($request['input'][1]['text'], 'recommend them only for the same employment row'));
     }
 
     public function test_statement_account_holder_name_is_shown_when_full_legal_name_was_omitted(): void
@@ -857,7 +881,7 @@ class SinglePassExtractionTest extends TestCase
                     $this->value('bank_accounts[].bank_name', 'provided', 'Maybank', 'Maybank', 'acct-1'),
                     $this->value('bank_accounts[].account_number', 'provided', '1234567890', '1234567890', 'acct-1'),
                     $this->value('bank_accounts[].account_holder_name', 'provided', 'Amina Noor', 'Amina Noor', 'acct-1'),
-                    $this->value('bank_accounts[].account_type', 'provided', 'savings', 'Savings-i', 'acct-1'),
+                    $this->value('bank_accounts[].account_type', 'provided', 'SAVINGS', 'Savings-i', 'acct-1'),
                     $this->value('bank_accounts[].branch_address', 'provided', 'Jalan Ampang', 'Jalan Ampang', 'acct-1'),
                     $this->value('addresses[mailing].line_1', 'provided', '12 Jalan Melati', '12 Jalan Melati'),
                     $this->value('addresses[mailing].postcode', 'provided', '50000', '50000'),
@@ -874,7 +898,7 @@ class SinglePassExtractionTest extends TestCase
 
         $this->assertSame('Bank Statement', $accepted['document_type']);
         $this->assertSame('Maybank', $values['bank_accounts[].bank_name']);
-        $this->assertSame('savings', $values['bank_accounts[].account_type']);
+        $this->assertSame('SAVINGS', $values['bank_accounts[].account_type']);
         $this->assertSame('Jalan Ampang', $values['bank_accounts[].branch_address']);
         $this->assertSame('12 Jalan Melati', $values['addresses[mailing].line_1']);
         $this->assertSame('Malaysia', $values['addresses[mailing].country']);

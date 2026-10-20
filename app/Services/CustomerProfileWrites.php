@@ -150,7 +150,9 @@ class CustomerProfileWrites
                 $this->syncSocialContact($customer, $platform, $validated['socialAccounts'][$platform] ?: null);
             }
             $customer->update([
-                'primary_mobile' => filled($validated['mobile']) ? $validated['mobile'] : null,
+                'primary_mobile' => filled($validated['mobile'])
+                    ? CustomerContact::normalizeValue(ContactType::Mobile, $validated['mobile'])
+                    : null,
                 'primary_email' => filled($validated['email'])
                     ? CustomerContact::normalizeValue(ContactType::Email, $validated['email'])
                     : null,
@@ -224,6 +226,9 @@ class CustomerProfileWrites
     {
         $source = $record ? ($record->related_customer_id ? 'customer' : 'new') : ($input['source'] ?? '');
         $input['source'] = $source;
+        $input['isActive'] = (bool) ($input['isActive'] ?? false)
+            || (bool) ($input['isPrimaryNextOfKin'] ?? false)
+            || (bool) ($input['isNextOfKin'] ?? false);
         $validated = Validator::make($input, [
             'source' => ['required', Rule::in(['new', 'customer'])],
             'linkedCustomerId' => ['exclude_if:source,new', Rule::requiredIf($source === 'customer'), 'nullable', 'integer', 'exists:customers,id'],
@@ -247,8 +252,7 @@ class CustomerProfileWrites
             'employerState' => ['exclude_if:source,customer', 'nullable', 'string', 'max:255'],
             'employerPostcode' => ['exclude_if:source,customer', 'nullable', 'string', 'max:20'],
             'employerCountry' => ['exclude_if:source,customer', 'nullable', 'string', 'max:255'],
-            'isNextOfKin' => ['boolean'],
-            'isPrimaryNextOfKin' => ['boolean'],
+            'isActive' => ['boolean'],
         ])->validate();
 
         $errors = [];
@@ -264,11 +268,8 @@ class CustomerProfileWrites
                 $errors['fullLegalName'] = 'Full legal name is required.';
             }
         }
-        if ($validated['isPrimaryNextOfKin'] && ! $validated['isNextOfKin']) {
-            $errors['isPrimaryNextOfKin'] = 'A primary next of kin must also be designated as next of kin.';
-        }
-        if ($validated['isNextOfKin'] && blank($contact)) {
-            $errors[$source === 'customer' ? 'linkedCustomerId' : 'mobile'] = 'Next of kin requires a usable contact number.';
+        if ($validated['isActive'] && blank($contact)) {
+            $errors[$source === 'customer' ? 'linkedCustomerId' : 'mobile'] = 'Active for BIMBSEC requires a usable contact number.';
         }
         if ($validated['relationship'] === 'spouse' && filled($customer->marital_status)
             && strcasecmp(trim((string) $customer->marital_status), 'married') !== 0) {
@@ -300,15 +301,6 @@ class CustomerProfileWrites
         if ($errors !== []) {
             throw ValidationException::withMessages($errors);
         }
-        if ($validated['isNextOfKin'] && ! $validated['isPrimaryNextOfKin']) {
-            $hasOtherPrimary = $customer->relationships()
-                ->where('is_primary_next_of_kin', true)
-                ->when($record?->exists, fn ($query) => $query->whereKeyNot($record->id))
-                ->exists();
-            if (! $hasOtherPrimary) {
-                $validated['isPrimaryNextOfKin'] = true;
-            }
-        }
 
         try {
             DB::transaction(function () use ($customer, $validated, $source, $record, $actor): void {
@@ -319,8 +311,12 @@ class CustomerProfileWrites
                         'date_of_birth' => $validated['dateOfBirth'] ?: null,
                         'gender' => $validated['gender'] ?: null,
                         'nationality' => $validated['nationality'] ?: null,
-                        'mobile' => $validated['mobile'] ?: null,
-                        'home_telephone' => $validated['homeTelephone'] ?: null,
+                        'mobile' => filled($validated['mobile'] ?? null)
+                            ? CustomerContact::normalizeValue(ContactType::Mobile, $validated['mobile'])
+                            : null,
+                        'home_telephone' => filled($validated['homeTelephone'] ?? null)
+                            ? CustomerContact::normalizeValue(ContactType::Home, $validated['homeTelephone'])
+                            : null,
                         'email' => filled($validated['email'] ?? null)
                             ? CustomerContact::normalizeValue(ContactType::Email, $validated['email'])
                             : null,
@@ -352,11 +348,12 @@ class CustomerProfileWrites
                 }
                 $record ??= new CustomerRelationship;
                 $wasNew = ! $record->exists;
-                $nextOfKinChanged = ! $wasNew && ($record->is_next_of_kin !== $validated['isNextOfKin'] || $record->is_primary_next_of_kin !== $validated['isPrimaryNextOfKin']);
-                if ($validated['isPrimaryNextOfKin']) {
+                $active = (bool) $validated['isActive'];
+                $activeChanged = ! $wasNew && $record->is_primary_next_of_kin !== $active;
+                if ($active) {
                     $customer->relationships()->where('is_primary_next_of_kin', true)
                         ->when($record->exists, fn ($query) => $query->whereKeyNot($record->id))
-                        ->update(['is_primary_next_of_kin' => false]);
+                        ->update(['is_primary_next_of_kin' => false, 'is_next_of_kin' => false]);
                 }
                 $record->fill([
                     'customer_id' => $customer->id,
@@ -364,14 +361,14 @@ class CustomerProfileWrites
                     'related_customer_id' => $source === 'customer' ? (int) $validated['linkedCustomerId'] : null,
                     'relationship' => $validated['relationship'],
                     'other_relationship' => $validated['relationship'] === 'other' ? $validated['otherRelationship'] : null,
-                    'is_next_of_kin' => $validated['isNextOfKin'],
-                    'is_primary_next_of_kin' => $validated['isPrimaryNextOfKin'],
+                    'is_next_of_kin' => $active,
+                    'is_primary_next_of_kin' => $active,
                     'active_identity_key' => $identityKey,
                 ])->save();
                 $this->activity->log($customer, $wasNew
                     ? ($source === 'customer' ? CustomerActivityAction::RelationshipLinked : CustomerActivityAction::RelatedPersonAdded)
                     : CustomerActivityAction::RelatedPersonUpdated, $actor);
-                if ($nextOfKinChanged || ($wasNew && $validated['isNextOfKin'])) {
+                if ($activeChanged || ($wasNew && $active)) {
                     $this->activity->log($customer, CustomerActivityAction::NextOfKinUpdated, $actor);
                 }
             });
@@ -490,6 +487,11 @@ class CustomerProfileWrites
                 $existingPrimary->update(['is_primary' => false, 'primary_current_key' => null]);
             }
             $attributes = collect($validated)->map(fn ($value) => $value === '' ? null : $value)->all();
+            foreach (['general_telephone', 'direct_telephone', 'fax'] as $phoneField) {
+                if (filled($attributes[$phoneField] ?? null)) {
+                    $attributes[$phoneField] = CustomerContact::normalizeValue(ContactType::Mobile, $attributes[$phoneField]);
+                }
+            }
             $attributes['is_current'] = (bool) $validated['is_current'];
             $attributes['is_primary'] = (bool) $validated['is_primary'];
             $attributes['primary_current_key'] = $validated['is_primary'] ? $customer->id : null;
@@ -1091,8 +1093,11 @@ class CustomerProfileWrites
             return;
         }
         $normalized = CustomerContact::normalizeValue($type, $value);
-        // Emails are stored lowercase (same as normalized); never print/save as capitals.
-        $stored = $type === ContactType::Email ? $normalized : $value;
+        // Emails lowercase; phones digits-only. Both print/save as the normalized form.
+        $stored = match ($type) {
+            ContactType::Email, ContactType::Mobile, ContactType::Home => $normalized,
+            default => $value,
+        };
         $payload = ['value' => $stored, 'normalized_value' => $normalized, 'is_primary' => $isPrimary];
         if ($existing) {
             $existing->update($payload);

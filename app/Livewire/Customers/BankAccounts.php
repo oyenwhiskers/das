@@ -99,7 +99,7 @@ class BankAccounts extends Component
         $this->confirmNumberChange = false;
         $this->form = [
             'bank_name' => '', 'bank_country' => 'Malaysia', 'branch_address' => '',
-            'account_type' => 'savings', 'account_number' => '', 'account_holder_name' => '',
+            'account_type' => 'SAVINGS', 'account_number' => '', 'account_holder_name' => '',
             'ownership' => 'sole', 'is_primary' => false,
         ];
     }

@@ -149,29 +149,15 @@ class Resolver
 
             return $selected;
         }
-        $spouses = $relationships->where('relationship', 'spouse')->values();
-        $kin = $relationships->where('is_primary_next_of_kin', true)->values();
-        $married = strcasecmp((string) $customer->marital_status, 'married') === 0;
-        if ($married && $spouses->count() === 1) {
-            $spouse = $spouses->first();
-            $other = $kin->first(fn (CustomerRelationship $row): bool => $row->id !== $spouse->id);
-            if ($other !== null) {
-                $this->warn('attention', 'Spouse or next of kin', 'A spouse and a different next of kin are both recorded. Choose one on this application. The family section was left blank.', null);
-
-                return null;
-            }
-
-            return $spouse;
+        $active = $relationships->where('is_primary_next_of_kin', true)->values();
+        if ($active->count() === 1) {
+            return $active->first();
         }
-        if ($spouses->count() === 0 && $kin->count() === 1) {
-            return $kin->first();
-        }
-        $nok = $relationships->where('is_next_of_kin', true)->values();
-        if ($spouses->count() === 0 && $nok->count() === 1) {
-            return $nok->first();
+        if ($relationships->count() === 1) {
+            return $relationships->first();
         }
         if ($relationships->isNotEmpty()) {
-            $this->warn('attention', 'Spouse or next of kin', 'More than one related person could fill this section. Choose one on this application. The family section was left blank.', null);
+            $this->warn('attention', 'Spouse or next of kin', 'More than one related person could fill this section. Mark one as active on the customer profile, or choose one on this application. The family section was left blank.', null);
         }
 
         return null;
@@ -729,7 +715,7 @@ class Resolver
             'bank' => $account->bank_name,
             'branch_or_address' => $account->branch_address,
             'account_type' => match ($account->account_type) {
-                'savings' => 'Savings', 'current' => 'Current', 'other' => 'Other', default => null,
+                'SAVINGS', 'savings' => 'Savings', 'CURRENT', 'current' => 'Current', 'OTHER', 'other' => 'Other', default => null,
             },
             'account_number' => $account->account_number,
             default => null,

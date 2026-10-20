@@ -53,7 +53,9 @@ class CustomerCreator
             if ($identificationType !== null && $identificationNumber !== null && $issuingJurisdiction === null) {
                 throw new \InvalidArgumentException('Issuing jurisdiction is required for this identification type.');
             }
-            $mobile = filled($data['mobile'] ?? null) ? trim($data['mobile']) : null;
+            $mobile = filled($data['mobile'] ?? null)
+                ? CustomerContact::normalizeValue(ContactType::Mobile, $data['mobile'])
+                : null;
             $email = filled($data['email'] ?? null)
                 ? CustomerContact::normalizeValue(ContactType::Email, $data['email'])
                 : null;

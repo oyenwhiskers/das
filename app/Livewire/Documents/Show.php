@@ -40,6 +40,10 @@ class Show extends Component
 
     public DocumentScan $documentScan;
 
+    public bool $editingFilename = false;
+
+    public string $filename = '';
+
     public ?int $matchProfileId = null;
 
     public string $customerQuery = '';
@@ -57,11 +61,14 @@ class Show extends Component
 
     public bool $matchAll = false;
 
-    /** @var list<array{profile_id: int, heading: string, customer_id: int, customer_name: string, number: string}> */
+    /** @var list<array{profile_id: int, heading: string, customer_id: int, customer_name: string, number: string, create: bool}> */
     public array $matchAllRows = [];
 
     /** @var list<string> */
     public array $matchAllSkipped = [];
+
+    /** @var list<string> profile ids as strings so checkbox wire:model stays in sync */
+    public array $matchAllSelected = [];
 
     public function mount(DocumentScan $documentScan): void
     {
@@ -90,6 +97,36 @@ class Show extends Component
     {
         $this->authorize('view', $this->documentScan);
         $this->startScanAgain($this->documentScan->fresh());
+    }
+
+    public function editFilename(): void
+    {
+        $this->authorize('view', $this->documentScan);
+        $this->filename = $this->documentScan->fresh()->original_filename;
+        $this->editingFilename = true;
+        $this->resetValidation();
+    }
+
+    public function cancelRename(): void
+    {
+        $this->editingFilename = false;
+        $this->resetValidation();
+    }
+
+    public function saveFilename(): void
+    {
+        $this->authorize('view', $this->documentScan);
+        $this->validate(['filename' => ['required', 'string', 'max:255']]);
+        $name = basename(str_replace('\\', '/', trim($this->filename)));
+        if ($name === '' || mb_strlen($name) > 255) {
+            $this->addError('filename', 'The filename must be 255 characters or fewer.');
+
+            return;
+        }
+
+        $this->documentScan->update(['original_filename' => $name]);
+        $this->documentScan->refresh();
+        $this->editingFilename = false;
     }
 
     private function startScanAgain(DocumentScan $scan): void
@@ -401,9 +438,48 @@ class Show extends Component
         }
         $this->matchAllRows = $rows;
         $this->matchAllSkipped = $skipped;
+        $this->matchAllSelected = $this->matchAllIdsForFilter('all');
         $this->matchStrategy = 'fill_empty';
         $this->matchAll = true;
         $this->resetValidation();
+    }
+
+    public function selectAllMatchAll(string $filter = 'all'): void
+    {
+        $this->matchAllSelected = array_values(array_unique([
+            ...$this->matchAllSelected,
+            ...$this->matchAllIdsForFilter($filter),
+        ]));
+    }
+
+    public function clearMatchAllSelection(string $filter = 'all'): void
+    {
+        if ($filter === 'all') {
+            $this->matchAllSelected = [];
+
+            return;
+        }
+        $remove = array_flip($this->matchAllIdsForFilter($filter));
+        $this->matchAllSelected = array_values(array_filter(
+            $this->matchAllSelected,
+            fn (string $id): bool => ! isset($remove[$id]),
+        ));
+    }
+
+    /** @return list<string> */
+    private function matchAllIdsForFilter(string $filter): array
+    {
+        return array_values(array_map(
+            fn (array $row): string => (string) $row['profile_id'],
+            array_filter(
+                $this->matchAllRows,
+                fn (array $row): bool => match ($filter) {
+                    'existing' => ! $row['create'],
+                    'new' => $row['create'],
+                    default => true,
+                },
+            ),
+        ));
     }
 
     public function closeMatchAll(): void
@@ -411,6 +487,7 @@ class Show extends Component
         $this->matchAll = false;
         $this->matchAllRows = [];
         $this->matchAllSkipped = [];
+        $this->matchAllSelected = [];
         $this->resetValidation();
     }
 
@@ -420,12 +497,20 @@ class Show extends Component
         if ($this->matchAllRows === []) {
             throw ValidationException::withMessages(['merge' => 'No applicant can be matched.']);
         }
+        $selected = array_flip(array_map('intval', $this->matchAllSelected));
+        $rows = array_values(array_filter(
+            $this->matchAllRows,
+            fn (array $row): bool => isset($selected[$row['profile_id']]),
+        ));
+        if ($rows === []) {
+            throw ValidationException::withMessages(['merge' => 'Select at least one applicant.']);
+        }
         if (! in_array($this->matchStrategy, ['fill_empty', 'overwrite', 'replace_all'], true)) {
             throw ValidationException::withMessages(['merge' => 'Choose a merge strategy.']);
         }
-        $count = count($this->matchAllRows);
-        DB::transaction(function () use ($preview, $merge): void {
-            foreach ($this->matchAllRows as $row) {
+        $count = count($rows);
+        DB::transaction(function () use ($preview, $merge, $rows): void {
+            foreach ($rows as $row) {
                 $profile = $this->documentScan->extractedProfiles()->find($row['profile_id']);
                 if (! $profile instanceof ExtractedProfile) {
                     throw ValidationException::withMessages(['merge' => 'A recommended applicant could not be found.']);
@@ -1258,7 +1343,9 @@ class Show extends Component
                 $derived['relationships[].other_relationship'] = 'Next of kin';
             }
         }
-        if ($this->parsedNric(
+        $relatedOccupation = trim((string) ($byId['relationships[].related_person.occupation']['value'] ?? ''));
+        $relatedEmployerName = trim((string) ($byId['relationships[].related_person.employer_name']['value'] ?? ''));
+        if (($relatedOccupation !== '' || $relatedEmployerName !== '') && $this->parsedNric(
             isset($byId['relationships[].related_person.identification_type']) ? (string) $byId['relationships[].related_person.identification_type']['value'] : '',
             isset($byId['relationships[].related_person.identification_number']) ? (string) $byId['relationships[].related_person.identification_number']['value'] : '',
         ) !== null) {
@@ -1332,8 +1419,18 @@ class Show extends Component
         }
         $status = strtolower((string) ($byId['customer.employment_status']['value'] ?? ($derived['customer.employment_status'] ?? '')));
         $arrangement = strtolower((string) ($byId['employments[].arrangement']['value'] ?? ''));
-        $selfEmployed = $status === 'self_employed' || $arrangement === 'self_employed';
-        if ($selfEmployed) {
+        $employer = (string) ($byId['employments[].employer_name']['value'] ?? '');
+        $kind = BankStatementProfileRules::resolveApplicantEmploymentKind($status, $arrangement, $employer);
+        if (BankStatementProfileRules::clearEmploymentKind($status, $arrangement) === null) {
+            $derived['customer.employment_status'] = $kind;
+            $derived['employments[].arrangement'] = $kind;
+            $filled = array_values(array_filter(
+                $filled,
+                fn (array $row): bool => ! in_array($row['field_id'], ['customer.employment_status', 'employments[].arrangement'], true),
+            ));
+            unset($byId['customer.employment_status'], $byId['employments[].arrangement']);
+        }
+        if ($kind === 'self_employed') {
             $map = [
                 'address_line_1' => 'line_1',
                 'address_line_2' => 'line_2',
@@ -1359,9 +1456,7 @@ class Show extends Component
                 $derived['employments[].'.$employmentField] = $value;
             }
         }
-        $relatedOccupation = (string) ($byId['relationships[].related_person.occupation']['value'] ?? '');
-        $relatedEmployer = (string) ($byId['relationships[].related_person.employer_name']['value'] ?? '');
-        if (BankStatementProfileRules::relatedLooksSelfEmployed($relatedOccupation, $relatedEmployer)) {
+        if (BankStatementProfileRules::relatedLooksSelfEmployed($relatedOccupation, $relatedEmployerName)) {
             foreach ([
                 'employer_address_line_1' => 'line_1',
                 'employer_address_line_2' => 'line_2',

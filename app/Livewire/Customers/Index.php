@@ -137,7 +137,7 @@ class Index extends Component
             ->when($this->sort === 'name', fn ($query) => $query->orderBy('full_legal_name'))
             ->when($this->sort === 'added', fn ($query) => $query->latest('created_at'))
             ->when($this->sort === 'updated' || $this->sort === '', fn ($query) => $query->latest('updated_at'))
-            ->paginate(15);
+            ->paginate(50);
 
         return view('livewire.customers.index', [
             'customers' => $customers,

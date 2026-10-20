@@ -26,10 +26,6 @@ class SigningDates
                 $index = intdiv($page - 5, 14);
                 $this->writeAuthorised($pdf, $applicants[$index] ?? [], $date);
             }
-            if (($page - 6) % 14 === 0) {
-                $index = intdiv($page - 6, 14);
-                $this->writeVerifiedBy($pdf, $applicants[$index] ?? [], $date);
-            }
         }
 
         return $pdf->Output('S');
@@ -46,19 +42,6 @@ class SigningDates
         $this->writeField($pdf, 122.0, 676.0, $name);
         $this->writeField($pdf, 122.0, 694.0, $nric);
         $this->writeField($pdf, 122.0, 716.4, $date);
-    }
-
-    /** @param  array{name?: string, nric?: string}  $applicant */
-    private function writeVerifiedBy(Fpdi $pdf, array $applicant, string $date): void
-    {
-        $pdf->SetFont('Helvetica', '', 8);
-        $pdf->SetTextColor(0, 0, 0);
-        $name = mb_strtoupper(trim((string) ($applicant['name'] ?? '')));
-        $nric = mb_strtoupper(trim((string) ($applicant['nric'] ?? '')));
-        // Mapping rects are rough estimates. Calibrated so each value sits on its label line.
-        $this->writeField($pdf, 70.0, 651.0, $name);
-        $this->writeField($pdf, 118.0, 660.0, $nric);
-        $this->writeField($pdf, 67.0, 670.0, $date);
     }
 
     private function writeField(Fpdi $pdf, float $x, float $y, string $text): void
