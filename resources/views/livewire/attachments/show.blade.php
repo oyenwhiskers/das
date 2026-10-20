@@ -1,7 +1,7 @@
 <div class="py-6">
     <div class="w-full space-y-5 px-4 sm:px-6 lg:px-8 xl:px-10">
         <div>
-            <a href="{{ route('attachments.index') }}" wire:navigate class="text-sm text-navy-700 hover:text-navy-900">&larr; Back to Scan Attachment</a>
+            <a href="{{ route('attachments.index') }}" wire:navigate class="text-sm text-navy-700 hover:text-navy-900">&larr; Back to Store Attachment</a>
             <h1 class="mt-2 text-xl font-semibold text-navy-900 sm:text-2xl">{{ $attachmentScan->original_filename }}</h1>
             <p class="mt-1 text-sm text-slate-500">Uploaded {{ $attachmentScan->created_at->timezone(config('app.timezone'))->format('d M Y, h:i A') }} by {{ $attachmentScan->uploader?->name ?? 'Unknown' }}</p>
         </div>

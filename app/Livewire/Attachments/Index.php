@@ -15,7 +15,7 @@ use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 use Throwable;
 
-#[Title('Scan Attachment — DAS')]
+#[Title('Store Attachment — DAS')]
 class Index extends Component
 {
     use AuthorizesRequests;

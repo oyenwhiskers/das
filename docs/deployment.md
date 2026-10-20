@@ -86,9 +86,9 @@ The web container starts five `queue:work` processes after migrate:
 php artisan queue:work --sleep=3 --tries=3 --timeout=3600
 ```
 
-`--timeout` stays below `DB_QUEUE_RETRY_AFTER` (3660). Those five workers already share the same `jobs` table and process different rows in parallel — enough for a 60-file Scan Attachment batch (one `ProcessAttachmentScan` job per file). Do **not** add a second Dokploy service that also runs `queue:work` against the same database (that would duplicate the entrypoint workers). On stop, the entrypoint signals the web server and the workers. Docker's default stop timeout is 10 seconds, so a long job can be killed and becomes available again after the retry window.
+`--timeout` stays below `DB_QUEUE_RETRY_AFTER` (3660). Those five workers already share the same `jobs` table and process different rows in parallel — enough for a 60-file Store Attachment batch (one `ProcessAttachmentScan` job per file). Do **not** add a second Dokploy service that also runs `queue:work` against the same database (that would duplicate the entrypoint workers). On stop, the entrypoint signals the web server and the workers. Docker's default stop timeout is 10 seconds, so a long job can be killed and becomes available again after the retry window.
 
-## Scan Attachment bulk uploads
+## Store Attachment bulk uploads
 
 - UI accepts up to `ATTACHMENT_SCAN_MAX_FILES` (default 60). Each file is stored, then one queue job is dispatched.
 - Livewire uploads each file in a separate request into `storage/app/private/livewire-tmp/` (covered by the `/app/storage/app` volume), then `processDocuments` moves them to `attachment-scans/`.

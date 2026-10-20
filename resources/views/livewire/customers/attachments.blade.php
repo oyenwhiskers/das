@@ -2,7 +2,7 @@
     <div class="rounded-lg border border-slate-200 bg-white">
         <div class="border-b border-slate-100 px-4 py-3 sm:px-5">
             <h2 class="text-base font-semibold text-navy-900">Attachments</h2>
-            <p class="text-xs text-slate-500">IC, signature, and CDS maintenance files for this customer. Upload here or via Scan Attachment.</p>
+            <p class="text-xs text-slate-500">IC, signature, and CDS maintenance files for this customer. Upload here or via Store Attachment.</p>
         </div>
     </div>
 

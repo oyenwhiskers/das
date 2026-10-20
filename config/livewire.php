@@ -69,7 +69,7 @@ return [
         // Match DOCUMENT_SCAN_MAX_KB (KB). Livewire uploads each file in its own request.
         'rules' => ['required', 'file', 'max:'.max(1, (int) env('DOCUMENT_SCAN_MAX_KB', 10240))],
         'directory' => 'livewire-tmp',
-        // Bulk Scan Attachment can send dozens of upload requests in one minute.
+        // Bulk Store Attachment can send dozens of upload requests in one minute.
         'middleware' => 'throttle:'.max(60, (int) env('LIVEWIRE_UPLOAD_THROTTLE', 180)).',1',
         'preview_mimes' => [
             'png', 'gif', 'bmp', 'svg', 'wav', 'mp4',

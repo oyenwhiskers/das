@@ -1,7 +1,7 @@
 <div class="py-6">
     <div class="w-full px-4 sm:px-6 lg:px-8 xl:px-10 space-y-5">
         <div>
-            <h1 class="text-xl sm:text-2xl font-semibold text-navy-900">Scan Attachment</h1>
+            <h1 class="text-xl sm:text-2xl font-semibold text-navy-900">Store Attachment</h1>
             <p class="mt-1 text-sm text-slate-500">Upload one or many IC, signature, or CDS maintenance files. Each file is queued and processed separately against the matching customer. Profile fields are not changed.</p>
         </div>
 
