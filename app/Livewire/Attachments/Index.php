@@ -25,8 +25,35 @@ class Index extends Component
     /** @var list<TemporaryUploadedFile>|TemporaryUploadedFile|null */
     public $files = [];
 
+    /** Staging property: each drop/choose replaces this, then merges into $files. */
+    /** @var list<TemporaryUploadedFile>|TemporaryUploadedFile|null */
+    public $incoming = [];
+
     /** @var list<string> */
     public array $selected = [];
+
+    public function updatedIncoming(): void
+    {
+        $added = $this->normalizeFiles($this->incoming);
+        $this->incoming = [];
+
+        if ($added === []) {
+            return;
+        }
+
+        $merged = array_merge($this->fileList(), $added);
+        $maxFiles = (int) config('document_scanner.attachment_max_files');
+
+        if (count($merged) > $maxFiles) {
+            $this->files = array_slice($merged, 0, $maxFiles);
+            $this->addError('files', 'Only the first '.$maxFiles.' files were kept (batch limit).');
+
+            return;
+        }
+
+        $this->files = $merged;
+        $this->resetValidation('files');
+    }
 
     public function toggleAll(): void
     {
@@ -61,6 +88,7 @@ class Index extends Component
     public function clearFiles(): void
     {
         $this->files = [];
+        $this->incoming = [];
         $this->resetValidation();
     }
 
@@ -152,16 +180,25 @@ class Index extends Component
     /** @return list<TemporaryUploadedFile> */
     private function fileList(): array
     {
-        if ($this->files instanceof TemporaryUploadedFile) {
-            return [$this->files];
+        return $this->normalizeFiles($this->files);
+    }
+
+    /**
+     * @param  mixed  $value
+     * @return list<TemporaryUploadedFile>
+     */
+    private function normalizeFiles(mixed $value): array
+    {
+        if ($value instanceof TemporaryUploadedFile) {
+            return [$value];
         }
 
-        if (! is_array($this->files)) {
+        if (! is_array($value)) {
             return [];
         }
 
         return array_values(array_filter(
-            $this->files,
+            $value,
             fn (mixed $file): bool => $file instanceof TemporaryUploadedFile
         ));
     }

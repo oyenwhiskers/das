@@ -73,6 +73,32 @@ class AttachmentFilingTest extends TestCase
         );
     }
 
+    public function test_dropping_more_files_appends_instead_of_replacing(): void
+    {
+        Storage::fake('local');
+        $staff = User::factory()->staff()->create();
+
+        $first = [
+            UploadedFile::fake()->create('a.pdf', 50, 'application/pdf'),
+            UploadedFile::fake()->create('b.pdf', 50, 'application/pdf'),
+        ];
+        $second = [
+            UploadedFile::fake()->create('c.pdf', 50, 'application/pdf'),
+            UploadedFile::fake()->create('d.pdf', 50, 'application/pdf'),
+        ];
+
+        $component = Livewire::actingAs($staff)
+            ->test(Index::class)
+            ->set('incoming', $first)
+            ->assertCount('files', 2)
+            ->set('incoming', $second)
+            ->assertCount('files', 4)
+            ->assertSet('incoming', []);
+
+        $names = collect($component->get('files'))->map(fn ($file) => $file->getClientOriginalName())->all();
+        $this->assertSame(['a.pdf', 'b.pdf', 'c.pdf', 'd.pdf'], $names);
+    }
+
     public function test_unique_ic_auto_attaches_to_the_matching_customer(): void
     {
         Storage::fake('local');

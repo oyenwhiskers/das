@@ -22,20 +22,28 @@
                     x-on:dragleave.prevent="dragging = false"
                     x-on:drop.prevent.stop="
                         dragging = false;
-                        const files = $event.dataTransfer?.files;
-                        if (files?.length) $wire.uploadMultiple('files', Array.from(files));
+                        const dropped = $event.dataTransfer?.files;
+                        if (dropped?.length) $wire.uploadMultiple('incoming', Array.from(dropped));
                     "
                     :class="{ 'border-navy-500 bg-navy-50': dragging }"
                     class="flex cursor-pointer flex-col items-center rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center hover:border-navy-400"
                 >
-                    <input id="attachment-upload" type="file" multiple wire:model="files" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" class="sr-only" />
+                    <input
+                        id="attachment-upload"
+                        type="file"
+                        multiple
+                        wire:model="incoming"
+                        accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                        class="sr-only"
+                        x-on:livewire-upload-finish="$el.value = ''"
+                    />
                     <span class="text-sm font-medium text-slate-800">Drag files here</span>
-                    <span class="mt-1 text-sm text-slate-500">or choose up to {{ $maxFiles }} from your computer</span>
+                    <span class="mt-1 text-sm text-slate-500">Drop again to add more — up to {{ $maxFiles }} files per batch</span>
                     <span class="mt-4 inline-flex h-9 items-center rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-800">Choose files</span>
                 </label>
                 @error('files') <p class="text-sm text-red-700" role="alert">{{ $message }}</p> @enderror
                 @error('files.*') <p class="text-sm text-red-700" role="alert">{{ $message }}</p> @enderror
-                <p wire:loading wire:target="files" class="text-sm text-slate-500">Preparing upload…</p>
+                <p wire:loading wire:target="incoming" class="text-sm text-slate-500">Preparing upload…</p>
 
                 @if ($pendingFiles !== [])
                     <div class="rounded-md border border-slate-200">
@@ -63,7 +71,7 @@
                         Each file becomes its own queue job; workers process them independently.
                     @endif
                 </p>
-                <button type="submit" wire:loading.attr="disabled" wire:target="processDocuments,files" @disabled($pendingFiles === []) class="inline-flex h-9 items-center rounded-md bg-navy-800 px-3.5 text-sm font-medium text-white hover:bg-navy-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+                <button type="submit" wire:loading.attr="disabled" wire:target="processDocuments,incoming" @disabled($pendingFiles === []) class="inline-flex h-9 items-center rounded-md bg-navy-800 px-3.5 text-sm font-medium text-white hover:bg-navy-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
                     <span wire:loading.remove wire:target="processDocuments">Queue {{ count($pendingFiles) === 0 ? '' : count($pendingFiles).' ' }}{{ count($pendingFiles) === 1 ? 'file' : 'files' }}</span>
                     <span wire:loading wire:target="processDocuments">Queuing…</span>
                 </button>
