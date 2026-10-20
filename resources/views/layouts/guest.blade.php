@@ -14,13 +14,12 @@
     </head>
     <body class="font-sans text-slate-900 antialiased">
         <x-flash-alerts />
-        <div class="min-h-screen flex flex-col justify-center items-center px-4 py-10 bg-gradient-to-b from-slate-100 via-slate-50 to-white">
+        <div class="min-h-screen flex flex-col justify-center items-center px-4 py-10 bg-gradient-to-b from-[#F0EBE6] via-[#F9F7F5] to-white">
             <div class="text-center mb-6">
                 <a href="{{ route('login') }}" wire:navigate class="inline-block">
-                    <x-application-logo class="justify-center text-3xl" />
+                    <x-application-logo class="text-3xl" />
                 </a>
-                <p class="mt-2 text-sm text-slate-600">Document Automation System</p>
-                <p class="mt-1 text-xs text-slate-500">Hairaa Capital Sdn Bhd</p>
+                <p class="mt-3 text-sm text-slate-600">Document Automation System</p>
             </div>
 
             <div class="w-full sm:max-w-md px-6 py-5 bg-white border border-slate-200 shadow-sm overflow-hidden rounded-lg">

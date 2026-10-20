@@ -16,13 +16,14 @@ export default {
                 sans: ['"Source Sans 3"', ...defaultTheme.fontFamily.sans],
             },
             colors: {
+                // Hairaa Capital maroon — token name kept so existing navy-* classes pick it up
                 navy: {
-                    50: '#f3f6f9',
-                    100: '#e4ebf2',
-                    500: '#3d5a73',
-                    700: '#1f3a52',
-                    800: '#163044',
-                    900: '#0f2435',
+                    50: '#faf4f4',
+                    100: '#f0e3e3',
+                    500: '#8b3d3d',
+                    700: '#5c1a1a',
+                    800: '#4a1010',
+                    900: '#2f0a0a',
                 },
             },
         },

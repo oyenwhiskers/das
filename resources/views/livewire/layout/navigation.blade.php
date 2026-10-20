@@ -26,9 +26,9 @@ new class extends Component
 <div>
     {{-- Desktop sidebar --}}
     <aside class="hidden lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-64 lg:shrink-0 lg:flex-col border-r border-slate-200 bg-white">
-        <div class="flex h-14 items-center border-b border-slate-200 px-5">
-            <a href="{{ route('customers.index') }}" wire:navigate>
-                <x-application-logo class="text-xl" />
+        <div class="flex h-16 items-center border-b border-slate-200 px-5 py-2">
+            <a href="{{ route('customers.index') }}" wire:navigate class="min-w-0">
+                <x-application-logo class="text-lg" />
             </a>
         </div>
 
@@ -188,9 +188,9 @@ new class extends Component
             x-transition:leave-end="-translate-x-full"
             @click.stop
         >
-            <div class="flex h-14 items-center justify-between border-b border-slate-200 px-4">
-                <a href="{{ route('customers.index') }}" wire:navigate @click="sidebarOpen = false">
-                    <x-application-logo class="text-xl" />
+            <div class="flex h-16 items-center justify-between border-b border-slate-200 px-4 py-2">
+                <a href="{{ route('customers.index') }}" wire:navigate @click="sidebarOpen = false" class="min-w-0">
+                    <x-application-logo class="text-lg" />
                 </a>
                 <button
                     type="button"
