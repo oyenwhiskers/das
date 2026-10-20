@@ -274,6 +274,23 @@ class CustomerProfileWrites
             && strcasecmp(trim((string) $customer->marital_status), 'married') !== 0) {
             $errors['relationship'] = 'Marital status is '.$customer->marital_status.'. Set Married before adding a spouse, or choose Next of kin / another relationship.';
         }
+        if ($source === 'new' && BankStatementProfileRules::relatedLooksSelfEmployed(
+            $validated['occupation'] ?? null,
+            $validated['employerName'] ?? null,
+        )) {
+            $customer->loadMissing('residentialAddress');
+            $validated = BankStatementProfileRules::copyAddressIntoRelatedEmployerBlanks(
+                $validated,
+                [
+                    'line_1' => $customer->residentialAddress?->line_1,
+                    'line_2' => $customer->residentialAddress?->line_2,
+                    'city' => $customer->residentialAddress?->city,
+                    'state' => $customer->residentialAddress?->state,
+                    'postcode' => $customer->residentialAddress?->postcode,
+                    'country' => $customer->residentialAddress?->country,
+                ],
+            );
+        }
         if ($source === 'new' && filled($validated['identificationNumber'])) {
             $normalized = CustomerIdentification::normalizeNumber($validated['identificationNumber']);
             if ($validated['identificationType'] === IdentificationType::Nric->value && ! preg_match('/^\d{12}$/', $normalized ?? '')) {
@@ -374,6 +391,33 @@ class CustomerProfileWrites
     }
 
     /** @param  array<string, mixed>  $fields */
+    /**
+     * Self-employed: copy residential into any blank office/business address fields.
+     *
+     * @param  array<string, mixed>  $fields
+     * @return array<string, mixed>
+     */
+    public function fillSelfEmployedOfficeAddress(Customer $customer, array $fields): array
+    {
+        $arrangement = is_string($fields['arrangement'] ?? null) ? $fields['arrangement'] : null;
+        if (! BankStatementProfileRules::customerIsSelfEmployed($customer, $arrangement)) {
+            return $fields;
+        }
+        $home = $customer->residentialAddress;
+        if ($home === null) {
+            return $fields;
+        }
+
+        return BankStatementProfileRules::copyAddressIntoEmploymentBlanks($fields, [
+            'line_1' => $home->line_1,
+            'line_2' => $home->line_2,
+            'city' => $home->city,
+            'state' => $home->state,
+            'postcode' => $home->postcode,
+            'country' => $home->country,
+        ]);
+    }
+
     public function saveEmployment(Customer $customer, array $fields, User $actor, ?int $employmentId = null, bool $confirmPrimaryReplacement = false, bool $isCorrection = false): void
     {
         // shortcut: map pre-Form-3 arrangement values, drop when none remain in DB
@@ -385,6 +429,7 @@ class CustomerProfileWrites
         if (($fields['arrangement'] ?? null) === 'other' && blank($fields['arrangement_other'] ?? null)) {
             $fields['arrangement_other'] = $customer->employment_status_other;
         }
+        $fields = $this->fillSelfEmployedOfficeAddress($customer, $fields);
         $validated = Validator::make(['form' => $fields], [
             'form.arrangement' => ['nullable', Rule::in(CustomerProfileSchema::options('arrangement'))],
             'form.arrangement_other' => ['required_if:form.arrangement,other', 'nullable', 'string', 'max:255'],

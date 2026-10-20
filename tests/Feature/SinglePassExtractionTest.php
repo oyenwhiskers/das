@@ -547,6 +547,28 @@ class SinglePassExtractionTest extends TestCase
             ->assertDontSee('0 findings stored.');
     }
 
+    public function test_free_text_next_of_kin_relationship_is_stored_as_other(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $scan = $this->scan($staff);
+        $this->fake($this->payload([[
+            'record_ref' => 'applicant_01',
+            'source_pages' => [1],
+            'values' => [
+                ['field_id' => 'customer.full_legal_name', 'value' => 'Suhaiza Binti Yaakub'],
+                ['field_id' => 'relationships[].relationship', 'value' => 'Next of kin'],
+                ['field_id' => 'relationships[].related_person.full_legal_name', 'value' => 'Ibrahim Bin Ali'],
+                ['field_id' => 'relationships[].related_person.identification_number', 'value' => '590202035486'],
+            ],
+        ]]));
+
+        app(SinglePassExtraction::class)->run($scan, app(GeminiDocumentReader::class));
+
+        $values = collect($scan->extractedProfiles()->sole()->original_projection['values'])->keyBy('field_id');
+        $this->assertSame('other', $values['relationships[].relationship']['value'] ?? null);
+        $this->assertSame('Next of kin', $values['relationships[].other_relationship']['value'] ?? null);
+    }
+
     public function test_a_single_applicant_with_opposite_gender_relative_is_next_of_kin_not_spouse(): void
     {
         $staff = User::factory()->staff()->create();
@@ -690,7 +712,7 @@ class SinglePassExtractionTest extends TestCase
         $fields = $pass->fieldList($snapshot);
         $prompt = $pass->prompt($snapshot, 1, 2);
 
-        $this->assertSame('14', SinglePassExtraction::PROMPT_VERSION);
+        $this->assertSame('16', SinglePassExtraction::PROMPT_VERSION);
         $this->assertStringContainsString('bank_accounts[].branch_address', $fields);
         $this->assertStringContainsString('When a Bank Reference or bank block prints Bank, Branch, Account type, and Account number', $prompt);
         $this->assertStringContainsString('Do not stop after bank name and account number if branch is printed', $prompt);
@@ -700,6 +722,9 @@ class SinglePassExtractionTest extends TestCase
         $this->assertStringContainsString('Put the account-holder or correspondence address into addresses[mailing]', $prompt);
         $this->assertStringContainsString('never put that address on addresses[residential]', $prompt);
         $this->assertStringContainsString('When employment status or arrangement is self_employed, also emit that same correspondence address on employments[]', $prompt);
+        $this->assertStringContainsString('also emit the residential address into those blank employments[] address fields', $prompt);
+        $this->assertStringContainsString('When the spouse or next of kin looks self-employed', $prompt);
+        $this->assertStringContainsString('emit the applicant\'s residential address into relationships[].related_person.employer_address_line_1', $prompt);
         $this->assertStringContainsString('Do not emit transaction table rows as profile fields', $prompt);
         $this->assertStringContainsString('Use a short record_ref such as applicant_3 or p12_a, never a full legal name', $prompt);
         $this->assertStringContainsString('Each distinct statement header is a new record; do not skip a printed account holder on these pages', $prompt);

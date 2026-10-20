@@ -75,35 +75,104 @@ class BankStatementProfileRules
     }
 
     /**
-     * @param  array{line_1?: mixed, line_2?: mixed, postcode?: mixed, city?: mixed, state?: mixed, country?: mixed}  $mailing
+     * Self-employed: fill blank office/business address parts from a source address.
+     *
+     * @param  array{line_1?: mixed, line_2?: mixed, postcode?: mixed, city?: mixed, state?: mixed, country?: mixed}  $source
      * @param  array<string, mixed>  $employment
      * @return array<string, mixed>
      */
-    public static function copyMailingIntoEmploymentIfBlank(array $employment, array $mailing): array
+    public static function copyAddressIntoEmploymentBlanks(array $employment, array $source): array
     {
-        if (! self::hasAddress($mailing)) {
+        if (! self::hasAddress($source)) {
             return $employment;
         }
-        $map = [
+        foreach ([
             'address_line_1' => 'line_1',
             'address_line_2' => 'line_2',
             'postcode' => 'postcode',
             'city' => 'city',
             'state' => 'state',
             'country' => 'country',
-        ];
-        foreach (array_keys($map) as $field) {
-            if (filled($employment[$field] ?? null)) {
-                return $employment;
+        ] as $employmentField => $sourceField) {
+            if (filled($employment[$employmentField] ?? null)) {
+                continue;
             }
-        }
-        foreach ($map as $employmentField => $mailField) {
-            $value = $mailing[$mailField] ?? '';
+            $value = $source[$sourceField] ?? '';
             if (filled($value)) {
                 $employment[$employmentField] = is_string($value) ? trim($value) : $value;
             }
         }
 
         return $employment;
+    }
+
+    /**
+     * @param  array{line_1?: mixed, line_2?: mixed, postcode?: mixed, city?: mixed, state?: mixed, country?: mixed}  $mailing
+     * @param  array<string, mixed>  $employment
+     * @return array<string, mixed>
+     */
+    public static function copyMailingIntoEmploymentIfBlank(array $employment, array $mailing): array
+    {
+        return self::copyAddressIntoEmploymentBlanks($employment, $mailing);
+    }
+
+    public static function relatedLooksSelfEmployed(?string $occupation, ?string $employerName = null): bool
+    {
+        $occupation = strtolower(trim((string) $occupation));
+        $employerName = strtolower(trim((string) $employerName));
+        $blob = trim($occupation.' '.$employerName);
+        if ($blob === '') {
+            return false;
+        }
+        if (preg_match('/\b(self[-\s]?employed?|own business|business owner|sole prop(?:rietor)?|freelancer|berniaga|kerja sendiri)\b/u', $blob) === 1) {
+            return true;
+        }
+
+        // Form-3 shorthand occupations that usually mean self-employed.
+        return in_array($occupation, ['business', 'bisnes', 'trader', 'trading'], true);
+    }
+
+    /**
+     * @param  array{line_1?: mixed, line_2?: mixed, postcode?: mixed, city?: mixed, state?: mixed, country?: mixed}  $source
+     * @param  array<string, mixed>  $person  camelCase (employerAddressLine1) or snake (employer_address_line_1)
+     * @return array<string, mixed>
+     */
+    public static function copyAddressIntoRelatedEmployerBlanks(array $person, array $source): array
+    {
+        if (! self::hasAddress($source)) {
+            return $person;
+        }
+        $camel = array_key_exists('employerAddressLine1', $person)
+            || array_key_exists('employerCity', $person)
+            || array_key_exists('occupation', $person)
+            || array_key_exists('employerName', $person);
+        $map = $camel
+            ? [
+                'employerAddressLine1' => 'line_1',
+                'employerAddressLine2' => 'line_2',
+                'employerPostcode' => 'postcode',
+                'employerCity' => 'city',
+                'employerState' => 'state',
+                'employerCountry' => 'country',
+            ]
+            : [
+                'employer_address_line_1' => 'line_1',
+                'employer_address_line_2' => 'line_2',
+                'employer_postcode' => 'postcode',
+                'employer_city' => 'city',
+                'employer_state' => 'state',
+                'employer_country' => 'country',
+            ];
+        foreach ($map as $personField => $sourceField) {
+            if (filled($person[$personField] ?? null)) {
+                continue;
+            }
+            $value = $source[$sourceField] ?? '';
+            if (filled($value)) {
+                $person[$personField] = is_string($value) ? trim($value) : $value;
+            }
+        }
+
+        return $person;
     }
 }

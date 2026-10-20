@@ -70,6 +70,10 @@ class WorkFinance extends Component
     {
         $this->authorize('update', $this->customer);
         $this->resetForm();
+        if ($this->customer->employment_status === 'self_employed') {
+            $this->form['arrangement'] = 'self_employed';
+            $this->form = app(CustomerProfileWrites::class)->fillSelfEmployedOfficeAddress($this->customer, $this->form);
+        }
         $this->mode = 'edit';
     }
 
@@ -115,7 +119,15 @@ class WorkFinance extends Component
         $this->form['arrangement_other'] = $this->form['arrangement'] === 'other'
             ? ($this->customer->employment_status_other ?? '')
             : '';
+        $this->form = app(CustomerProfileWrites::class)->fillSelfEmployedOfficeAddress($this->customer, $this->form);
         $this->mode = 'edit';
+    }
+
+    public function updatedFormArrangement(mixed $value): void
+    {
+        if ($value === 'self_employed') {
+            $this->form = app(CustomerProfileWrites::class)->fillSelfEmployedOfficeAddress($this->customer, $this->form);
+        }
     }
 
     #[On('discard-employment-edit')]

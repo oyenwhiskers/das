@@ -662,7 +662,7 @@ class Show extends Component
         $resolver = app(Resolver::class);
         $job = $resolver->subjects($customer, $this->application->choices ?? [])['employment'];
         if ($reference === 'employment.business_address' && $job !== null) {
-            if ($resolver->businessAddressUsesResidential($customer, $job)) {
+            if ($resolver->businessAddressFieldFromResidential($customer, $job, $item === '' ? 'address_lines' : $item)) {
                 $home = $customer->residentialAddress;
 
                 return $item === 'address_lines'

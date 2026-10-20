@@ -551,7 +551,7 @@
         @if ($matchProfileId)
             <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div class="absolute inset-0 bg-slate-900/40" wire:click="closeMatch"></div>
-                <div role="dialog" aria-modal="true" aria-labelledby="match-title" class="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-lg bg-white shadow-xl">
+                <div role="dialog" aria-modal="true" aria-labelledby="match-title" class="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
                     <div class="border-b border-slate-200 px-5 py-4">
                         <h3 id="match-title" class="text-base font-semibold text-navy-900">Match applicant</h3>
                     </div>
@@ -580,6 +580,22 @@
                                 <option value="replace_all">Replace all</option>
                             </select>
                         </div>
+                        @if ($matchSections !== [])
+                            <fieldset>
+                                <legend class="text-sm text-slate-600">Sections to match</legend>
+                                <p class="mt-1 text-xs text-slate-500">Unchecked sections are left unchanged on the customer.</p>
+                                <ul class="mt-2 space-y-2">
+                                    @foreach ($matchSections as $index => $section)
+                                        <li>
+                                            <label class="flex items-center gap-2 text-sm text-slate-700">
+                                                <input type="checkbox" wire:model="matchSections.{{ $index }}.include" class="rounded border-slate-300 text-navy-800 focus:ring-navy-800" />
+                                                <span>{{ $section['label'] }}</span>
+                                            </label>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            </fieldset>
+                        @endif
                         @error('merge') <p class="whitespace-pre-line text-sm text-red-700">{{ $message }}</p> @enderror
                     </div>
                     <div class="flex justify-end gap-3 border-t border-slate-200 px-5 py-4">

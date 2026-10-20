@@ -65,7 +65,9 @@ class ProfileMergePreview
             if (is_string($current) && is_string($proposed) && ! str_contains(strtolower((string) $value['field_id']), 'email') && $current !== $proposed && mb_strtoupper($current, 'UTF-8') === mb_strtoupper($proposed, 'UTF-8') && ! $this->isIdentificationNumberField((string) $value['field_id'])) {
                 $action = 'replace';
             }
-            $included = in_array($action, ['add', 'replace', 'clear'], true) && ! in_array($key, $excluded, true);
+            $included = in_array($action, ['add', 'replace', 'clear'], true)
+                && ! in_array($key, $excluded, true)
+                && ! in_array('module:'.$module, $excluded, true);
             $lines[] = [
                 'key' => $key,
                 'field_id' => $value['field_id'],
@@ -182,7 +184,9 @@ class ProfileMergePreview
         if ($changes = $changesFor('employment_status')) {
             $operations[] = ['type' => 'employment_status', 'payload' => $this->overlay($this->employmentStatus($customer), $included, $proposed, 'employment_status'), 'changes' => $changes];
         }
-        $mailingParts = $this->mailingPartsFromPayload($addressPayload ?? $this->addresses($customer), $customer, $included, $proposed);
+        $addressBase = $addressPayload ?? $this->addresses($customer);
+        $mailingParts = $this->mailingPartsFromPayload($addressBase, $customer, $included, $proposed);
+        $residentialParts = $this->residentialPartsFromPayload($addressBase, $customer);
         foreach ($resolved as $rowKey => $row) {
             $module = explode('|', $rowKey, 2)[0];
             $changes = $changesFor($module, $rowKey);
@@ -191,9 +195,19 @@ class ProfileMergePreview
             }
             $id = $row['target'] === 'new' ? null : $row['target'];
             $payload = $this->rowPayload($customer, $module, $id, $included, $proposed, $rowKey);
-            if ($statement && $module === 'employments'
+            if ($module === 'employments'
                 && BankStatementProfileRules::customerIsSelfEmployed($customer, is_string($payload['arrangement'] ?? null) ? $payload['arrangement'] : null)) {
-                $payload = BankStatementProfileRules::copyMailingIntoEmploymentIfBlank($payload, $mailingParts);
+                $payload = BankStatementProfileRules::copyAddressIntoEmploymentBlanks($payload, $residentialParts);
+                if ($statement) {
+                    $payload = BankStatementProfileRules::copyAddressIntoEmploymentBlanks($payload, $mailingParts);
+                }
+            }
+            if ($module === 'relationships'
+                && BankStatementProfileRules::relatedLooksSelfEmployed(
+                    is_string($payload['occupation'] ?? null) ? $payload['occupation'] : null,
+                    is_string($payload['employerName'] ?? null) ? $payload['employerName'] : null,
+                )) {
+                $payload = BankStatementProfileRules::copyAddressIntoRelatedEmployerBlanks($payload, $residentialParts);
             }
             $operations[] = ['type' => $module, 'id' => $id, 'payload' => $payload, 'changes' => $changes];
         }
@@ -258,6 +272,33 @@ class ProfileMergePreview
      * @param  Collection<string, array<string, mixed>>  $proposed
      * @return array{line_1: mixed, line_2: mixed, postcode: mixed, city: mixed, state: mixed, country: mixed}
      */
+    /** @param  array<string, mixed>  $addressPayload
+     * @return array{line_1: mixed, line_2: mixed, postcode: mixed, city: mixed, state: mixed, country: mixed} */
+    private function residentialPartsFromPayload(array $addressPayload, Customer $customer): array
+    {
+        $parts = [
+            'line_1' => $addressPayload['residential_line_1'] ?? '',
+            'line_2' => $addressPayload['residential_line_2'] ?? '',
+            'postcode' => $addressPayload['residential_postcode'] ?? '',
+            'city' => $addressPayload['residential_city'] ?? '',
+            'state' => $addressPayload['residential_state'] ?? '',
+            'country' => $addressPayload['residential_country'] ?? '',
+        ];
+        if (BankStatementProfileRules::hasAddress($parts)) {
+            return $parts;
+        }
+        $residential = $customer->addresses->firstWhere('type', AddressType::Residential);
+
+        return [
+            'line_1' => $residential?->line_1 ?? '',
+            'line_2' => $residential?->line_2 ?? '',
+            'postcode' => $residential?->postcode ?? '',
+            'city' => $residential?->city ?? '',
+            'state' => $residential?->state ?? '',
+            'country' => $residential?->country ?? '',
+        ];
+    }
+
     private function mailingPartsFromPayload(array $addressPayload, Customer $customer, $included, $proposed): array
     {
         $parts = [
@@ -605,7 +646,8 @@ class ProfileMergePreview
             ])),
             'relationships' => array_values(array_filter([
                 $blank('relationships[].related_person.full_legal_name') ? 'family member name' : null,
-                $blank('relationships[].relationship') ? 'relationship to the applicant' : null,
+                ($blank('relationships[].relationship') && $blank('relationships[].other_relationship'))
+                    ? 'relationship to the applicant' : null,
             ])),
             'employments' => ($blank('employments[].arrangement') && $blank('employments[].occupation') && $blank('employments[].employer_name'))
                 ? ['an arrangement, an occupation, or an employer name'] : [],
@@ -655,6 +697,14 @@ class ProfileMergePreview
                 continue;
             }
             $base[$this->inputKey($line['field_id'])] = $proposed[$line['key']]['value'];
+        }
+        if ($module === 'relationships' && blank($base['relationship'] ?? null)) {
+            if (filled($base['otherRelationship'] ?? null) || ($base['isNextOfKin'] ?? false)) {
+                $base['relationship'] = 'other';
+                if (blank($base['otherRelationship'] ?? null)) {
+                    $base['otherRelationship'] = 'Next of kin';
+                }
+            }
         }
         if ($module === 'tax_residencies') {
             $end = $included->first(fn (array $line): bool => $line['row_key'] === $rowKey && str_ends_with($line['field_id'], '.ended_on'));
@@ -1020,6 +1070,11 @@ class ProfileMergePreview
             'tax_identification.malaysian_tin' => 'malaysian_tin',
             default => substr($fieldId, (int) strrpos($fieldId, '.') + 1),
         };
+    }
+
+    public function moduleOf(string $path): string
+    {
+        return $this->module($path);
     }
 
     private function module(string $path): string

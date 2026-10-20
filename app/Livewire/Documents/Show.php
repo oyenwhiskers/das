@@ -48,6 +48,9 @@ class Show extends Component
 
     public string $matchStrategy = 'fill_empty';
 
+    /** @var list<array{module: string, label: string, include: bool}> */
+    public array $matchSections = [];
+
     public string $matchRecommendation = '';
 
     public bool $recommendCreate = false;
@@ -216,6 +219,10 @@ class Show extends Component
         $this->matchStrategy = 'fill_empty';
         $this->matchRecommendation = '';
         $this->recommendCreate = false;
+        $profile = $this->documentScan->extractedProfiles()->find($profileId);
+        $this->matchSections = $profile instanceof ExtractedProfile
+            ? $this->sectionsForMatch($profile)
+            : [];
         $this->resetValidation();
     }
 
@@ -437,6 +444,7 @@ class Show extends Component
         $this->matchCustomerId = '';
         $this->matchRecommendation = '';
         $this->recommendCreate = false;
+        $this->matchSections = [];
         $this->resetValidation();
     }
 
@@ -474,13 +482,14 @@ class Show extends Component
         if (! in_array($this->matchStrategy, ['fill_empty', 'overwrite', 'replace_all'], true)) {
             throw ValidationException::withMessages(['merge' => 'Choose a merge strategy.']);
         }
+        $excluded = $this->matchExcludedModules();
         $this->copyCardOnto($profile);
-        $built = $preview->make($profile->fresh(), $customer, $this->matchStrategy, [], []);
+        $built = $preview->make($profile->fresh(), $customer, $this->matchStrategy, [], $excluded);
         if (! $built['ready']) {
             throw ValidationException::withMessages(['merge' => $this->matchRefusal($built)]);
         }
         try {
-            $merge->commit($profile->fresh(), $customer, auth()->user(), $this->matchStrategy, (string) Str::uuid(), $built['baseline'], [], []);
+            $merge->commit($profile->fresh(), $customer, auth()->user(), $this->matchStrategy, (string) Str::uuid(), $built['baseline'], [], $excluded);
         } catch (ValidationException $exception) {
             $messages = collect($exception->errors())->flatten()->unique()->implode("\n");
             throw ValidationException::withMessages(['merge' => $messages !== '' ? $messages : 'This applicant cannot be matched to that customer.']);
@@ -490,6 +499,77 @@ class Show extends Component
         $name = trim((string) $customer->fresh()->full_legal_name);
         $this->closeMatch();
         $this->dispatch('matched', message: $name !== '' ? 'Matched to '.$name.'.' : 'The applicant was matched.');
+    }
+
+    /** @return list<array{module: string, label: string, include: bool}> */
+    private function sectionsForMatch(ExtractedProfile $profile): array
+    {
+        $preview = app(ProfileMergePreview::class);
+        $present = [];
+        foreach ($profile->reviewed_projection['values'] ?? [] as $value) {
+            if (($value['state'] ?? '') !== 'provided' || ! is_string($value['field_id'] ?? null)) {
+                continue;
+            }
+            $present[$preview->moduleOf($value['field_id'])] = true;
+        }
+        $order = [
+            'personal', 'contacts', 'addresses', 'relationships', 'employment_status', 'employments',
+            'bank_accounts', 'tin', 'tax_residencies', 'fatca', 'financial', 'investment',
+            'brokerage_declaration', 'brokerage_accounts', 'pep_associations',
+            'compliance:pep', 'compliance:bankruptcy', 'compliance:petition', 'other',
+        ];
+        $sections = [];
+        foreach ($order as $module) {
+            if (! isset($present[$module])) {
+                continue;
+            }
+            $sections[] = ['module' => $module, 'label' => $this->matchSectionLabel($module), 'include' => true];
+            unset($present[$module]);
+        }
+        foreach (array_keys($present) as $module) {
+            $sections[] = ['module' => $module, 'label' => $this->matchSectionLabel($module), 'include' => true];
+        }
+
+        return $sections;
+    }
+
+    private function matchSectionLabel(string $module): string
+    {
+        return match ($module) {
+            'personal' => 'Personal details',
+            'contacts' => 'Contacts',
+            'addresses' => 'Addresses',
+            'relationships' => 'Family and next of kin',
+            'employment_status' => 'Employment status',
+            'employments' => 'Employment',
+            'bank_accounts' => 'Bank accounts',
+            'tin' => 'Tax identification',
+            'tax_residencies' => 'Foreign tax residency',
+            'fatca' => 'FATCA',
+            'financial' => 'Financial',
+            'investment' => 'Investment',
+            'brokerage_declaration' => 'Brokerage declaration',
+            'brokerage_accounts' => 'Other brokerage accounts',
+            'pep_associations' => 'PEP associations',
+            'compliance:pep' => 'PEP compliance',
+            'compliance:bankruptcy' => 'Bankruptcy',
+            'compliance:petition' => 'Petition',
+            default => 'Other',
+        };
+    }
+
+    /** @return list<string> */
+    private function matchExcludedModules(): array
+    {
+        if ($this->matchSections !== [] && collect($this->matchSections)->every(fn (array $section): bool => ! $section['include'])) {
+            throw ValidationException::withMessages(['merge' => 'Choose at least one section to match.']);
+        }
+
+        return collect($this->matchSections)
+            ->reject(fn (array $section): bool => $section['include'])
+            ->map(fn (array $section): string => 'module:'.$section['module'])
+            ->values()
+            ->all();
     }
 
     private function applicantIdentification(int $profileId): ?string
@@ -1138,6 +1218,21 @@ class Show extends Component
             $derived['relationships[].is_next_of_kin'] = 'Yes';
             $derived['relationships[].is_primary_next_of_kin'] = 'Yes';
         }
+        // AI often stores "Next of kin" only on other_relationship (or drops an invalid relationship enum).
+        // Match requires relationships[].relationship; without it the family row is blocked and skipped.
+        $hasFamily = false;
+        foreach (array_keys($byId) as $fieldId) {
+            if (str_starts_with($fieldId, 'relationships[].')) {
+                $hasFamily = true;
+                break;
+            }
+        }
+        if ($hasFamily && trim((string) ($byId['relationships[].relationship']['value'] ?? '')) === '') {
+            $derived['relationships[].relationship'] = 'other';
+            if (trim((string) ($byId['relationships[].other_relationship']['value'] ?? '')) === '') {
+                $derived['relationships[].other_relationship'] = 'Next of kin';
+            }
+        }
         if ($this->parsedNric(
             isset($byId['relationships[].related_person.identification_type']) ? (string) $byId['relationships[].related_person.identification_type']['value'] : '',
             isset($byId['relationships[].related_person.identification_number']) ? (string) $byId['relationships[].related_person.identification_number']['value'] : '',
@@ -1210,35 +1305,56 @@ class Show extends Component
                 $derived['addresses[mailing].same_as_residential'] = 'Yes';
             }
         }
-        if ($statement) {
-            $status = strtolower((string) ($byId['customer.employment_status']['value'] ?? ($derived['customer.employment_status'] ?? '')));
-            $arrangement = strtolower((string) ($byId['employments[].arrangement']['value'] ?? ''));
-            $selfEmployed = $status === 'self_employed' || $arrangement === 'self_employed';
-            if ($selfEmployed && $mailingFilled) {
-                $map = [
-                    'address_line_1' => 'line_1',
-                    'address_line_2' => 'line_2',
-                    'postcode' => 'postcode',
-                    'city' => 'city',
-                    'state' => 'state',
-                    'country' => 'country',
-                ];
-                $employmentAddressBlank = true;
-                foreach (array_keys($map) as $field) {
-                    if (isset($byId['employments[].'.$field])) {
-                        $employmentAddressBlank = false;
-                        break;
-                    }
+        $status = strtolower((string) ($byId['customer.employment_status']['value'] ?? ($derived['customer.employment_status'] ?? '')));
+        $arrangement = strtolower((string) ($byId['employments[].arrangement']['value'] ?? ''));
+        $selfEmployed = $status === 'self_employed' || $arrangement === 'self_employed';
+        if ($selfEmployed) {
+            $map = [
+                'address_line_1' => 'line_1',
+                'address_line_2' => 'line_2',
+                'postcode' => 'postcode',
+                'city' => 'city',
+                'state' => 'state',
+                'country' => 'country',
+            ];
+            foreach ($map as $employmentField => $addrField) {
+                if (isset($byId['employments[].'.$employmentField])
+                    && trim((string) $byId['employments[].'.$employmentField]['value']) !== '') {
+                    continue;
                 }
-                if ($employmentAddressBlank) {
-                    foreach ($map as $employmentField => $mailField) {
-                        $value = $byId['addresses[mailing].'.$mailField]['value'] ?? null;
-                        if ($value === null || $value === '') {
-                            continue;
-                        }
-                        $derived['employments[].'.$employmentField] = $value;
-                    }
+                $value = $byId['addresses[residential].'.$addrField]['value']
+                    ?? ($derived['addresses[residential].'.$addrField] ?? null);
+                if (($value === null || $value === '') && $statement) {
+                    $value = $byId['addresses[mailing].'.$addrField]['value']
+                        ?? ($derived['addresses[mailing].'.$addrField] ?? null);
                 }
+                if ($value === null || $value === '') {
+                    continue;
+                }
+                $derived['employments[].'.$employmentField] = $value;
+            }
+        }
+        $relatedOccupation = (string) ($byId['relationships[].related_person.occupation']['value'] ?? '');
+        $relatedEmployer = (string) ($byId['relationships[].related_person.employer_name']['value'] ?? '');
+        if (BankStatementProfileRules::relatedLooksSelfEmployed($relatedOccupation, $relatedEmployer)) {
+            foreach ([
+                'employer_address_line_1' => 'line_1',
+                'employer_address_line_2' => 'line_2',
+                'employer_postcode' => 'postcode',
+                'employer_city' => 'city',
+                'employer_state' => 'state',
+                'employer_country' => 'country',
+            ] as $employerField => $addrField) {
+                $path = 'relationships[].related_person.'.$employerField;
+                if (isset($byId[$path]) && trim((string) $byId[$path]['value']) !== '') {
+                    continue;
+                }
+                $value = $byId['addresses[residential].'.$addrField]['value']
+                    ?? ($derived['addresses[residential].'.$addrField] ?? null);
+                if ($value === null || $value === '') {
+                    continue;
+                }
+                $derived[$path] = $value;
             }
         }
         foreach ($derived as $fieldId => $value) {

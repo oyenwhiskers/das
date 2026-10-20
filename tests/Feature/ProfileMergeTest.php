@@ -313,6 +313,107 @@ class ProfileMergeTest extends TestCase
         $this->assertNull($account->account_type);
     }
 
+    public function test_match_fills_next_of_kin_when_only_other_relationship_was_extracted(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->create([
+            'full_legal_name' => 'Suhaiza Binti Yaakub',
+            'race' => 'Malay',
+            'country_of_residence' => 'Malaysia',
+        ]);
+        [$scan, $profile] = $this->reviewed('Suhaiza Binti Yaakub', [
+            $this->value('relationships[].other_relationship', 'Next of kin', '1'),
+            $this->value('relationships[].related_person.full_legal_name', 'Ibrahim Bin Ali', '1'),
+            $this->value('relationships[].related_person.identification_type', 'nric', '1'),
+            $this->value('relationships[].related_person.identification_number', '590202035486', '1'),
+            $this->value('relationships[].related_person.mobile', '0139170006', '1'),
+            $this->value('relationships[].is_next_of_kin', true, '1'),
+            $this->value('relationships[].is_primary_next_of_kin', true, '1'),
+        ]);
+
+        Livewire::actingAs($staff)->test(Show::class, ['documentScan' => $scan])
+            ->call('openMatch', $profile->id)
+            ->call('selectMatchCustomer', $customer->id)
+            ->set('matchStrategy', 'fill_empty')
+            ->call('confirmMatch')
+            ->assertHasNoErrors()
+            ->assertDispatched('matched');
+
+        $relationship = $customer->fresh()->relationships()->first();
+        $this->assertNotNull($relationship);
+        $this->assertSame('other', $relationship->relationship);
+        $this->assertSame('NEXT OF KIN', $relationship->other_relationship);
+        $this->assertTrue($relationship->is_next_of_kin);
+        $this->assertTrue($relationship->is_primary_next_of_kin);
+        $this->assertSame('IBRAHIM BIN ALI', $relationship->relatedPerson?->full_legal_name);
+    }
+
+    public function test_unchecked_match_sections_are_left_unchanged(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->create([
+            'full_legal_name' => 'Section Keep',
+            'race' => 'Malay',
+            'country_of_residence' => 'Malaysia',
+            'marital_status' => null,
+        ]);
+        $account = CustomerBankAccount::factory()->for($customer)->create(['branch_address' => null]);
+        [$scan, $profile] = $this->reviewed('Section Keep', [
+            $this->value('customer.marital_status', 'Married'),
+            $this->value('bank_accounts[].bank_name', $account->bank_name, 'acct-1'),
+            $this->value('bank_accounts[].bank_country', 'Malaysia', 'acct-1'),
+            $this->value('bank_accounts[].account_number', $account->account_number, 'acct-1'),
+            $this->value('bank_accounts[].account_holder_name', $account->account_holder_name, 'acct-1'),
+            $this->value('bank_accounts[].branch_address', 'Jalan Ampang', 'acct-1'),
+        ]);
+
+        $component = Livewire::actingAs($staff)->test(Show::class, ['documentScan' => $scan])
+            ->call('openMatch', $profile->id)
+            ->assertSee('Sections to match')
+            ->assertSee('Bank accounts')
+            ->assertSee('Personal details')
+            ->call('selectMatchCustomer', $customer->id);
+        $bankIndex = collect($component->get('matchSections'))->search(fn (array $section): bool => $section['module'] === 'bank_accounts');
+        $this->assertNotFalse($bankIndex);
+        $component->set('matchSections.'.$bankIndex.'.include', false)
+            ->set('matchStrategy', 'overwrite')
+            ->call('confirmMatch')
+            ->assertHasNoErrors()
+            ->assertDispatched('matched');
+
+        $customer->refresh();
+        $this->assertSame('MARRIED', $customer->marital_status);
+        $this->assertSame(1, $customer->bankAccounts()->count());
+        $this->assertNull($account->fresh()->branch_address);
+    }
+
+    public function test_matching_with_every_section_unchecked_is_refused(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->create([
+            'full_legal_name' => 'Section Keep',
+            'race' => 'Malay',
+            'country_of_residence' => 'Malaysia',
+            'marital_status' => null,
+        ]);
+        [$scan, $profile] = $this->reviewed('Section Keep', [
+            $this->value('customer.marital_status', 'Married'),
+            $this->value('bank_accounts[].bank_name', 'Maybank', 'acct-1'),
+        ]);
+
+        $component = Livewire::actingAs($staff)->test(Show::class, ['documentScan' => $scan])
+            ->call('openMatch', $profile->id)
+            ->call('selectMatchCustomer', $customer->id);
+        foreach (array_keys($component->get('matchSections')) as $index) {
+            $component->set('matchSections.'.$index.'.include', false);
+        }
+        $component->call('confirmMatch')
+            ->assertSee('Choose at least one section to match.');
+
+        $this->assertNull($customer->fresh()->marital_status);
+        $this->assertDatabaseCount('extracted_profile_merges', 0);
+    }
+
     public function test_only_a_different_identification_blocks_a_match(): void
     {
         $staff = User::factory()->staff()->create();
@@ -687,6 +788,160 @@ class ProfileMergeTest extends TestCase
         $employment->refresh();
         $this->assertSame('Lot 9 Pasar', $employment->address_line_1);
         $this->assertSame('Tanah Merah', $employment->city);
+    }
+
+    public function test_bank_statement_fills_only_blank_self_employed_office_parts_from_mailing(): void
+    {
+        $customer = Customer::factory()->create([
+            'full_legal_name' => 'Amina Noor',
+            'employment_status' => 'self_employed',
+        ]);
+        $employment = CustomerEmployment::factory()->selfEmployed()->create([
+            'customer_id' => $customer->id,
+            'is_primary' => true,
+            'is_current' => true,
+            'address_line_1' => 'PASAR BESAR',
+            'city' => null,
+            'postcode' => null,
+            'state' => null,
+            'country' => null,
+        ]);
+        [, $profile] = $this->reviewed($customer->full_legal_name, [
+            $this->value('addresses[mailing].line_1', 'Lot 9 Pasar'),
+            $this->value('addresses[mailing].city', 'Tanah Merah'),
+            $this->value('addresses[mailing].postcode', '17500'),
+            $this->value('addresses[mailing].state', 'Kelantan'),
+            $this->value('addresses[mailing].country', 'Malaysia'),
+            $this->value('employments[].arrangement', 'self_employed', 'job-1'),
+            $this->value('employments[].address_line_1', 'PASAR BESAR', 'job-1'),
+            $this->value('employments[].occupation', 'Trader', 'job-1'),
+        ], 'Bank Statement', 'Account Statement');
+
+        $preview = app(ProfileMergePreview::class)->make($profile->fresh(), $customer->fresh(), 'overwrite', [
+            'employments|job-1' => (string) $employment->id,
+        ], []);
+        $employmentOp = collect($preview['operations'])->firstWhere('type', 'employments');
+        $this->assertSame('PASAR BESAR', $employmentOp['payload']['address_line_1']);
+        $this->assertSame('Tanah Merah', $employmentOp['payload']['city']);
+        $this->assertSame('17500', $employmentOp['payload']['postcode']);
+    }
+
+    public function test_form_self_employed_fills_blank_office_parts_from_residential(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->create([
+            'full_legal_name' => 'Suhaiza Binti Yaakub',
+            'employment_status' => 'self_employed',
+        ]);
+        $customer->addresses()->create([
+            'type' => AddressType::Residential,
+            'line_1' => 'LOT 244',
+            'city' => 'Machang',
+            'state' => 'Kelantan',
+            'postcode' => '18500',
+            'country' => 'Malaysia',
+        ]);
+        $employment = CustomerEmployment::factory()->selfEmployed()->create([
+            'customer_id' => $customer->id,
+            'is_primary' => true,
+            'is_current' => true,
+            'address_line_1' => 'SUHAIZA CONSTRUCTION',
+            'address_line_2' => 'JALAN PASAR MACHANG',
+            'state' => 'KELANTAN',
+            'city' => null,
+            'postcode' => null,
+            'country' => null,
+        ]);
+        [, $profile] = $this->reviewed($customer->full_legal_name, [
+            $this->value('customer.employment_status', 'self_employed'),
+            $this->value('addresses[residential].line_1', 'LOT 244'),
+            $this->value('addresses[residential].city', 'Machang'),
+            $this->value('addresses[residential].state', 'Kelantan'),
+            $this->value('addresses[residential].postcode', '18500'),
+            $this->value('addresses[residential].country', 'Malaysia'),
+            $this->value('employments[].arrangement', 'self_employed', 'job-1'),
+            $this->value('employments[].occupation', 'BUSINESS', 'job-1'),
+            $this->value('employments[].address_line_1', 'SUHAIZA CONSTRUCTION', 'job-1'),
+            $this->value('employments[].address_line_2', 'JALAN PASAR MACHANG', 'job-1'),
+            $this->value('employments[].state', 'KELANTAN', 'job-1'),
+        ], 'Account Opening Form', 'Form 3');
+
+        $preview = app(ProfileMergePreview::class)->make($profile->fresh(), $customer->fresh(), 'overwrite', [
+            'employments|job-1' => (string) $employment->id,
+        ], []);
+        $employmentOp = collect($preview['operations'])->firstWhere('type', 'employments');
+        $this->assertNotNull($employmentOp);
+        $this->assertSame('SUHAIZA CONSTRUCTION', $employmentOp['payload']['address_line_1']);
+        $this->assertSame('JALAN PASAR MACHANG', $employmentOp['payload']['address_line_2']);
+        $this->assertSame('KELANTAN', $employmentOp['payload']['state']);
+        $this->assertSame('Machang', $employmentOp['payload']['city']);
+        $this->assertSame('18500', $employmentOp['payload']['postcode']);
+        $this->assertSame('Malaysia', $employmentOp['payload']['country']);
+
+        app(MergeExtractedProfile::class)->commit(
+            $profile->fresh(),
+            $customer->fresh(),
+            $staff,
+            'overwrite',
+            (string) str()->uuid(),
+            $preview['baseline'],
+            ['employments|job-1' => (string) $employment->id],
+            [],
+        );
+        $employment->refresh();
+        $this->assertSame('Machang', $employment->city);
+        $this->assertSame('18500', $employment->postcode);
+        $this->assertSame('Malaysia', $employment->country);
+    }
+
+    public function test_merge_fills_self_employed_next_of_kin_employer_address_from_residential(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->create(['full_legal_name' => 'Ali Bin Abu']);
+        $customer->addresses()->create([
+            'type' => AddressType::Residential,
+            'line_1' => '1 Jalan Damai',
+            'city' => 'KL',
+            'state' => 'Wilayah',
+            'postcode' => '50000',
+            'country' => 'Malaysia',
+        ]);
+        [, $profile] = $this->reviewed($customer->full_legal_name, [
+            $this->value('addresses[residential].line_1', '1 Jalan Damai'),
+            $this->value('addresses[residential].city', 'KL'),
+            $this->value('addresses[residential].state', 'Wilayah'),
+            $this->value('addresses[residential].postcode', '50000'),
+            $this->value('addresses[residential].country', 'Malaysia'),
+            $this->value('relationships[].relationship', 'father', 'kin-1'),
+            $this->value('relationships[].related_person.full_legal_name', 'Mazwan Bin Mahmud', 'kin-1'),
+            $this->value('relationships[].related_person.occupation', 'BUSINESS', 'kin-1'),
+            $this->value('relationships[].related_person.mobile', '0123456789', 'kin-1'),
+            $this->value('relationships[].is_next_of_kin', true, 'kin-1'),
+            $this->value('relationships[].is_primary_next_of_kin', true, 'kin-1'),
+        ], 'Account Opening Form', 'Form 3');
+
+        $preview = app(ProfileMergePreview::class)->make($profile->fresh(), $customer->fresh(), 'fill_empty', [
+            'relationships|kin-1' => 'new',
+        ], []);
+        $relationshipOp = collect($preview['operations'])->firstWhere('type', 'relationships');
+        $this->assertNotNull($relationshipOp);
+        $this->assertSame('1 Jalan Damai', $relationshipOp['payload']['employerAddressLine1']);
+        $this->assertSame('KL', $relationshipOp['payload']['employerCity']);
+        $this->assertSame('50000', $relationshipOp['payload']['employerPostcode']);
+
+        app(MergeExtractedProfile::class)->commit(
+            $profile->fresh(),
+            $customer->fresh(),
+            $staff,
+            'fill_empty',
+            (string) str()->uuid(),
+            $preview['baseline'],
+            ['relationships|kin-1' => 'new'],
+            [],
+        );
+        $person = $customer->fresh()->relationships()->firstOrFail()->relatedPerson;
+        $this->assertSame('1 Jalan Damai', $person->employer_address_line_1);
+        $this->assertSame('KL', $person->employer_city);
     }
 
     public function test_bank_statement_does_not_fill_employed_office_from_mailing(): void

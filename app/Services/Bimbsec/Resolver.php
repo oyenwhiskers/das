@@ -9,6 +9,7 @@ use App\Models\CustomerBankAccount;
 use App\Models\CustomerEmployment;
 use App\Models\CustomerRelationship;
 use App\Models\RelatedPerson;
+use App\Services\BankStatementProfileRules;
 use App\Services\CustomerProfileSchema;
 use Illuminate\Support\Carbon;
 
@@ -303,7 +304,7 @@ class Resolver
             'contact.mobile_phone' => $this->contact($customer, ContactType::Mobile, 'Mobile telephone'),
             'contact.email' => $this->contact($customer, ContactType::Email, 'Email'),
             'contact.social_account' => $this->social($customer),
-            'relationships.spouse_or_next_of_kin' => $this->relative($context['person'], $item, $field),
+            'relationships.spouse_or_next_of_kin' => $this->relative($customer, $context['person'], $item, $field),
             'employment.lth_group_employee' => $this->yesNo($context['choices']['lth_group_employee'] ?? null, $item, 'LTH Group employee', false, 'no'),
             'employment.status' => $this->employmentStatus($customer, $item),
             'employment.occupation_designation' => $this->text($context['employment']?->occupation, 'Occupation'),
@@ -568,7 +569,7 @@ class Resolver
         return null;
     }
 
-    private function relative(?CustomerRelationship $relationship, string $item, array $field): mixed
+    private function relative(Customer $customer, ?CustomerRelationship $relationship, string $item, array $field): mixed
     {
         if ($relationship === null) {
             return null;
@@ -577,7 +578,7 @@ class Resolver
         if (($field['placement']['type'] ?? '') === 'enum_choice') {
             return $role;
         }
-        $person = $this->relativePayload($relationship);
+        $person = $this->relativePayload($customer, $relationship);
         if ($item === 'relationship_specification') {
             return $role === 'next_of_kin' ? $relationship->relationshipLabel() : null;
         }
@@ -599,7 +600,7 @@ class Resolver
     }
 
     /** @return array<string, mixed> */
-    private function relativePayload(CustomerRelationship $relationship): array
+    private function relativePayload(Customer $customer, CustomerRelationship $relationship): array
     {
         $linked = $relationship->relatedCustomer;
         $person = $relationship->relatedPerson;
@@ -619,14 +620,30 @@ class Resolver
             ];
         }
         if ($person instanceof RelatedPerson) {
+            $line1 = $person->employer_address_line_1;
+            $line2 = $person->employer_address_line_2;
+            $city = $person->employer_city;
+            $state = $person->employer_state;
+            $postcode = $person->employer_postcode;
+            $country = $person->employer_country;
+            if (BankStatementProfileRules::relatedLooksSelfEmployed($person->occupation, $person->employer_name)) {
+                $home = $customer->residentialAddress;
+                $line1 = filled($line1) ? $line1 : $home?->line_1;
+                $line2 = filled($line2) ? $line2 : $home?->line_2;
+                $city = filled($city) ? $city : $home?->city;
+                $state = filled($state) ? $state : $home?->state;
+                $postcode = filled($postcode) ? $postcode : $home?->postcode;
+                $country = filled($country) ? $country : $home?->country;
+            }
+
             return [
                 'name' => $person->full_legal_name,
                 'nric' => $person->identification_number,
                 'date_of_birth' => $person->date_of_birth,
                 'occupation' => $person->occupation,
-                'employer' => trim(implode(' ', array_filter([$person->employer_name, $person->employer_address_line_1, $person->employer_address_line_2, $person->employer_address]))),
-                'employer_city' => $person->employer_city, 'employer_state' => $person->employer_state,
-                'employer_postcode' => $person->employer_postcode, 'employer_country' => $person->employer_country,
+                'employer' => trim(implode(' ', array_filter([$person->employer_name, $line1, $line2, $person->employer_address]))),
+                'employer_city' => $city, 'employer_state' => $state,
+                'employer_postcode' => $postcode, 'employer_country' => $country,
                 'home' => $person->home_telephone, 'mobile' => $person->mobile, 'email' => $person->email,
             ];
         }
@@ -649,22 +666,20 @@ class Resolver
         return $this->one($customer->employment_status, $map, $item, 'Employment status');
     }
 
-    /** Self-employed with no office address: print residential into Office/Business Address boxes. */
-    public function businessAddressUsesResidential(Customer $customer, ?CustomerEmployment $employment): bool
+    /** Self-employed and this office-address part is blank: use residential for that part. */
+    public function businessAddressFieldFromResidential(Customer $customer, ?CustomerEmployment $employment, string $item): bool
     {
-        if ($employment === null) {
+        if ($employment === null || $customer->residentialAddress === null) {
             return false;
         }
         if ($customer->employment_status !== 'self_employed' && $employment->arrangement !== 'self_employed') {
             return false;
         }
-        foreach (['address_line_1', 'address_line_2', 'city', 'state', 'postcode', 'country'] as $column) {
-            if (filled($employment->{$column})) {
-                return false;
-            }
+        if ($item === 'address_lines') {
+            return blank($employment->address_line_1) && blank($employment->address_line_2);
         }
 
-        return $customer->residentialAddress !== null;
+        return blank($employment->{$item} ?? null);
     }
 
     private function employmentAddress(Customer $customer, ?CustomerEmployment $employment, string $item): ?string
@@ -672,18 +687,22 @@ class Resolver
         if ($employment === null) {
             return null;
         }
-        $source = $this->businessAddressUsesResidential($customer, $employment)
-            ? $customer->residentialAddress
-            : $employment;
+        $home = $customer->residentialAddress;
         if ($item === 'address_lines') {
-            $line1 = $source instanceof CustomerEmployment ? $source->address_line_1 : $source?->line_1;
-            $line2 = $source instanceof CustomerEmployment ? $source->address_line_2 : $source?->line_2;
+            if ($this->businessAddressFieldFromResidential($customer, $employment, 'address_lines')) {
+                $line1 = $home?->line_1;
+                $line2 = $home?->line_2;
+            } else {
+                $line1 = $employment->address_line_1;
+                $line2 = $employment->address_line_2;
+            }
 
             return $this->text(trim(implode(' ', array_filter([$line1, $line2]))), 'Employer address');
         }
-        $value = $source instanceof CustomerEmployment
-            ? ($source->{$item} ?? null)
-            : ($source?->{$item} ?? null);
+        $value = $employment->{$item} ?? null;
+        if ($this->businessAddressFieldFromResidential($customer, $employment, $item)) {
+            $value = $home?->{$item} ?? null;
+        }
 
         return $this->text($value, $this->titled('Employer', $item));
     }

@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AddressType;
 use App\Livewire\Customers\WorkFinance;
 use App\Models\Customer;
+use App\Models\CustomerAddress;
 use App\Models\User;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -102,6 +104,44 @@ class EmploymentInformationTest extends TestCase
         $this->assertNull($customer->employments()->firstOrFail()->employer_name);
         $this->actingAs($staff)->get(route('customers.show', $customer).'?tab=work')
             ->assertOk()->assertSee('Work Information')->assertSee('Employment Status')->assertSee('Employment History');
+    }
+
+    public function test_self_employed_blank_office_fields_are_filled_from_residential(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($staff, 'creator')->create(['employment_status' => 'self_employed']);
+        CustomerAddress::query()->create([
+            'customer_id' => $customer->id,
+            'type' => AddressType::Residential,
+            'line_1' => 'LOT 244',
+            'line_2' => 'KG BARU',
+            'city' => 'Machang',
+            'state' => 'Kelantan',
+            'postcode' => '18500',
+            'country' => 'Malaysia',
+        ]);
+
+        Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer->fresh()])
+            ->call('add')
+            ->assertSet('form.arrangement', 'self_employed')
+            ->assertSet('form.address_line_1', 'LOT 244')
+            ->assertSet('form.city', 'Machang')
+            ->assertSet('form.postcode', '18500')
+            ->set('form.occupation', 'BUSINESS')
+            ->set('form.address_line_1', 'SUHAIZA CONSTRUCTION')
+            ->set('form.address_line_2', 'JALAN PASAR MACHANG')
+            ->set('form.city', '')
+            ->set('form.postcode', '')
+            ->set('form.country', '')
+            ->call('save')->assertHasNoErrors();
+
+        $job = $customer->employments()->firstOrFail();
+        $this->assertSame('SUHAIZA CONSTRUCTION', $job->address_line_1);
+        $this->assertSame('JALAN PASAR MACHANG', $job->address_line_2);
+        $this->assertSame('Machang', $job->city);
+        $this->assertSame('Kelantan', $job->state);
+        $this->assertSame('18500', $job->postcode);
+        $this->assertSame('Malaysia', $job->country);
     }
 
     public function test_other_status_requires_description_and_corrections_are_logged(): void

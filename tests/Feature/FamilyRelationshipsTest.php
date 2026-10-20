@@ -203,6 +203,36 @@ class FamilyRelationshipsTest extends TestCase
         $this->assertFalse($customer->relationships()->firstOrFail()->is_next_of_kin);
     }
 
+    public function test_self_employed_next_of_kin_gets_applicant_residential_as_employer_address(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($staff, 'creator')->create();
+        $customer->addresses()->create([
+            'type' => \App\Enums\AddressType::Residential,
+            'line_1' => 'LOT 244 KG BARU',
+            'city' => 'Machang',
+            'state' => 'Kelantan',
+            'postcode' => '18500',
+            'country' => 'Malaysia',
+        ]);
+
+        Livewire::actingAs($staff)->test(FamilyRelationships::class, ['customer' => $customer->fresh()])
+            ->call('add')
+            ->set('fullLegalName', 'Mazwan Bin Mahmud')
+            ->set('relationship', 'father')
+            ->set('occupation', 'BUSINESS')
+            ->set('mobile', '+60123456789')
+            ->set('isNextOfKin', true)
+            ->set('isPrimaryNextOfKin', true)
+            ->call('save')->assertHasNoErrors();
+
+        $person = $customer->relationships()->firstOrFail()->relatedPerson;
+        $this->assertSame('LOT 244 KG BARU', $person->employer_address_line_1);
+        $this->assertSame('Machang', $person->employer_city);
+        $this->assertSame('18500', $person->employer_postcode);
+        $this->assertSame('Malaysia', $person->employer_country);
+    }
+
     public function test_a_single_customer_cannot_be_given_a_spouse(): void
     {
         $staff = User::factory()->staff()->create();

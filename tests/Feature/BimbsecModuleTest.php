@@ -384,13 +384,21 @@ class BimbsecModuleTest extends TestCase
 
         CustomerEmployment::query()->where('customer_id', $customer->id)->update([
             'address_line_1' => 'LOT 9 PASAR',
-            'city' => 'Tanah Merah',
+            'city' => null,
+            'postcode' => null,
         ]);
-        $officeLines = collect(app(Resolver::class)->resolve($customer->fresh(), [])['draws'])->first(
+        $customer->residentialAddress->update(['city' => 'Tanah Merah', 'postcode' => '17500']);
+        $draws = collect(app(Resolver::class)->resolve($customer->fresh(), [])['draws']);
+        $officeLines = $draws->first(
             fn (array $draw): bool => ($draw['field']['source']['reference_key'] ?? '') === 'employment.business_address'
                 && ($draw['field']['printed_item'] ?? '') === 'address_lines',
         );
+        $officeCity = $draws->first(
+            fn (array $draw): bool => ($draw['field']['source']['reference_key'] ?? '') === 'employment.business_address'
+                && ($draw['field']['printed_item'] ?? '') === 'city',
+        );
         $this->assertSame('LOT 9 PASAR', $officeLines['text'] ?? null);
+        $this->assertSame('Tanah Merah', $officeCity['text'] ?? null);
     }
 
     public function test_opening_the_pdf_stamps_the_date_without_rewriting_the_file(): void

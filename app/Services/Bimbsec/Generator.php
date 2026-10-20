@@ -147,7 +147,11 @@ class Generator
             if ($reference === 'employment.business_address') {
                 $job = $this->resolver->subjects($customer, [])['employment'] ?? null;
 
-                return ! $this->resolver->businessAddressUsesResidential($customer, $job);
+                return ! $this->resolver->businessAddressFieldFromResidential(
+                    $customer,
+                    $job,
+                    $item !== '' ? $item : 'address_lines',
+                );
             }
 
             return true;
