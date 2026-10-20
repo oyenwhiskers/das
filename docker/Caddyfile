@@ -6,5 +6,9 @@
 :80 {
 	root * /app/public
 	encode zstd br gzip
+	# Livewire sends each attachment as its own upload request (not one 60-file POST).
+	request_body {
+		max_size 24MB
+	}
 	php_server
 }

@@ -37,7 +37,7 @@ Where to go in Dokploy:
 
 That path holds uploaded scans and generated PDFs. Do **not** mount `/app/storage`. The BIMBSEC templates live in `storage/templates` inside the image and would be hidden by a mount of the whole storage directory.
 
-After a successful upload, the file should appear under `/app/storage/app/private/document-scans/` inside the container.
+After a successful upload, document scans appear under `/app/storage/app/private/document-scans/` and attachment scans under `/app/storage/app/private/attachment-scans/` (plus `livewire-tmp/` while a bulk drop is in progress).
 
 ## Environment
 
@@ -65,11 +65,18 @@ QUEUE_CONNECTION=database
 DB_QUEUE_RETRY_AFTER=3660
 CACHE_STORE=database
 FILESYSTEM_DISK=local
+
+DOCUMENT_SCAN_MAX_KB=10240
+ATTACHMENT_SCAN_MAX_FILES=60
+LIVEWIRE_UPLOAD_THROTTLE=180
+LIVEWIRE_UPLOAD_MAX_MINUTES=30
 ```
 
 `DB_HOST` is the Cloud SQL address reachable from the VM. It is not `127.0.0.1` and MySQL is not part of this container. Use `https://` in `APP_URL` when Dokploy serves TLS for that host. Set `MYSQL_ATTR_SSL_CA` only when Cloud SQL requires a CA file that is mounted into the container.
 
 Keep existing `VITE_*` variables in Dokploy. The current asset build does not read them.
+
+`CACHE_STORE=database` is required so `ShouldBeUnique` attachment/document jobs share locks across the five in-container workers.
 
 ## Queue workers
 
@@ -79,7 +86,14 @@ The web container starts five `queue:work` processes after migrate:
 php artisan queue:work --sleep=3 --tries=3 --timeout=3600
 ```
 
-`--timeout` stays below `DB_QUEUE_RETRY_AFTER` (3660). Do not add a second worker service for the same database or jobs will be processed twice. On stop, the entrypoint signals the web server and the workers. Docker's default stop timeout is 10 seconds, so a long job can be killed and becomes available again after the retry window.
+`--timeout` stays below `DB_QUEUE_RETRY_AFTER` (3660). Those five workers already share the same `jobs` table and process different rows in parallel — enough for a 60-file Scan Attachment batch (one `ProcessAttachmentScan` job per file). Do **not** add a second Dokploy service that also runs `queue:work` against the same database (that would duplicate the entrypoint workers). On stop, the entrypoint signals the web server and the workers. Docker's default stop timeout is 10 seconds, so a long job can be killed and becomes available again after the retry window.
+
+## Scan Attachment bulk uploads
+
+- UI accepts up to `ATTACHMENT_SCAN_MAX_FILES` (default 60). Each file is stored, then one queue job is dispatched.
+- Livewire uploads each file in a separate request into `storage/app/private/livewire-tmp/` (covered by the `/app/storage/app` volume), then `processDocuments` moves them to `attachment-scans/`.
+- Keep `LIVEWIRE_UPLOAD_THROTTLE` at least as high as the batch size, and `LIVEWIRE_UPLOAD_MAX_MINUTES` high enough to finish a large drop before temps expire.
+- PHP `upload_max_filesize` / Caddy `request_body` in the image are sized for one file per request, not one giant multi-file POST.
 
 ## Scheduler
 

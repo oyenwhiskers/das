@@ -21,7 +21,8 @@ class ProcessAttachmentScan implements ShouldBeUnique, ShouldQueue
 
     public int $timeout = 300;
 
-    public int $uniqueFor = 360;
+    // Keep unique lock longer than $timeout so a second worker cannot double-run the same scan.
+    public int $uniqueFor = 420;
 
     public function __construct(public int $attachmentScanId) {}
 

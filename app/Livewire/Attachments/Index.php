@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 use Throwable;
@@ -21,7 +22,8 @@ class Index extends Component
     use WithFileUploads;
     use WithPagination;
 
-    public $document;
+    /** @var list<TemporaryUploadedFile>|TemporaryUploadedFile|null */
+    public $files = [];
 
     /** @var list<string> */
     public array $selected = [];
@@ -49,12 +51,29 @@ class Index extends Component
         }
     }
 
-    public function processDocument(): void
+    public function removeFile(int $index): void
+    {
+        $files = $this->fileList();
+        unset($files[$index]);
+        $this->files = array_values($files);
+    }
+
+    public function clearFiles(): void
+    {
+        $this->files = [];
+        $this->resetValidation();
+    }
+
+    public function processDocuments(): void
     {
         $this->authorize('create', AttachmentScan::class);
 
+        $maxFiles = (int) config('document_scanner.attachment_max_files');
+        $this->files = $this->fileList();
+
         $this->validate([
-            'document' => [
+            'files' => ['required', 'array', 'min:1', 'max:'.$maxFiles],
+            'files.*' => [
                 'required', 'file',
                 'mimetypes:application/pdf,image/jpeg,image/png',
                 'extensions:pdf,jpg,jpeg,png',
@@ -62,55 +81,89 @@ class Index extends Component
             ],
         ]);
 
-        $originalFilename = basename(str_replace('\\', '/', $this->document->getClientOriginalName()));
+        $queued = 0;
+        $queueFailed = 0;
 
-        if ($originalFilename === '' || mb_strlen($originalFilename) > 255) {
-            $this->addError('document', 'The filename must be 255 characters or fewer.');
+        foreach ($this->files as $index => $document) {
+            $originalFilename = basename(str_replace('\\', '/', $document->getClientOriginalName()));
+            if ($originalFilename === '' || mb_strlen($originalFilename) > 255) {
+                $this->addError('files.'.$index, 'The filename must be 255 characters or fewer.');
+
+                continue;
+            }
+
+            $path = $document->store('attachment-scans', 'local');
+            if (! is_string($path)) {
+                $this->addError('files.'.$index, 'The attachment could not be stored.');
+
+                continue;
+            }
+
+            try {
+                $attachmentScan = AttachmentScan::query()->create([
+                    'uploaded_by' => auth()->id(),
+                    'original_filename' => $originalFilename,
+                    'storage_path' => $path,
+                    'mime_type' => $document->getMimeType(),
+                    'file_size' => $document->getSize(),
+                    'status' => AttachmentScanStatus::Pending,
+                ]);
+            } catch (Throwable $exception) {
+                Storage::disk('local')->delete($path);
+
+                throw $exception;
+            }
+
+            try {
+                ProcessAttachmentScan::dispatch($attachmentScan->id);
+                $queued++;
+            } catch (Throwable $exception) {
+                $attachmentScan->update([
+                    'status' => AttachmentScanStatus::Failed,
+                    'processing_error' => 'Processing could not be queued. Please contact an administrator.',
+                    'processing_completed_at' => now(),
+                ]);
+                report($exception);
+                $queueFailed++;
+            }
+        }
+
+        $this->files = [];
+        $this->resetValidation();
+        $this->resetPage();
+
+        if ($queued === 0 && $queueFailed === 0) {
+            $this->addError('files', 'No valid files were queued.');
 
             return;
         }
 
-        $path = $this->document->store('attachment-scans', 'local');
-
-        if (! is_string($path)) {
-            $this->addError('document', 'The attachment could not be stored.');
-
-            return;
+        $message = $queued === 1
+            ? '1 attachment queued for processing.'
+            : $queued.' attachments queued for processing.';
+        if ($queueFailed > 0) {
+            $message .= ' '.$queueFailed.' could not be queued.';
         }
 
-        try {
-            $attachmentScan = AttachmentScan::query()->create([
-                'uploaded_by' => auth()->id(),
-                'original_filename' => $originalFilename,
-                'storage_path' => $path,
-                'mime_type' => $this->document->getMimeType(),
-                'file_size' => $this->document->getSize(),
-                'status' => AttachmentScanStatus::Pending,
-            ]);
-        } catch (Throwable $exception) {
-            Storage::disk('local')->delete($path);
+        session()->flash('status', $message);
+        $this->dispatch('notify', type: $queueFailed > 0 ? 'warning' : 'success', message: $message);
+    }
 
-            throw $exception;
+    /** @return list<TemporaryUploadedFile> */
+    private function fileList(): array
+    {
+        if ($this->files instanceof TemporaryUploadedFile) {
+            return [$this->files];
         }
 
-        try {
-            ProcessAttachmentScan::dispatch($attachmentScan->id);
-        } catch (Throwable $exception) {
-            $attachmentScan->update([
-                'status' => AttachmentScanStatus::Failed,
-                'processing_error' => 'Processing could not be queued. Please contact an administrator.',
-                'processing_completed_at' => now(),
-            ]);
-
-            report($exception);
-            session()->flash('status', 'Attachment uploaded, but processing could not be queued.');
-            $this->redirect(route('attachments.show', $attachmentScan), navigate: true);
-
-            return;
+        if (! is_array($this->files)) {
+            return [];
         }
 
-        session()->flash('status', 'Attachment uploaded. Processing will begin shortly.');
-        $this->redirect(route('attachments.show', $attachmentScan), navigate: true);
+        return array_values(array_filter(
+            $this->files,
+            fn (mixed $file): bool => $file instanceof TemporaryUploadedFile
+        ));
     }
 
     public function render(): View
@@ -118,8 +171,10 @@ class Index extends Component
         $this->authorize('viewAny', AttachmentScan::class);
 
         return view('livewire.attachments.index', [
-            'documents' => AttachmentScan::query()->with(['uploader', 'customer'])->latest()->paginate(15),
+            'scans' => AttachmentScan::query()->with(['uploader', 'customer'])->latest()->paginate(15),
+            'pendingFiles' => $this->fileList(),
             'maxUploadMb' => config('document_scanner.max_upload_kb') / 1024,
+            'maxFiles' => (int) config('document_scanner.attachment_max_files'),
         ])->layout('layouts.app');
     }
 }

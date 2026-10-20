@@ -34,10 +34,10 @@ class AttachmentFilingTest extends TestCase
 
         Livewire::actingAs($staff)
             ->test(Index::class)
-            ->set('document', UploadedFile::fake()->create('ic.pdf', 100, 'application/pdf'))
-            ->call('processDocument')
+            ->set('files', [UploadedFile::fake()->create('ic.pdf', 100, 'application/pdf')])
+            ->call('processDocuments')
             ->assertHasNoErrors()
-            ->assertRedirect();
+            ->assertSet('files', []);
 
         $scan = AttachmentScan::query()->sole();
         $this->assertSame(AttachmentScanStatus::Pending, $scan->status);
@@ -46,6 +46,31 @@ class AttachmentFilingTest extends TestCase
         $this->assertStringStartsWith('attachment-scans/', $scan->storage_path);
         Storage::disk('local')->assertExists($scan->storage_path);
         Queue::assertPushed(ProcessAttachmentScan::class, fn (ProcessAttachmentScan $job): bool => $job->attachmentScanId === $scan->id);
+    }
+
+    public function test_staff_can_queue_many_attachments_as_separate_jobs(): void
+    {
+        Storage::fake('local');
+        Queue::fake();
+        $staff = User::factory()->staff()->create();
+
+        $files = [];
+        for ($i = 1; $i <= 5; $i++) {
+            $files[] = UploadedFile::fake()->create("file-{$i}.pdf", 50, 'application/pdf');
+        }
+
+        Livewire::actingAs($staff)
+            ->test(Index::class)
+            ->set('files', $files)
+            ->call('processDocuments')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseCount('attachment_scans', 5);
+        Queue::assertPushed(ProcessAttachmentScan::class, 5);
+        $this->assertEqualsCanonicalizing(
+            AttachmentScan::query()->orderBy('id')->pluck('id')->all(),
+            collect(Queue::pushed(ProcessAttachmentScan::class))->map(fn (ProcessAttachmentScan $job) => $job->attachmentScanId)->all()
+        );
     }
 
     public function test_unique_ic_auto_attaches_to_the_matching_customer(): void
