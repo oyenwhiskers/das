@@ -5,6 +5,7 @@ Dokploy builds this repository from the `Dockerfile` and injects environment var
 ## Image
 
 - PHP 8.4 with FrankenPHP (Caddy, classic `php_server`, not Octane). `composer.json` allows `^8.3`; the lockfile's Symfony 8.1 packages require PHP 8.4.1 or newer.
+- Python 3 + `pypdf` (from `requirements.txt`) so compressed PDFs can be split when FPDI cannot — required for multi-page bank packs on the server.
 - Web root: `/app/public`
 - Container port: **80**
 - Health check: `GET /up`

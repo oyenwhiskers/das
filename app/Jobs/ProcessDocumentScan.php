@@ -72,8 +72,10 @@ class ProcessDocumentScan implements ShouldBeUnique, ShouldQueue
             if (in_array($exception->getCode(), [408, 429], true) || $exception->getCode() >= 500) {
                 throw $exception;
             }
-
-            $this->failRun($documentScan->id, $run, 'Document processing could not be completed. Please contact an administrator.');
+            $message = str_contains($exception->getMessage(), 'pypdf') || str_contains($exception->getMessage(), 'split')
+                ? $exception->getMessage()
+                : 'Document processing could not be completed. Please contact an administrator.';
+            $this->failRun($documentScan->id, $run, $message);
         }
     }
 

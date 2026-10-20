@@ -11,6 +11,13 @@ RUN install-php-extensions \
         redis \
         zip
 
+# Compressed PDFs need Python + pypdf when FPDI cannot split them (same as local).
+COPY requirements.txt /tmp/requirements.txt
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 python3-pip \
+    && pip3 install --no-cache-dir --break-system-packages -r /tmp/requirements.txt \
+    && rm -rf /var/lib/apt/lists/* /tmp/requirements.txt
+
 COPY docker/php/production.ini /usr/local/etc/php/conf.d/99-production.ini
 
 FROM base AS vendor
