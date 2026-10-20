@@ -111,6 +111,14 @@ class SinglePassExtraction
 
                     return;
                 }
+                if ($this->wholeDocumentNeedsSliceFallback($piece, $start, $end, $mode)
+                    && $this->enqueueWholeDocumentFallback($queue, $scan)) {
+                    $unresolved[] = ['warning' => 'Whole-document read returned too few applicants and was re-read in page groups.'];
+                    $total = $done + count($queue);
+                    $this->writeProgress($scan, $done, $total, $queue[0] ?? null);
+
+                    continue;
+                }
                 if ($this->underfilledBankSlice($piece, $start, $end, $mode)
                     && $this->splitPages($queue, $scan, $start, $end)) {
                     $unresolved[] = ['warning' => 'Pages '.$start.'-'.$end.' returned fewer applicants than pages and were re-read per page.'];
@@ -367,12 +375,62 @@ class SinglePassExtraction
         return substr($safe, 0, 21).'_'.substr(sha1($ref), 0, 8);
     }
 
+    /**
+     * Whole-doc packs (e.g. many bank statements) often return meta + empty records.
+     * Fall back to page groups instead of completing with zero profiles.
+     *
+     * @param  array{document_type: ?string, title: ?string, records: array<string, array<string, mixed>>}  $piece
+     */
+    private function wholeDocumentNeedsSliceFallback(array $piece, int $start, ?int $end, string $mode): bool
+    {
+        if ($mode !== 'whole' || $end === null || $end <= $start) {
+            return false;
+        }
+        $pages = $end - $start + 1;
+        $count = count($piece['records']);
+        if ($count === 0) {
+            return true;
+        }
+        if ($count >= $pages) {
+            return false;
+        }
+
+        return $this->looksLikeBankPack($piece);
+    }
+
+    /** @param list<array{0: int, 1: ?int, 2: ?string, 3: string}> $queue */
+    private function enqueueWholeDocumentFallback(array &$queue, DocumentScan $scan): bool
+    {
+        $added = false;
+        foreach ($this->fallbackRanges($scan) as [$rangeStart, $rangeEnd, $bytes]) {
+            if ($rangeEnd === null) {
+                continue;
+            }
+            $queue[] = [$rangeStart, $rangeEnd, $bytes, 'slice'];
+            $added = true;
+        }
+        if (! $added) {
+            return false;
+        }
+        $this->runStats['mode'] = 'sliced';
+        $this->runStats['subdivided'] = true;
+
+        return true;
+    }
+
     /** @param  array{document_type: ?string, title: ?string, records: array<string, array<string, mixed>>}  $piece */
     private function underfilledBankSlice(array $piece, int $start, ?int $end, string $mode): bool
     {
         if ($mode !== 'slice' || $end === null || $end <= $start || count($piece['records']) >= ($end - $start + 1)) {
             return false;
         }
+
+        return $this->looksLikeBankPack($piece);
+    }
+
+    /** @param  array{document_type: ?string, title: ?string, records: array<string, array<string, mixed>>}  $piece */
+    private function looksLikeBankPack(array $piece): bool
+    {
         if (BankStatementProfileRules::isStatementLabel(
             is_string($piece['document_type'] ?? null) ? $piece['document_type'] : null,
             is_string($piece['title'] ?? null) ? $piece['title'] : null,

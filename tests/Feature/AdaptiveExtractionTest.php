@@ -156,6 +156,34 @@ class AdaptiveExtractionTest extends TestCase
         $this->assertSame(2, $scan->fresh()->extractedProfiles()->count());
     }
 
+    public function test_an_empty_whole_document_bank_pack_falls_back_to_page_groups(): void
+    {
+        $scan = $this->prepare(4, 2, 16);
+        $empty = $this->payload([]);
+        $empty['document_type'] = 'Bank Statement';
+        $empty['title'] = 'Account Statements';
+        $empty['summary'] = 'Collection of various bank statements from CIMB, Maybank, and others.';
+        $empty['limitations'] = 'The provided documents are a collection of individual bank account statements for multiple individuals and accounts. No single applicant profile can be derived.';
+        $this->respond([
+            $empty,
+            $this->payload([$this->named('ILLAWAHIDA BINTI HASHIM', 1)]),
+            $this->payload([$this->named('KHAIRUL ABDUL HALIM BIN AHMAD', 3, 'r2')]),
+        ]);
+
+        app(SinglePassExtraction::class)->run($scan, app(GeminiDocumentReader::class));
+
+        $processing = $scan->fresh()->findings->record_ownership['processing'];
+        $this->assertSame(2, $scan->extractedProfiles()->count());
+        $this->assertSame('sliced', $processing['mode']);
+        $this->assertTrue($processing['subdivided']);
+        $this->assertContains(
+            'Whole-document read returned too few applicants and was re-read in page groups.',
+            array_column($scan->fresh()->profile_unresolved, 'warning')
+        );
+        Http::assertSentCount(3);
+        $this->assertEvidence($scan->fresh());
+    }
+
     public function test_valid_json_does_not_claim_verified_completeness(): void
     {
         $scan = $this->prepare(2, 2, 16);
