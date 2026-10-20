@@ -6,6 +6,7 @@ use App\Jobs\ProcessDocumentScan;
 use App\Models\Customer;
 use App\Models\DocumentScan;
 use App\Models\User;
+use App\Services\BankStatementProfileRules;
 use App\Services\CustomerProfileSchema;
 use App\Services\GeminiDocumentReader;
 use App\Services\PdfPageBatches;
@@ -743,12 +744,14 @@ class SinglePassExtractionTest extends TestCase
                 $this->value('bank_accounts[].bank_name', 'provided', 'Maybank Islamic', 'Maybank Islamic', 'acct-1'),
             ],
         ]]);
-        $payload['document_type'] = 'Bank Statement';
-        $payload['title'] = 'Account Statement';
+        // Gemini often returns bank_statement; the UI fallback must still treat it as a statement.
+        $payload['document_type'] = 'bank_statement';
+        $payload['title'] = 'Account Details and Transaction History';
         $this->fake($payload);
 
         app(SinglePassExtraction::class)->run($scan, app(GeminiDocumentReader::class));
 
+        $this->assertTrue(BankStatementProfileRules::isStatementScan($scan->fresh()));
         $this->actingAs($staff)->get(route('documents.show', $scan->fresh()))
             ->assertOk()
             ->assertSee('MOHD NASIR BIN MOHD ALI')

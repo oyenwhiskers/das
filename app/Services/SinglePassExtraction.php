@@ -373,8 +373,10 @@ class SinglePassExtraction
         if ($mode !== 'slice' || $end === null || $end <= $start || count($piece['records']) >= ($end - $start + 1)) {
             return false;
         }
-        $label = strtolower(trim((string) ($piece['document_type'] ?? '').' '.(string) ($piece['title'] ?? '')));
-        if (str_contains($label, 'bank statement') || str_contains($label, 'passbook')) {
+        if (BankStatementProfileRules::isStatementLabel(
+            is_string($piece['document_type'] ?? null) ? $piece['document_type'] : null,
+            is_string($piece['title'] ?? null) ? $piece['title'] : null,
+        )) {
             return true;
         }
         foreach ($piece['records'] as $record) {

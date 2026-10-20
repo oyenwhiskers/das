@@ -18,7 +18,9 @@ class BankStatementProfileRules
 
     public static function isStatementLabel(?string $type, ?string $title): bool
     {
+        // Gemini sometimes returns bank_statement / bank-statement instead of "bank statement".
         $label = strtolower(trim((string) $type.' '.(string) $title));
+        $label = trim(preg_replace('/[\s_-]+/', ' ', $label) ?? $label);
 
         return str_contains($label, 'bank statement') || str_contains($label, 'passbook');
     }
