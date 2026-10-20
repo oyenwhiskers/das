@@ -1,10 +1,15 @@
 <div class="py-6">
     <div class="w-full px-4 sm:px-6 lg:px-8 xl:px-10 space-y-4">
-        <div class="flex flex-wrap items-start justify-between gap-3">
-            <div>
-                <a href="{{ route('bimbsec.index') }}" wire:navigate class="text-sm text-navy-800 hover:underline">BIMBSEC</a>
-                <h1 class="text-xl font-semibold text-navy-900">{{ $customer->full_legal_name }}</h1>
-                <p class="text-sm text-slate-500">{{ $customer->primary_identification_number ?: 'No NRIC / passport on the profile' }}</p>
+        <div>
+            <a href="{{ route('bimbsec.index') }}" wire:navigate class="text-sm text-navy-800 hover:underline">BIMBSEC</a>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h1 class="text-xl font-semibold text-navy-900">{{ $customer->full_legal_name }}</h1>
+                    <p class="text-sm text-slate-500">{{ $customer->primary_identification_number ?: 'No NRIC / passport on the profile' }}</p>
+                </div>
+                @if ($fromProfile)
+                    <a href="{{ route('customers.show', $customer) }}" wire:navigate class="text-sm text-navy-800 hover:underline">&larr; Back to profile</a>
+                @endif
             </div>
         </div>
 

@@ -376,7 +376,18 @@ class CustomerManagementTest extends TestCase
         Livewire::actingAs($user)
             ->test(Show::class, ['customer' => $customer->fresh()])
             ->call('openBimbsec')
-            ->assertRedirect(route('bimbsec.show', [$customer, $application]));
+            ->assertRedirect(route('bimbsec.show', [$customer, $application, 'from' => 'profile']));
+
+        $this->actingAs($user)
+            ->get(route('bimbsec.show', [$customer, $application, 'from' => 'profile']))
+            ->assertOk()
+            ->assertSee('Back to profile')
+            ->assertSee(route('customers.show', $customer), false);
+
+        $this->actingAs($user)
+            ->get(route('bimbsec.show', [$customer, $application]))
+            ->assertOk()
+            ->assertDontSee('Back to profile');
     }
 
     public function test_archived_customer_can_be_restored_from_profile(): void

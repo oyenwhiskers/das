@@ -5,6 +5,7 @@ use App\Http\Controllers\BimbsecFileController;
 use App\Http\Controllers\DocumentFileController;
 use App\Livewire\AiUsage\Index as AiUsageIndex;
 use App\Livewire\Attachments\Index as AttachmentsIndex;
+use App\Livewire\StorageUsage\Index as StorageUsageIndex;
 use App\Livewire\Attachments\Show as AttachmentsShow;
 use App\Livewire\Bimbsec\BatchShow as BimbsecBatchShow;
 use App\Livewire\Bimbsec\Index as BimbsecIndex;
@@ -45,6 +46,7 @@ Route::middleware(['auth', 'active'])->group(function () {
 
     Route::middleware('admin')->group(function () {
         Route::get('/ai-usage', AiUsageIndex::class)->name('ai-usage.index');
+        Route::get('/storage-usage', StorageUsageIndex::class)->name('storage-usage.index');
         Route::get('/users', UsersIndex::class)->name('users.index');
         Route::get('/users/{user}', UsersShow::class)->name('users.show');
     });

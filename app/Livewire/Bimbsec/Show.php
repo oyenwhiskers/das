@@ -123,20 +123,26 @@ class Show extends Component
 
     public bool $kin_linked = false;
 
+    public bool $fromProfile = false;
+
     /** @var array<string, string> */
     public array $overflow_values = [];
 
     public function mount(Customer $customer, BimbsecApplication $application): void
     {
         abort_unless($application->customer_id === $customer->id, 404);
+        $fromProfile = request('from') === 'profile';
         $current = $customer->currentBimbsecApplication();
         $this->customer = $customer;
         $this->application = $current ?? $application;
         if ($current !== null && $current->id !== $application->id) {
-            $this->redirect(route('bimbsec.show', [$customer, $current]));
+            $this->redirect(route('bimbsec.show', $fromProfile
+                ? [$customer, $current, 'from' => 'profile']
+                : [$customer, $current]));
 
             return;
         }
+        $this->fromProfile = $fromProfile;
         $this->authorize('view', $application);
         $choices = $application->choices ?? [];
         $this->account_type = $choices['account_type'] ?? 'trading';

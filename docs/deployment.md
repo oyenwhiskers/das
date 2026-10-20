@@ -39,6 +39,8 @@ That path holds uploaded scans and generated PDFs. Do **not** mount `/app/storag
 
 After a successful upload, document scans appear under `/app/storage/app/private/document-scans/` and attachment scans under `/app/storage/app/private/attachment-scans/` (plus `livewire-tmp/` while a bulk drop is in progress).
 
+Admin **Storage Usage** reads free/total space from the filesystem that backs that mount (`disk_free_space` on `/app/storage/app`) and app file size from `/app/storage/app/private`. Without the volume, the page still loads but capacity follows the container overlay and uploads are lost on redeploy.
+
 ## Environment
 
 Set these in Dokploy. Keep every existing `APP_*`, `DB_*`, `SESSION_*`, `QUEUE_*`, `CACHE_*`, `FILESYSTEM_*`, `ADMIN_*`, `GEMINI_*`, `AI_SCAN_*`, `MAIL_*`, `REDIS_*`, `AWS_*`, and `VITE_*` value already configured there.

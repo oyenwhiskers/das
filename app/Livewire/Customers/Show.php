@@ -267,7 +267,7 @@ class Show extends Component
         if ($application->document === null) {
             $generator->generate($application, auth()->user());
         }
-        $this->redirect(route('bimbsec.show', [$this->customer, $application]));
+        $this->redirect(route('bimbsec.show', [$this->customer, $application, 'from' => 'profile']));
     }
 
     public function delete(): void
