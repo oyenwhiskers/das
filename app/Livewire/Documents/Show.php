@@ -1534,6 +1534,12 @@ class Show extends Component
             ],
         );
         if ($kind === 'self_employed') {
+            $derived['employments[].occupation'] = BankStatementProfileRules::SELF_EMPLOYED_OCCUPATION;
+            $filled = array_values(array_filter(
+                $filled,
+                fn (array $row): bool => $row['field_id'] !== 'employments[].occupation',
+            ));
+            unset($byId['employments[].occupation']);
             $map = [
                 'address_line_1' => 'line_1',
                 'address_line_2' => 'line_2',
@@ -1562,6 +1568,13 @@ class Show extends Component
             }
         }
         if (BankStatementProfileRules::relatedLooksSelfEmployed($relatedOccupation, $relatedEmployerName)) {
+            $occPath = 'relationships[].related_person.occupation';
+            $derived[$occPath] = BankStatementProfileRules::SELF_EMPLOYED_OCCUPATION;
+            $filled = array_values(array_filter(
+                $filled,
+                fn (array $row): bool => $row['field_id'] !== $occPath,
+            ));
+            unset($byId[$occPath]);
             foreach ([
                 'employer_address_line_1' => 'line_1',
                 'employer_address_line_2' => 'line_2',

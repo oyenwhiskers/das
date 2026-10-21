@@ -285,6 +285,7 @@ class CustomerProfileWrites
             $validated['occupation'] ?? null,
             $validated['employerName'] ?? null,
         )) {
+            $validated['occupation'] = BankStatementProfileRules::SELF_EMPLOYED_OCCUPATION;
             $validated = BankStatementProfileRules::copyAddressIntoRelatedEmployerBlanks(
                 $validated,
                 BankStatementProfileRules::preferredSelfEmployedAddressFromCustomer($customer),
@@ -407,6 +408,7 @@ class CustomerProfileWrites
         if (! BankStatementProfileRules::customerIsSelfEmployed($customer, $arrangement)) {
             return $fields;
         }
+        $fields['occupation'] = BankStatementProfileRules::SELF_EMPLOYED_OCCUPATION;
         $fields = BankStatementProfileRules::copyAddressIntoEmploymentBlanks(
             $fields,
             BankStatementProfileRules::preferredSelfEmployedAddressFromCustomer($customer),

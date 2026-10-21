@@ -857,6 +857,7 @@ class ProfileMergeTest extends TestCase
         ], []);
         $employmentOp = collect($preview['operations'])->firstWhere('type', 'employments');
         $this->assertNotNull($employmentOp);
+        $this->assertSame('ENTREPRENEUR', $employmentOp['payload']['occupation']);
         $this->assertSame('Lot 9 Pasar', $employmentOp['payload']['address_line_1']);
         $this->assertSame('Tanah Merah', $employmentOp['payload']['city']);
         $this->assertSame('17500', $employmentOp['payload']['postcode']);
@@ -948,6 +949,7 @@ class ProfileMergeTest extends TestCase
         ], []);
         $employmentOp = collect($preview['operations'])->firstWhere('type', 'employments');
         $this->assertNotNull($employmentOp);
+        $this->assertSame('ENTREPRENEUR', $employmentOp['payload']['occupation']);
         $this->assertSame('SUHAIZA CONSTRUCTION', $employmentOp['payload']['address_line_1']);
         $this->assertSame('JALAN PASAR MACHANG', $employmentOp['payload']['address_line_2']);
         $this->assertSame('KELANTAN', $employmentOp['payload']['state']);
@@ -967,6 +969,7 @@ class ProfileMergeTest extends TestCase
             [],
         );
         $employment->refresh();
+        $this->assertSame('ENTREPRENEUR', $employment->occupation);
         $this->assertSame('Machang', $employment->city);
         $this->assertSame('18500', $employment->postcode);
         $this->assertSame('Malaysia', $employment->country);
@@ -1009,6 +1012,7 @@ class ProfileMergeTest extends TestCase
         ], []);
         $relationshipOp = collect($preview['operations'])->firstWhere('type', 'relationships');
         $this->assertNotNull($relationshipOp);
+        $this->assertSame('ENTREPRENEUR', $relationshipOp['payload']['occupation']);
         $this->assertSame('88 Jalan Pos', $relationshipOp['payload']['employerAddressLine1']);
         $this->assertSame('PJ', $relationshipOp['payload']['employerCity']);
         $this->assertSame('46000', $relationshipOp['payload']['employerPostcode']);
@@ -1024,6 +1028,7 @@ class ProfileMergeTest extends TestCase
             [],
         );
         $person = $customer->fresh()->relationships()->firstOrFail()->relatedPerson;
+        $this->assertSame('ENTREPRENEUR', $person->occupation);
         $this->assertSame('88 Jalan Pos', $person->employer_address_line_1);
         $this->assertSame('PJ', $person->employer_city);
     }

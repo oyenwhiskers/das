@@ -579,7 +579,7 @@
                             <fieldset>
                                 <legend class="text-sm text-slate-600">Sections to match</legend>
                                 <p class="mt-1 text-xs text-slate-500">Unchecked sections are left unchanged on every selected customer.</p>
-                                <ul class="mt-2 space-y-2">
+                                <ul class="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
                                     @foreach ($matchSections as $index => $section)
                                         <li>
                                             <label class="flex items-center gap-2 text-sm text-slate-700">
@@ -638,7 +638,7 @@
                             <fieldset>
                                 <legend class="text-sm text-slate-600">Sections to match</legend>
                                 <p class="mt-1 text-xs text-slate-500">Unchecked sections are left unchanged on the customer.</p>
-                                <ul class="mt-2 space-y-2">
+                                <ul class="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
                                     @foreach ($matchSections as $index => $section)
                                         <li>
                                             <label class="flex items-center gap-2 text-sm text-slate-700">

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\AttachmentScanStatus;
 use App\Enums\AttachmentType;
 use App\Enums\CustomerStatus;
+use App\Enums\IdentificationType;
 use App\Models\AttachmentScan;
 use App\Models\Customer;
 use App\Models\CustomerIdentification;
@@ -31,7 +32,7 @@ class AttachmentFiling
                 'status' => AttachmentScanStatus::Failed,
                 'attachment_type' => $type,
                 'extracted_name' => $this->nullableString($payload['full_legal_name'] ?? null),
-                'extracted_identification_number' => $this->nullableString($payload['identification_number'] ?? null),
+                'extracted_identification_number' => $this->dashedNric($this->nullableString($payload['identification_number'] ?? null)),
                 'processing_error' => $type === null
                     ? 'Could not classify the attachment type.'
                     : ($this->nullableString($payload['limitations'] ?? null) ?? 'The attachment could not be read.'),
@@ -42,7 +43,7 @@ class AttachmentFiling
         }
 
         $name = $this->nullableString($payload['full_legal_name'] ?? null);
-        $number = $this->nullableString($payload['identification_number'] ?? null);
+        $number = $this->dashedNric($this->nullableString($payload['identification_number'] ?? null));
         $normalized = CustomerIdentification::normalizeNumber($number);
 
         $scan->fill([
@@ -249,5 +250,18 @@ class AttachmentFiling
         $trimmed = trim($value);
 
         return $trimmed === '' ? null : $trimmed;
+    }
+
+    private function dashedNric(?string $number): ?string
+    {
+        if ($number === null) {
+            return null;
+        }
+        $normalized = CustomerIdentification::normalizeNumber($number);
+        if ($normalized !== null && preg_match('/^\d{12}$/', $normalized) === 1) {
+            return CustomerIdentification::formatNumber($number, IdentificationType::Nric);
+        }
+
+        return $number;
     }
 }

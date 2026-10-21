@@ -161,6 +161,7 @@ class AttachmentFilingTest extends TestCase
         $scan->refresh();
         $this->assertSame(AttachmentScanStatus::NeedsReview, $scan->status);
         $this->assertSame(AttachmentType::Signature, $scan->attachment_type);
+        $this->assertSame('010101-01-1111', $scan->extracted_identification_number);
         $this->assertNull($scan->customer_id);
 
         Livewire::actingAs($staff)

@@ -72,6 +72,16 @@ class BankStatementProfileRulesTest extends TestCase
     }
 
     #[Test]
+    public function related_looks_self_employed_includes_business_and_self_working(): void
+    {
+        $this->assertTrue(BankStatementProfileRules::relatedLooksSelfEmployed('Business'));
+        $this->assertTrue(BankStatementProfileRules::relatedLooksSelfEmployed('self working'));
+        $this->assertTrue(BankStatementProfileRules::relatedLooksSelfEmployed('Self-Employed'));
+        $this->assertFalse(BankStatementProfileRules::relatedLooksSelfEmployed('Teacher'));
+        $this->assertSame('ENTREPRENEUR', BankStatementProfileRules::SELF_EMPLOYED_OCCUPATION);
+    }
+
+    #[Test]
     public function preferred_self_employed_address_uses_mailing_then_residential(): void
     {
         $mailing = [

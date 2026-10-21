@@ -100,9 +100,11 @@ class EmploymentInformationTest extends TestCase
             ->call('editStatus')->set('employmentStatus', 'self_employed')->call('saveStatus')->assertHasNoErrors()
             ->call('add')->set('form.arrangement', 'self_employed')->set('form.occupation', 'Consultant')
             ->set('form.registration_number', '202601234567')->set('form.city', 'Kuala Lumpur')
-            ->call('save')->assertHasNoErrors()->assertSee('Consultant');
+            ->call('save')->assertHasNoErrors()->assertSee('ENTREPRENEUR');
 
-        $this->assertNull($customer->employments()->firstOrFail()->employer_name);
+        $job = $customer->employments()->firstOrFail();
+        $this->assertSame('ENTREPRENEUR', $job->occupation);
+        $this->assertNull($job->employer_name);
         $this->actingAs($staff)->get(route('customers.show', $customer).'?tab=work')
             ->assertOk()->assertSee('Work Information')->assertSee('Employment Status')->assertSee('Employment History');
     }
@@ -138,6 +140,7 @@ class EmploymentInformationTest extends TestCase
         Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer->fresh()])
             ->call('add')
             ->assertSet('form.arrangement', 'self_employed')
+            ->assertSet('form.occupation', 'ENTREPRENEUR')
             ->assertSet('form.address_line_1', 'Lot 9 Pasar')
             ->assertSet('form.city', 'Tanah Merah')
             ->assertSet('form.postcode', '17500')
@@ -152,6 +155,7 @@ class EmploymentInformationTest extends TestCase
             ->call('save')->assertHasNoErrors();
 
         $job = $customer->employments()->firstOrFail();
+        $this->assertSame('ENTREPRENEUR', $job->occupation);
         $this->assertSame('SUHAIZA CONSTRUCTION', $job->address_line_1);
         $this->assertSame('JALAN PASAR MACHANG', $job->address_line_2);
         $this->assertSame('Tanah Merah', $job->city);

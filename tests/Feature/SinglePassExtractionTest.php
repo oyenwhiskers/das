@@ -739,7 +739,7 @@ class SinglePassExtractionTest extends TestCase
         $fields = $pass->fieldList($snapshot);
         $prompt = $pass->prompt($snapshot, 1, 2);
 
-        $this->assertSame('20', SinglePassExtraction::PROMPT_VERSION);
+        $this->assertSame('21', SinglePassExtraction::PROMPT_VERSION);
         $this->assertStringContainsString('bank_accounts[].branch_address', $fields);
         $this->assertStringContainsString('When a Bank Reference or bank block prints Bank, Branch, Account type, and Account number', $prompt);
         $this->assertStringContainsString('Do not stop after bank name and account number if branch is printed', $prompt);
@@ -749,8 +749,10 @@ class SinglePassExtractionTest extends TestCase
         $this->assertStringContainsString('Put the account-holder or correspondence address into addresses[mailing]', $prompt);
         $this->assertStringContainsString('never put that address on addresses[residential]', $prompt);
         $this->assertStringContainsString('also emit that same correspondence (mailing) address on blank employments[]', $prompt);
+        $this->assertStringContainsString('emit employments[].occupation as ENTREPRENEUR in capital letters', $prompt);
         $this->assertStringContainsString('emit the mailing address into those blank employments[] address fields; if mailing is blank, emit the residential address instead', $prompt);
         $this->assertStringContainsString('When the spouse or next of kin looks self-employed', $prompt);
+        $this->assertStringContainsString('emit relationships[].related_person.occupation as ENTREPRENEUR in capital letters', $prompt);
         $this->assertStringContainsString('emit the applicant\'s mailing address into relationships[].related_person.employer_address_line_1', $prompt);
         $this->assertStringContainsString('Do not emit transaction table rows as profile fields', $prompt);
         $this->assertStringContainsString('Use a short record_ref such as applicant_3 or p12_a, never a full legal name', $prompt);
@@ -1038,6 +1040,64 @@ class SinglePassExtractionTest extends TestCase
         app(SinglePassExtraction::class)->run($scan, app(GeminiDocumentReader::class));
 
         $this->assertSame(2, $scan->extractedProfiles()->count());
+    }
+
+    public function test_undashed_nric_is_stored_with_dashes(): void
+    {
+        $scan = $this->scan();
+        $this->fake($this->payload([[
+            'record_ref' => 'r1', 'source_pages' => [1], 'warnings' => [],
+            'values' => [
+                $this->value('customer.full_legal_name', 'provided', 'Amina Noor', 'Amina Noor'),
+                $this->value('primary_identification.number', 'provided', '900101145678', '900101145678'),
+                $this->value('relationships[].related_person.identification_number', 'provided', '810506036065', '810506036065', '1', 'kin-1', 'related person'),
+            ],
+        ]]));
+
+        app(SinglePassExtraction::class)->run($scan, app(GeminiDocumentReader::class));
+
+        $values = collect($scan->extractedProfiles()->sole()->original_projection['values'])->pluck('value', 'field_id');
+        $this->assertSame('900101-14-5678', $values['primary_identification.number']);
+        $this->assertSame('810506-03-6065', $values['relationships[].related_person.identification_number']);
+    }
+
+    public function test_same_nric_with_and_without_dashes_folds_into_one_applicant(): void
+    {
+        $scan = $this->scan();
+        config()->set('document_scanner.pages_per_batch', 2);
+        app()->instance(PdfPageBatches::class, new class extends PdfPageBatches
+        {
+            public function make($scan, int $size): array
+            {
+                return ['count' => 4, 'batches' => [1 => '%PDF-1', 3 => '%PDF-3']];
+            }
+        });
+        Http::preventStrayRequests();
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::sequence()
+            ->push(['status' => 'completed', 'output_text' => json_encode($this->payload([[
+                'record_ref' => 'r1', 'source_pages' => [1], 'warnings' => [],
+                'values' => [
+                    $this->value('customer.full_legal_name', 'provided', 'AMINA NOOR', 'AMINA NOOR'),
+                    $this->value('primary_identification.number', 'provided', '900101-14-5678', '900101-14-5678'),
+                ],
+            ]]))])
+            ->push(['status' => 'completed', 'output_text' => json_encode($this->payload([[
+                'record_ref' => 'r2', 'source_pages' => [3], 'warnings' => [],
+                'values' => [
+                    $this->value('customer.full_legal_name', 'provided', 'SITI AMINA', 'SITI AMINA', null, 'person-1', 'Applicant', 3),
+                    $this->value('primary_identification.number', 'provided', '900101145678', '900101145678', null, 'person-1', 'Applicant', 3),
+                    $this->value('employments[].employer_name', 'provided', 'ACME', 'ACME', '1', 'person-1', 'Applicant', 3),
+                ],
+            ]]))]),
+        ]);
+
+        app(SinglePassExtraction::class)->run($scan, app(GeminiDocumentReader::class));
+
+        $profile = $scan->extractedProfiles()->sole();
+        $values = collect($profile->original_projection['values']);
+        $this->assertSame([1, 3], $profile->source_pages);
+        $this->assertSame(['900101-14-5678'], $values->where('field_id', 'primary_identification.number')->pluck('value')->all());
+        $this->assertTrue($values->pluck('value')->contains('ACME'));
     }
 
     public function test_a_named_slice_after_a_nameless_slice_stays_separate(): void

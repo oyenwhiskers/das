@@ -221,6 +221,7 @@ class ProfileMergePreview
                     $payload['arrangement'] = $kind;
                 }
                 if ($kind === 'self_employed') {
+                    $payload['occupation'] = BankStatementProfileRules::SELF_EMPLOYED_OCCUPATION;
                     $payload = BankStatementProfileRules::copyAddressIntoEmploymentBlanks($payload, $selfEmployedAddress);
                     $mobile = $this->proposedModuleValue($included, $proposed, 'contacts[mobile].value')
                         ?? $customer->contacts->firstWhere('type', ContactType::Mobile)?->value
@@ -236,6 +237,7 @@ class ProfileMergePreview
                     is_string($payload['occupation'] ?? null) ? $payload['occupation'] : null,
                     is_string($payload['employerName'] ?? null) ? $payload['employerName'] : null,
                 )) {
+                $payload['occupation'] = BankStatementProfileRules::SELF_EMPLOYED_OCCUPATION;
                 $payload = BankStatementProfileRules::copyAddressIntoRelatedEmployerBlanks($payload, $selfEmployedAddress);
             }
             $operations[] = ['type' => $module, 'id' => $id, 'payload' => $payload, 'changes' => $changes];

@@ -7,6 +7,8 @@ use App\Models\DocumentScan;
 
 class BankStatementProfileRules
 {
+    public const SELF_EMPLOYED_OCCUPATION = 'ENTREPRENEUR';
+
     public static function isStatementScan(?DocumentScan $scan): bool
     {
         if ($scan === null) {
@@ -230,7 +232,7 @@ class BankStatementProfileRules
         if ($blob === '') {
             return false;
         }
-        if (preg_match('/\b(self[-\s]?employed?|own business|business owner|sole prop(?:rietor)?|freelancer|berniaga|kerja sendiri)\b/u', $blob) === 1) {
+        if (preg_match('/\b(self[-\s]?employed?|self[-\s]?working|own business|business owner|sole prop(?:rietor)?|freelancer|entrepreneur|enterpreneur|berniaga|kerja sendiri)\b/u', $blob) === 1) {
             return true;
         }
 
