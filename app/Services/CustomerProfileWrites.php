@@ -229,14 +229,17 @@ class CustomerProfileWrites
         $input['isActive'] = (bool) ($input['isActive'] ?? false)
             || (bool) ($input['isPrimaryNextOfKin'] ?? false)
             || (bool) ($input['isNextOfKin'] ?? false);
+        if (array_key_exists('identificationType', $input) && blank($input['identificationType'])) {
+            $input['identificationType'] = null;
+        }
         $validated = Validator::make($input, [
             'source' => ['required', Rule::in(['new', 'customer'])],
             'linkedCustomerId' => ['exclude_if:source,new', Rule::requiredIf($source === 'customer'), 'nullable', 'integer', 'exists:customers,id'],
             'fullLegalName' => ['exclude_if:source,customer', Rule::requiredIf($source === 'new'), 'nullable', 'string', 'max:255'],
             'relationship' => ['required', Rule::in(CustomerProfileSchema::options('relationship'))],
             'otherRelationship' => ['required_if:relationship,other', 'nullable', 'string', 'max:100'],
-            'identificationType' => ['exclude_if:source,customer', 'nullable', Rule::requiredIf($source === 'new' && $record === null && filled($input['identificationNumber'] ?? null)), Rule::enum(IdentificationType::class)],
-            'identificationNumber' => ['exclude_if:source,customer', 'nullable', Rule::requiredIf($source === 'new' && $record === null && filled($input['identificationType'] ?? null)), 'string', 'max:100'],
+            'identificationType' => ['exclude_if:source,customer', 'nullable', Rule::enum(IdentificationType::class)],
+            'identificationNumber' => ['exclude_if:source,customer', 'nullable', 'string', 'max:100'],
             'dateOfBirth' => ['exclude_if:source,customer', 'nullable', 'date', 'before_or_equal:today'],
             'gender' => ['exclude_if:source,customer', 'nullable', 'string', 'max:50'],
             'nationality' => ['exclude_if:source,customer', 'nullable', 'string', 'max:100'],
@@ -268,6 +271,9 @@ class CustomerProfileWrites
                 $errors['fullLegalName'] = 'Full legal name is required.';
             }
         }
+        if ($source === 'new' && $record === null && filled($validated['identificationType'] ?? null) && blank($validated['identificationNumber'] ?? null)) {
+            $errors['identificationNumber'] = $this->relatedPersonIdentityIssue($customer, $validated, 'has an identification type but no identification number. Add the number or clear the type.');
+        }
         if ($validated['isActive'] && blank($contact)) {
             $errors[$source === 'customer' ? 'linkedCustomerId' : 'mobile'] = 'Active for BIMBSEC requires a usable contact number.';
         }
@@ -292,10 +298,10 @@ class CustomerProfileWrites
                 ],
             );
         }
-        if ($source === 'new' && filled($validated['identificationNumber'])) {
+        if ($source === 'new' && filled($validated['identificationNumber'] ?? null)) {
             $normalized = CustomerIdentification::normalizeNumber($validated['identificationNumber']);
-            if ($validated['identificationType'] === IdentificationType::Nric->value && ! preg_match('/^\d{12}$/', $normalized ?? '')) {
-                $errors['identificationNumber'] = 'NRIC must be 12 digits (with or without dashes).';
+            if (($validated['identificationType'] ?? null) === IdentificationType::Nric->value && ! preg_match('/^\d{12}$/', $normalized ?? '')) {
+                $errors['identificationNumber'] = $this->relatedPersonIdentityIssue($customer, $validated, 'NRIC must be 12 digits (with or without dashes).');
             }
         }
         if ($errors !== []) {
@@ -1140,5 +1146,27 @@ class CustomerProfileWrites
     private function fail(string $key, string $message): never
     {
         throw ValidationException::withMessages([$key => $message]);
+    }
+
+    /** @param  array<string, mixed>  $person */
+    private function relatedPersonIdentityIssue(Customer $customer, array $person, string $issue): string
+    {
+        $applicant = trim((string) $customer->full_legal_name);
+        $applicantLabel = $applicant !== ''
+            ? $applicant.(filled($customer->reference) ? ' ('.$customer->reference.')' : '')
+            : (filled($customer->reference) ? (string) $customer->reference : 'this applicant');
+        $name = trim((string) ($person['fullLegalName'] ?? ''));
+        $relationship = trim((string) ($person['relationship'] ?? ''));
+        $other = trim((string) ($person['otherRelationship'] ?? ''));
+        $who = $name !== '' ? $name : 'this related person';
+        $role = match (true) {
+            $relationship === 'spouse' => ' (spouse)',
+            $relationship === 'other' && $other !== '' => ' ('.$other.')',
+            $relationship === 'other' => ' (next of kin)',
+            $relationship !== '' => ' ('.$relationship.')',
+            default => '',
+        };
+
+        return 'Family and next of kin for '.$applicantLabel.': '.$who.$role.' '.$issue;
     }
 }

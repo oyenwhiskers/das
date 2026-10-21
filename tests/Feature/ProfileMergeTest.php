@@ -348,6 +348,38 @@ class ProfileMergeTest extends TestCase
         $this->assertSame('IBRAHIM BIN ALI', $relationship->relatedPerson?->full_legal_name);
     }
 
+    public function test_match_keeps_related_person_number_when_identification_type_is_missing(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->create([
+            'full_legal_name' => 'Mohd Khairee Bin Hassan',
+            'race' => 'Malay',
+            'country_of_residence' => 'Malaysia',
+            'marital_status' => 'Married',
+        ]);
+        [$scan, $profile] = $this->reviewed('Mohd Khairee Bin Hassan', [
+            $this->value('relationships[].relationship', 'spouse', '1'),
+            $this->value('relationships[].related_person.full_legal_name', 'Maya Sari Bt Kliwon', '1'),
+            $this->value('relationships[].related_person.identification_number', 'e7428296', '1'),
+            $this->value('relationships[].related_person.mobile', '0122841981', '1'),
+        ]);
+
+        Livewire::actingAs($staff)->test(Show::class, ['documentScan' => $scan])
+            ->call('openMatch', $profile->id)
+            ->call('selectMatchCustomer', $customer->id)
+            ->set('matchStrategy', 'fill_empty')
+            ->call('confirmMatch')
+            ->assertHasNoErrors()
+            ->assertDispatched('matched');
+
+        $person = $customer->fresh()->relationships()->first()?->relatedPerson;
+        $this->assertNotNull($person);
+        $this->assertSame('MAYA SARI BT KLIWON', $person->full_legal_name);
+        $this->assertNull($person->identification_type);
+        $this->assertSame('E7428296', $person->identification_number);
+        $this->assertNotNull($person->mobile);
+    }
+
     public function test_unchecked_match_sections_are_left_unchanged(): void
     {
         $staff = User::factory()->staff()->create();
