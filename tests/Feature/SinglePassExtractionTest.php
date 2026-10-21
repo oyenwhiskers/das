@@ -630,6 +630,33 @@ class SinglePassExtractionTest extends TestCase
             ->assertDontSee('MARRIED');
     }
 
+    public function test_married_female_with_stale_cik_from_ic_shows_puan(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $scan = $this->scan($staff);
+        $this->fake($this->payload([[
+            'record_ref' => 'applicant_01',
+            'source_pages' => [1],
+            'values' => [
+                ['field_id' => 'customer.full_legal_name', 'value' => 'Siti Aminah Binti Ali'],
+                ['field_id' => 'customer.salutation', 'value' => 'CIK'],
+                ['field_id' => 'customer.marital_status', 'value' => 'Married'],
+                ['field_id' => 'primary_identification.number', 'value' => '990301-06-5314'],
+                ['field_id' => 'primary_identification.type', 'value' => 'nric'],
+                ['field_id' => 'relationships[].relationship', 'value' => 'spouse'],
+                ['field_id' => 'relationships[].related_person.full_legal_name', 'value' => 'Ahmad Bin Ali'],
+                ['field_id' => 'relationships[].related_person.identification_number', 'value' => '970905-10-6721'],
+            ],
+        ]]));
+
+        app(SinglePassExtraction::class)->run($scan, app(GeminiDocumentReader::class));
+
+        $this->actingAs($staff)->get(route('documents.show', $scan))
+            ->assertOk()
+            ->assertSeeInOrder(['Salutation', 'PUAN', 'Marital Status', 'MARRIED'])
+            ->assertDontSee('>CIK<', false);
+    }
+
     public function test_a_female_applicant_and_female_relative_are_next_of_kin_instead_of_spouse(): void
     {
         $staff = User::factory()->staff()->create();

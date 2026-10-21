@@ -299,7 +299,7 @@ class Resolver
             'employment.status' => $this->employmentStatus($customer, $item),
             'employment.occupation_designation' => $this->text($context['employment']?->occupation, 'Occupation'),
             'employment.employer_name' => $this->text($context['employment']?->employer_name, 'Employer'),
-            'employment.employer_general_phone' => $this->text($context['employment']?->general_telephone, 'Employer telephone'),
+            'employment.employer_general_phone' => $this->employerGeneralPhone($customer, $context['employment']),
             'employment.business_registration_no' => $this->text($context['employment']?->registration_number, 'Business registration'),
             'employment.industry' => $this->text($context['employment']?->industry, 'Industry'),
             'employment.sub_industry' => $this->text($context['employment']?->sub_industry, 'Sub-industry'),
@@ -670,6 +670,18 @@ class Resolver
         }
 
         return blank($employment->{$item} ?? null);
+    }
+
+    /** Self-employed and employer general phone blank: use applicant mobile. */
+    private function employerGeneralPhone(Customer $customer, ?CustomerEmployment $employment): ?string
+    {
+        $phone = $employment?->general_telephone;
+        if (blank($phone) && BankStatementProfileRules::customerIsSelfEmployed($customer, $employment?->arrangement)) {
+            $phone = $customer->contacts->first(fn ($contact): bool => $contact->type === ContactType::Mobile)?->value
+                ?? $customer->primary_mobile;
+        }
+
+        return $this->text($phone, 'Employer telephone');
     }
 
     private function employmentAddress(Customer $customer, ?CustomerEmployment $employment, string $item): ?string

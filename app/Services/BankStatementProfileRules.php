@@ -151,6 +151,17 @@ class BankStatementProfileRules
         return self::copyAddressIntoEmploymentBlanks($employment, $mailing);
     }
 
+    /** Self-employed: blank employer general phone ← applicant mobile. */
+    public static function copyMobileIntoEmploymentPhoneIfBlank(array $employment, ?string $mobile): array
+    {
+        if (filled($employment['general_telephone'] ?? null) || blank($mobile)) {
+            return $employment;
+        }
+        $employment['general_telephone'] = trim((string) $mobile);
+
+        return $employment;
+    }
+
     public static function relatedLooksSelfEmployed(?string $occupation, ?string $employerName = null): bool
     {
         $occupation = strtolower(trim((string) $occupation));

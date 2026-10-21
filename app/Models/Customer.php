@@ -28,7 +28,8 @@ class Customer extends Model
                 return;
             }
 
-            $driverChanged = ($customer->isDirty('gender') || $customer->isDirty('marital_status')) && ! $customer->isDirty('salutation');
+            // Driver wins over a stale automatic title in the same write (e.g. merge CIK + Married).
+            $driverChanged = $customer->isDirty('gender') || $customer->isDirty('marital_status');
             $automatic = in_array(strtolower((string) $customer->salutation), array_map(strtolower(...), self::AUTOMATIC_SALUTATIONS), true);
             if (blank($customer->salutation) || ($driverChanged && $automatic)) {
                 $customer->salutation = $defaultSalutation;

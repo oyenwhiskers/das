@@ -931,8 +931,10 @@ class ProfileMergeTest extends TestCase
             'postcode' => null,
             'country' => null,
         ]);
+        $customer->update(['primary_mobile' => '0128834419']);
         [, $profile] = $this->reviewed($customer->full_legal_name, [
             $this->value('customer.employment_status', 'self_employed'),
+            $this->value('contacts[mobile].value', '0128834419'),
             $this->value('addresses[residential].line_1', 'LOT 244'),
             $this->value('addresses[residential].city', 'Machang'),
             $this->value('addresses[residential].state', 'Kelantan'),
@@ -956,6 +958,7 @@ class ProfileMergeTest extends TestCase
         $this->assertSame('Machang', $employmentOp['payload']['city']);
         $this->assertSame('18500', $employmentOp['payload']['postcode']);
         $this->assertSame('Malaysia', $employmentOp['payload']['country']);
+        $this->assertSame('0128834419', $employmentOp['payload']['general_telephone']);
 
         app(MergeExtractedProfile::class)->commit(
             $profile->fresh(),
@@ -971,6 +974,7 @@ class ProfileMergeTest extends TestCase
         $this->assertSame('Machang', $employment->city);
         $this->assertSame('18500', $employment->postcode);
         $this->assertSame('Malaysia', $employment->country);
+        $this->assertSame('0128834419', $employment->general_telephone);
     }
 
     public function test_merge_fills_self_employed_next_of_kin_employer_address_from_residential(): void

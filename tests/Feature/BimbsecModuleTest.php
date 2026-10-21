@@ -400,6 +400,10 @@ class BimbsecModuleTest extends TestCase
                 && ($draw['field']['printed_item'] ?? '') === 'address_lines',
         );
         $this->assertSame($long, $officeLines['text'] ?? null);
+        $employerPhone = $draws->first(
+            fn (array $draw): bool => ($draw['field']['source']['reference_key'] ?? '') === 'employment.employer_general_phone',
+        );
+        $this->assertSame('0123456789', $employerPhone['text'] ?? null);
 
         $messages = collect(app(Generator::class)->assess($customer->fresh(), [])['warnings'])
             ->where('level', 'blocking')

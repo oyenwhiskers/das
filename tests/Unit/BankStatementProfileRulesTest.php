@@ -55,4 +55,19 @@ class BankStatementProfileRulesTest extends TestCase
             BankStatementProfileRules::resolveApplicantEmploymentKind(null, 'self_employed', 'Maybank'),
         );
     }
+
+    #[Test]
+    public function copy_mobile_into_blank_employer_phone_only(): void
+    {
+        $this->assertSame(
+            ['general_telephone' => '0123456789'],
+            BankStatementProfileRules::copyMobileIntoEmploymentPhoneIfBlank([], '0123456789'),
+        );
+        $this->assertSame(
+            ['general_telephone' => '03-111'],
+            BankStatementProfileRules::copyMobileIntoEmploymentPhoneIfBlank(['general_telephone' => '03-111'], '0123456789'),
+        );
+        $this->assertSame([], BankStatementProfileRules::copyMobileIntoEmploymentPhoneIfBlank([], null));
+        $this->assertSame([], BankStatementProfileRules::copyMobileIntoEmploymentPhoneIfBlank([], ''));
+    }
 }

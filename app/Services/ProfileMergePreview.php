@@ -224,6 +224,13 @@ class ProfileMergePreview
                     if ($statement) {
                         $payload = BankStatementProfileRules::copyAddressIntoEmploymentBlanks($payload, $mailingParts);
                     }
+                    $mobile = $this->proposedModuleValue($included, $proposed, 'contacts[mobile].value')
+                        ?? $customer->contacts->firstWhere('type', ContactType::Mobile)?->value
+                        ?? $customer->primary_mobile;
+                    $payload = BankStatementProfileRules::copyMobileIntoEmploymentPhoneIfBlank(
+                        $payload,
+                        is_string($mobile) ? $mobile : null,
+                    );
                 }
             }
             if ($module === 'relationships'

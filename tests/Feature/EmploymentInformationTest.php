@@ -110,7 +110,10 @@ class EmploymentInformationTest extends TestCase
     public function test_self_employed_blank_office_fields_are_filled_from_residential(): void
     {
         $staff = User::factory()->staff()->create();
-        $customer = Customer::factory()->for($staff, 'creator')->create(['employment_status' => 'self_employed']);
+        $customer = Customer::factory()->for($staff, 'creator')->create([
+            'employment_status' => 'self_employed',
+            'primary_mobile' => '0128834419',
+        ]);
         CustomerAddress::query()->create([
             'customer_id' => $customer->id,
             'type' => AddressType::Residential,
@@ -128,12 +131,14 @@ class EmploymentInformationTest extends TestCase
             ->assertSet('form.address_line_1', 'LOT 244')
             ->assertSet('form.city', 'Machang')
             ->assertSet('form.postcode', '18500')
+            ->assertSet('form.general_telephone', '0128834419')
             ->set('form.occupation', 'BUSINESS')
             ->set('form.address_line_1', 'SUHAIZA CONSTRUCTION')
             ->set('form.address_line_2', 'JALAN PASAR MACHANG')
             ->set('form.city', '')
             ->set('form.postcode', '')
             ->set('form.country', '')
+            ->set('form.general_telephone', '')
             ->call('save')->assertHasNoErrors();
 
         $job = $customer->employments()->firstOrFail();
@@ -143,6 +148,7 @@ class EmploymentInformationTest extends TestCase
         $this->assertSame('Kelantan', $job->state);
         $this->assertSame('18500', $job->postcode);
         $this->assertSame('Malaysia', $job->country);
+        $this->assertSame('0128834419', $job->general_telephone);
     }
 
     public function test_other_status_requires_description_and_corrections_are_logged(): void

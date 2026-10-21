@@ -1069,7 +1069,7 @@ class Show extends Component
             $filled[$index]['field_id'] = $path;
             $filled[$index]['label'] = $this->staffLabel($path, (string) ($row['label'] ?? $path));
         }
-        $filled = $this->fillDefaults($this->fillFromIc($filled, $requested), $requested);
+        $filled = $this->syncAutomaticSalutation($this->fillDefaults($this->fillFromIc($filled, $requested), $requested));
         $identificationWarning = $this->identificationWarning($filled);
         $grouped = [];
         foreach ($filled as $row) {
@@ -1215,6 +1215,10 @@ class Show extends Component
         }
         foreach ($derived as $fieldId => $value) {
             if (isset($byId[$fieldId])) {
+                if ($fieldId === 'customer.salutation' && $this->isAutomaticSalutation((string) $filled[$byId[$fieldId]]['value'])) {
+                    $filled[$byId[$fieldId]]['value'] = $value;
+                    $filled[$byId[$fieldId]]['from_ic'] = true;
+                }
                 continue;
             }
             $filled[] = [
@@ -1228,6 +1232,46 @@ class Show extends Component
         $this->rejectUnmarriedSpouse($filled, $labels);
 
         return $filled;
+    }
+
+    /**
+     * @param  list<array{field_id: string, label: string, value: string, from_ic?: bool, note?: string}>  $filled
+     * @return list<array{field_id: string, label: string, value: string, from_ic?: bool, note?: string}>
+     */
+    private function syncAutomaticSalutation(array $filled): array
+    {
+        $gender = null;
+        $marital = null;
+        $salutationIndex = null;
+        foreach ($filled as $index => $row) {
+            if ($row['field_id'] === 'customer.gender') {
+                $gender = (string) $row['value'];
+            }
+            if ($row['field_id'] === 'customer.marital_status') {
+                $marital = (string) $row['value'];
+            }
+            if ($row['field_id'] === 'customer.salutation') {
+                $salutationIndex = $index;
+            }
+        }
+        $default = Customer::defaultSalutationForGender($gender, $marital);
+        if ($default === null) {
+            return $filled;
+        }
+        if ($salutationIndex === null) {
+            return $filled;
+        }
+        if ($this->isAutomaticSalutation((string) $filled[$salutationIndex]['value'])) {
+            $filled[$salutationIndex]['value'] = $default;
+        }
+
+        return $filled;
+    }
+
+    private function isAutomaticSalutation(string $salutation): bool
+    {
+        return blank($salutation)
+            || in_array(strtolower($salutation), array_map(strtolower(...), Customer::AUTOMATIC_SALUTATIONS), true);
     }
 
     /**
@@ -1491,6 +1535,13 @@ class Show extends Component
                     continue;
                 }
                 $derived['employments[].'.$employmentField] = $value;
+            }
+            if (! isset($byId['employments[].general_telephone'])
+                || trim((string) $byId['employments[].general_telephone']['value']) === '') {
+                $mobile = $byId['contacts[mobile].value']['value'] ?? ($derived['contacts[mobile].value'] ?? null);
+                if ($mobile !== null && $mobile !== '') {
+                    $derived['employments[].general_telephone'] = $mobile;
+                }
             }
         }
         if (BankStatementProfileRules::relatedLooksSelfEmployed($relatedOccupation, $relatedEmployerName)) {

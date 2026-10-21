@@ -416,18 +416,20 @@ class CustomerProfileWrites
             return $fields;
         }
         $home = $customer->residentialAddress;
-        if ($home === null) {
-            return $fields;
+        if ($home !== null) {
+            $fields = BankStatementProfileRules::copyAddressIntoEmploymentBlanks($fields, [
+                'line_1' => $home->line_1,
+                'line_2' => $home->line_2,
+                'city' => $home->city,
+                'state' => $home->state,
+                'postcode' => $home->postcode,
+                'country' => $home->country,
+            ]);
         }
+        $mobile = $customer->contacts->first(fn ($contact): bool => $contact->type === ContactType::Mobile)?->value
+            ?? $customer->primary_mobile;
 
-        return BankStatementProfileRules::copyAddressIntoEmploymentBlanks($fields, [
-            'line_1' => $home->line_1,
-            'line_2' => $home->line_2,
-            'city' => $home->city,
-            'state' => $home->state,
-            'postcode' => $home->postcode,
-            'country' => $home->country,
-        ]);
+        return BankStatementProfileRules::copyMobileIntoEmploymentPhoneIfBlank($fields, is_string($mobile) ? $mobile : null);
     }
 
     public function saveEmployment(Customer $customer, array $fields, User $actor, ?int $employmentId = null, bool $confirmPrimaryReplacement = false, bool $isCorrection = false): void
