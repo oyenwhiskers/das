@@ -845,9 +845,12 @@ class Resolver
     }
 
     /** @param  array<string, mixed>  $choices */
-    private function verification(array $choices, string $item): bool
+    private function verification(array $choices, string $item): ?bool
     {
-        $value = $choices['verification_mode'] ?? 'non_face';
+        $value = $choices['verification_mode'] ?? null;
+        if ($value === null) {
+            return null;
+        }
 
         return ($value === 'non_face' && $item === 'Non Face-To-Face') || ($value === 'face' && $item === 'Face to Face');
     }

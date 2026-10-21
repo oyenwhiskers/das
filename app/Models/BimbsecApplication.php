@@ -51,7 +51,7 @@ class BimbsecApplication extends Model
 
         return [
             'account_type' => in_array($account, ['trading', 'margin'], true) ? $account : 'trading',
-            'verification_mode' => in_array($verification, ['non_face', 'face'], true) ? $verification : 'non_face',
+            'verification_mode' => in_array($verification, ['non_face', 'face'], true) ? $verification : null,
             'dealings_capacity' => in_array($dealings, ['principal', 'on_behalf'], true) ? $dealings : 'principal',
             'margin_credit_limit' => filled($input['margin_credit_limit'] ?? null) ? mb_substr(trim((string) $input['margin_credit_limit']), 0, 40) : null,
             'lth_group_employee' => in_array($lth, ['yes', 'no'], true) ? $lth : null,

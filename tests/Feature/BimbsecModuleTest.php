@@ -140,7 +140,7 @@ class BimbsecModuleTest extends TestCase
         $trading = collect($resolved['draws'])->first(fn (array $draw): bool => ($draw['field']['printed_item'] ?? '') === 'Trading Account');
         $remote = collect($resolved['draws'])->first(fn (array $draw): bool => ($draw['field']['printed_item'] ?? '') === 'Non Face-To-Face');
         $this->assertTrue($trading['on'] ?? false);
-        $this->assertTrue($remote['on'] ?? false);
+        $this->assertNull($remote);
         foreach ([
             'Certified true copy of Applicant NRIC/Passport',
             'Certified true copy of latest 1 month bank statement/passbook',
