@@ -200,8 +200,9 @@ class ProfileMergePreview
             $operations[] = ['type' => 'employment_status', 'payload' => $statusPayload, 'changes' => $changes];
         }
         $addressBase = $addressPayload ?? $this->addresses($customer);
-        $mailingParts = $this->mailingPartsFromPayload($addressBase, $customer, $included, $proposed);
         $residentialParts = $this->residentialPartsFromPayload($addressBase, $customer);
+        $mailingParts = $this->mailingPartsFromPayload($addressBase, $customer);
+        $selfEmployedAddress = BankStatementProfileRules::preferredSelfEmployedAddressParts($mailingParts, $residentialParts);
         foreach ($resolved as $rowKey => $row) {
             $module = explode('|', $rowKey, 2)[0];
             $changes = $changesFor($module, $rowKey);
@@ -220,10 +221,7 @@ class ProfileMergePreview
                     $payload['arrangement'] = $kind;
                 }
                 if ($kind === 'self_employed') {
-                    $payload = BankStatementProfileRules::copyAddressIntoEmploymentBlanks($payload, $residentialParts);
-                    if ($statement) {
-                        $payload = BankStatementProfileRules::copyAddressIntoEmploymentBlanks($payload, $mailingParts);
-                    }
+                    $payload = BankStatementProfileRules::copyAddressIntoEmploymentBlanks($payload, $selfEmployedAddress);
                     $mobile = $this->proposedModuleValue($included, $proposed, 'contacts[mobile].value')
                         ?? $customer->contacts->firstWhere('type', ContactType::Mobile)?->value
                         ?? $customer->primary_mobile;
@@ -238,7 +236,7 @@ class ProfileMergePreview
                     is_string($payload['occupation'] ?? null) ? $payload['occupation'] : null,
                     is_string($payload['employerName'] ?? null) ? $payload['employerName'] : null,
                 )) {
-                $payload = BankStatementProfileRules::copyAddressIntoRelatedEmployerBlanks($payload, $residentialParts);
+                $payload = BankStatementProfileRules::copyAddressIntoRelatedEmployerBlanks($payload, $selfEmployedAddress);
             }
             $operations[] = ['type' => $module, 'id' => $id, 'payload' => $payload, 'changes' => $changes];
         }
@@ -318,19 +316,15 @@ class ProfileMergePreview
         if (BankStatementProfileRules::hasAddress($parts)) {
             return $parts;
         }
-        $residential = $customer->addresses->firstWhere('type', AddressType::Residential);
 
-        return [
-            'line_1' => $residential?->line_1 ?? '',
-            'line_2' => $residential?->line_2 ?? '',
-            'postcode' => $residential?->postcode ?? '',
-            'city' => $residential?->city ?? '',
-            'state' => $residential?->state ?? '',
-            'country' => $residential?->country ?? '',
-        ];
+        return BankStatementProfileRules::addressParts(
+            $customer->addresses->firstWhere('type', AddressType::Residential),
+        );
     }
 
-    private function mailingPartsFromPayload(array $addressPayload, Customer $customer, $included, $proposed): array
+    /** @param  array<string, mixed>  $addressPayload
+     * @return array{line_1: mixed, line_2: mixed, postcode: mixed, city: mixed, state: mixed, country: mixed} */
+    private function mailingPartsFromPayload(array $addressPayload, Customer $customer): array
     {
         $parts = [
             'line_1' => $addressPayload['mailing_line_1'] ?? '',
@@ -340,54 +334,14 @@ class ProfileMergePreview
             'state' => $addressPayload['mailing_state'] ?? '',
             'country' => $addressPayload['mailing_country'] ?? '',
         ];
+        if (BankStatementProfileRules::hasAddress($parts)) {
+            return $parts;
+        }
         if (($addressPayload['same_as_residential'] ?? false) === true) {
-            $parts = [
-                'line_1' => $addressPayload['residential_line_1'] ?? '',
-                'line_2' => $addressPayload['residential_line_2'] ?? '',
-                'postcode' => $addressPayload['residential_postcode'] ?? '',
-                'city' => $addressPayload['residential_city'] ?? '',
-                'state' => $addressPayload['residential_state'] ?? '',
-                'country' => $addressPayload['residential_country'] ?? '',
-            ];
-        }
-        if (BankStatementProfileRules::hasAddress($parts)) {
-            return $parts;
-        }
-        foreach ($included as $line) {
-            if (! str_starts_with((string) $line['field_id'], 'addresses[mailing].')) {
-                continue;
-            }
-            $leaf = substr((string) $line['field_id'], strlen('addresses[mailing].'));
-            if ($leaf === 'same_as_residential') {
-                continue;
-            }
-            $parts[$leaf] = $proposed[$line['key']]['value'] ?? $parts[$leaf] ?? '';
-        }
-        if (BankStatementProfileRules::hasAddress($parts)) {
-            return $parts;
-        }
-        $mailing = $customer->addresses->firstWhere('type', AddressType::Mailing);
-        if ($mailing?->same_as_residential) {
-            $residential = $customer->addresses->firstWhere('type', AddressType::Residential);
-
-            return [
-                'line_1' => $residential?->line_1 ?? '',
-                'line_2' => $residential?->line_2 ?? '',
-                'postcode' => $residential?->postcode ?? '',
-                'city' => $residential?->city ?? '',
-                'state' => $residential?->state ?? '',
-                'country' => $residential?->country ?? '',
-            ];
+            return $this->residentialPartsFromPayload($addressPayload, $customer);
         }
 
-        return [
-            'line_1' => $mailing?->line_1 ?? '',
-            'line_2' => $mailing?->line_2 ?? '',
-            'postcode' => $mailing?->postcode ?? '',
-            'city' => $mailing?->city ?? '',
-            'state' => $mailing?->state ?? '',
-            'country' => $mailing?->country ?? '',
-        ];
+        return BankStatementProfileRules::effectiveMailingParts($customer);
     }
 
     /** @param  array<string, mixed>  $base

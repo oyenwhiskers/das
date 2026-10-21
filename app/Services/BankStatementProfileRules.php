@@ -110,6 +110,76 @@ class BankStatementProfileRules
     }
 
     /**
+     * @return array{line_1: mixed, line_2: mixed, postcode: mixed, city: mixed, state: mixed, country: mixed}
+     */
+    public static function addressParts(?object $address): array
+    {
+        return [
+            'line_1' => $address?->line_1 ?? '',
+            'line_2' => $address?->line_2 ?? '',
+            'postcode' => $address?->postcode ?? '',
+            'city' => $address?->city ?? '',
+            'state' => $address?->state ?? '',
+            'country' => $address?->country ?? '',
+        ];
+    }
+
+    /**
+     * Effective mailing parts (same_as_residential → residential). Empty when none.
+     *
+     * @return array{line_1: mixed, line_2: mixed, postcode: mixed, city: mixed, state: mixed, country: mixed}
+     */
+    public static function effectiveMailingParts(Customer $customer): array
+    {
+        $customer->loadMissing(['mailingAddress', 'residentialAddress']);
+        $mailing = $customer->mailingAddress;
+        if ($mailing?->same_as_residential === true) {
+            return self::addressParts($customer->residentialAddress);
+        }
+
+        return self::addressParts($mailing);
+    }
+
+    /**
+     * Self-employed employer/office source: mailing if present, else residential.
+     *
+     * @param  array{line_1?: mixed, line_2?: mixed, postcode?: mixed, city?: mixed, state?: mixed, country?: mixed}  $mailing
+     * @param  array{line_1?: mixed, line_2?: mixed, postcode?: mixed, city?: mixed, state?: mixed, country?: mixed}  $residential
+     * @return array{line_1: mixed, line_2: mixed, postcode: mixed, city: mixed, state: mixed, country: mixed}
+     */
+    public static function preferredSelfEmployedAddressParts(array $mailing, array $residential): array
+    {
+        return self::hasAddress($mailing) ? [
+            'line_1' => $mailing['line_1'] ?? '',
+            'line_2' => $mailing['line_2'] ?? '',
+            'postcode' => $mailing['postcode'] ?? '',
+            'city' => $mailing['city'] ?? '',
+            'state' => $mailing['state'] ?? '',
+            'country' => $mailing['country'] ?? '',
+        ] : [
+            'line_1' => $residential['line_1'] ?? '',
+            'line_2' => $residential['line_2'] ?? '',
+            'postcode' => $residential['postcode'] ?? '',
+            'city' => $residential['city'] ?? '',
+            'state' => $residential['state'] ?? '',
+            'country' => $residential['country'] ?? '',
+        ];
+    }
+
+    /**
+     * @return array{line_1: mixed, line_2: mixed, postcode: mixed, city: mixed, state: mixed, country: mixed}
+     */
+    public static function preferredSelfEmployedAddressFromCustomer(Customer $customer): array
+    {
+        $customer->loadMissing(['mailingAddress', 'residentialAddress']);
+
+        return self::preferredSelfEmployedAddressParts(
+            self::effectiveMailingParts($customer),
+            self::addressParts($customer->residentialAddress),
+        );
+    }
+
+    /**
      * Self-employed: fill blank office/business address parts from a source address.
      *
      * @param  array{line_1?: mixed, line_2?: mixed, postcode?: mixed, city?: mixed, state?: mixed, country?: mixed}  $source
@@ -139,16 +209,6 @@ class BankStatementProfileRules
         }
 
         return $employment;
-    }
-
-    /**
-     * @param  array{line_1?: mixed, line_2?: mixed, postcode?: mixed, city?: mixed, state?: mixed, country?: mixed}  $mailing
-     * @param  array<string, mixed>  $employment
-     * @return array<string, mixed>
-     */
-    public static function copyMailingIntoEmploymentIfBlank(array $employment, array $mailing): array
-    {
-        return self::copyAddressIntoEmploymentBlanks($employment, $mailing);
     }
 
     /** Self-employed: blank employer general phone ← applicant mobile. */

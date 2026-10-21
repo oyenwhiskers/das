@@ -817,12 +817,19 @@ class ProfileMergeTest extends TestCase
         $this->assertSame('12 Jalan Melati', $mailing->line_1);
     }
 
-    public function test_bank_statement_fills_self_employed_employment_address_from_mailing(): void
+    public function test_self_employed_office_prefers_mailing_over_residential(): void
     {
-        $staff = User::factory()->staff()->create();
         $customer = Customer::factory()->create([
             'full_legal_name' => 'Amina Noor', 'race' => 'Malay', 'country_of_residence' => 'Malaysia',
             'employment_status' => 'self_employed',
+        ]);
+        $customer->addresses()->create([
+            'type' => AddressType::Residential,
+            'line_1' => '12 Jalan Melati',
+            'city' => 'Kota Bharu',
+            'state' => 'Kelantan',
+            'postcode' => '15000',
+            'country' => 'Malaysia',
         ]);
         $employment = CustomerEmployment::factory()->selfEmployed()->create([
             'customer_id' => $customer->id,
@@ -852,28 +859,22 @@ class ProfileMergeTest extends TestCase
         $this->assertNotNull($employmentOp);
         $this->assertSame('Lot 9 Pasar', $employmentOp['payload']['address_line_1']);
         $this->assertSame('Tanah Merah', $employmentOp['payload']['city']);
-
-        app(MergeExtractedProfile::class)->commit(
-            $profile->fresh(),
-            $customer->fresh(),
-            $staff,
-            'fill_empty',
-            (string) str()->uuid(),
-            $preview['baseline'],
-            ['employments|job-1' => (string) $employment->id],
-            [],
-        );
-
-        $employment->refresh();
-        $this->assertSame('Lot 9 Pasar', $employment->address_line_1);
-        $this->assertSame('Tanah Merah', $employment->city);
+        $this->assertSame('17500', $employmentOp['payload']['postcode']);
     }
 
-    public function test_bank_statement_fills_only_blank_self_employed_office_parts_from_mailing(): void
+    public function test_self_employed_office_uses_residential_when_mailing_missing(): void
     {
         $customer = Customer::factory()->create([
             'full_legal_name' => 'Amina Noor',
             'employment_status' => 'self_employed',
+        ]);
+        $customer->addresses()->create([
+            'type' => AddressType::Residential,
+            'line_1' => '12 Jalan Melati',
+            'city' => 'Kota Bharu',
+            'state' => 'Kelantan',
+            'postcode' => '15000',
+            'country' => 'Malaysia',
         ]);
         $employment = CustomerEmployment::factory()->selfEmployed()->create([
             'customer_id' => $customer->id,
@@ -886,23 +887,18 @@ class ProfileMergeTest extends TestCase
             'country' => null,
         ]);
         [, $profile] = $this->reviewed($customer->full_legal_name, [
-            $this->value('addresses[mailing].line_1', 'Lot 9 Pasar'),
-            $this->value('addresses[mailing].city', 'Tanah Merah'),
-            $this->value('addresses[mailing].postcode', '17500'),
-            $this->value('addresses[mailing].state', 'Kelantan'),
-            $this->value('addresses[mailing].country', 'Malaysia'),
             $this->value('employments[].arrangement', 'self_employed', 'job-1'),
             $this->value('employments[].address_line_1', 'PASAR BESAR', 'job-1'),
             $this->value('employments[].occupation', 'Trader', 'job-1'),
-        ], 'Bank Statement', 'Account Statement');
+        ], 'Account Opening Form', 'Form 3');
 
         $preview = app(ProfileMergePreview::class)->make($profile->fresh(), $customer->fresh(), 'overwrite', [
             'employments|job-1' => (string) $employment->id,
         ], []);
         $employmentOp = collect($preview['operations'])->firstWhere('type', 'employments');
         $this->assertSame('PASAR BESAR', $employmentOp['payload']['address_line_1']);
-        $this->assertSame('Tanah Merah', $employmentOp['payload']['city']);
-        $this->assertSame('17500', $employmentOp['payload']['postcode']);
+        $this->assertSame('Kota Bharu', $employmentOp['payload']['city']);
+        $this->assertSame('15000', $employmentOp['payload']['postcode']);
     }
 
     public function test_form_self_employed_fills_blank_office_parts_from_residential(): void
@@ -977,7 +973,7 @@ class ProfileMergeTest extends TestCase
         $this->assertSame('0128834419', $employment->general_telephone);
     }
 
-    public function test_merge_fills_self_employed_next_of_kin_employer_address_from_residential(): void
+    public function test_merge_fills_self_employed_next_of_kin_employer_address_from_applicant_mailing(): void
     {
         $staff = User::factory()->staff()->create();
         $customer = Customer::factory()->create(['full_legal_name' => 'Ali Bin Abu']);
@@ -995,6 +991,11 @@ class ProfileMergeTest extends TestCase
             $this->value('addresses[residential].state', 'Wilayah'),
             $this->value('addresses[residential].postcode', '50000'),
             $this->value('addresses[residential].country', 'Malaysia'),
+            $this->value('addresses[mailing].line_1', '88 Jalan Pos'),
+            $this->value('addresses[mailing].city', 'PJ'),
+            $this->value('addresses[mailing].state', 'Selangor'),
+            $this->value('addresses[mailing].postcode', '46000'),
+            $this->value('addresses[mailing].country', 'Malaysia'),
             $this->value('relationships[].relationship', 'father', 'kin-1'),
             $this->value('relationships[].related_person.full_legal_name', 'Mazwan Bin Mahmud', 'kin-1'),
             $this->value('relationships[].related_person.occupation', 'BUSINESS', 'kin-1'),
@@ -1008,9 +1009,9 @@ class ProfileMergeTest extends TestCase
         ], []);
         $relationshipOp = collect($preview['operations'])->firstWhere('type', 'relationships');
         $this->assertNotNull($relationshipOp);
-        $this->assertSame('1 Jalan Damai', $relationshipOp['payload']['employerAddressLine1']);
-        $this->assertSame('KL', $relationshipOp['payload']['employerCity']);
-        $this->assertSame('50000', $relationshipOp['payload']['employerPostcode']);
+        $this->assertSame('88 Jalan Pos', $relationshipOp['payload']['employerAddressLine1']);
+        $this->assertSame('PJ', $relationshipOp['payload']['employerCity']);
+        $this->assertSame('46000', $relationshipOp['payload']['employerPostcode']);
 
         app(MergeExtractedProfile::class)->commit(
             $profile->fresh(),
@@ -1023,8 +1024,8 @@ class ProfileMergeTest extends TestCase
             [],
         );
         $person = $customer->fresh()->relationships()->firstOrFail()->relatedPerson;
-        $this->assertSame('1 Jalan Damai', $person->employer_address_line_1);
-        $this->assertSame('KL', $person->employer_city);
+        $this->assertSame('88 Jalan Pos', $person->employer_address_line_1);
+        $this->assertSame('PJ', $person->employer_city);
     }
 
     public function test_bank_statement_does_not_fill_employed_office_from_mailing(): void

@@ -285,17 +285,9 @@ class CustomerProfileWrites
             $validated['occupation'] ?? null,
             $validated['employerName'] ?? null,
         )) {
-            $customer->loadMissing('residentialAddress');
             $validated = BankStatementProfileRules::copyAddressIntoRelatedEmployerBlanks(
                 $validated,
-                [
-                    'line_1' => $customer->residentialAddress?->line_1,
-                    'line_2' => $customer->residentialAddress?->line_2,
-                    'city' => $customer->residentialAddress?->city,
-                    'state' => $customer->residentialAddress?->state,
-                    'postcode' => $customer->residentialAddress?->postcode,
-                    'country' => $customer->residentialAddress?->country,
-                ],
+                BankStatementProfileRules::preferredSelfEmployedAddressFromCustomer($customer),
             );
         }
         if ($source === 'new' && filled($validated['identificationNumber'] ?? null)) {
@@ -404,7 +396,7 @@ class CustomerProfileWrites
 
     /** @param  array<string, mixed>  $fields */
     /**
-     * Self-employed: copy residential into any blank office/business address fields.
+     * Self-employed: blank office ← mailing, else residential; blank phone ← mobile.
      *
      * @param  array<string, mixed>  $fields
      * @return array<string, mixed>
@@ -415,17 +407,10 @@ class CustomerProfileWrites
         if (! BankStatementProfileRules::customerIsSelfEmployed($customer, $arrangement)) {
             return $fields;
         }
-        $home = $customer->residentialAddress;
-        if ($home !== null) {
-            $fields = BankStatementProfileRules::copyAddressIntoEmploymentBlanks($fields, [
-                'line_1' => $home->line_1,
-                'line_2' => $home->line_2,
-                'city' => $home->city,
-                'state' => $home->state,
-                'postcode' => $home->postcode,
-                'country' => $home->country,
-            ]);
-        }
+        $fields = BankStatementProfileRules::copyAddressIntoEmploymentBlanks(
+            $fields,
+            BankStatementProfileRules::preferredSelfEmployedAddressFromCustomer($customer),
+        );
         $mobile = $customer->contacts->first(fn ($contact): bool => $contact->type === ContactType::Mobile)?->value
             ?? $customer->primary_mobile;
 

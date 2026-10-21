@@ -617,13 +617,13 @@ class Resolver
             $postcode = $person->employer_postcode;
             $country = $person->employer_country;
             if (BankStatementProfileRules::relatedLooksSelfEmployed($person->occupation, $person->employer_name)) {
-                $home = $customer->residentialAddress;
-                $line1 = filled($line1) ? $line1 : $home?->line_1;
-                $line2 = filled($line2) ? $line2 : $home?->line_2;
-                $city = filled($city) ? $city : $home?->city;
-                $state = filled($state) ? $state : $home?->state;
-                $postcode = filled($postcode) ? $postcode : $home?->postcode;
-                $country = filled($country) ? $country : $home?->country;
+                $source = BankStatementProfileRules::preferredSelfEmployedAddressFromCustomer($customer);
+                $line1 = filled($line1) ? $line1 : ($source['line_1'] ?: null);
+                $line2 = filled($line2) ? $line2 : ($source['line_2'] ?: null);
+                $city = filled($city) ? $city : ($source['city'] ?: null);
+                $state = filled($state) ? $state : ($source['state'] ?: null);
+                $postcode = filled($postcode) ? $postcode : ($source['postcode'] ?: null);
+                $country = filled($country) ? $country : ($source['country'] ?: null);
             }
 
             return [
@@ -656,13 +656,16 @@ class Resolver
         return $this->one($customer->employment_status, $map, $item, 'Employment status');
     }
 
-    /** Self-employed and this office-address part is blank: use residential for that part. */
+    /** Self-employed and this office-address part is blank: use mailing, else residential. */
     public function businessAddressFieldFromResidential(Customer $customer, ?CustomerEmployment $employment, string $item): bool
     {
-        if ($employment === null || $customer->residentialAddress === null) {
+        if ($employment === null) {
             return false;
         }
         if ($customer->employment_status !== 'self_employed' && $employment->arrangement !== 'self_employed') {
+            return false;
+        }
+        if (! BankStatementProfileRules::hasAddress(BankStatementProfileRules::preferredSelfEmployedAddressFromCustomer($customer))) {
             return false;
         }
         if ($item === 'address_lines') {
@@ -689,11 +692,11 @@ class Resolver
         if ($employment === null) {
             return null;
         }
-        $home = $customer->residentialAddress;
+        $fallback = BankStatementProfileRules::preferredSelfEmployedAddressFromCustomer($customer);
         if ($item === 'address_lines') {
             if ($this->businessAddressFieldFromResidential($customer, $employment, 'address_lines')) {
-                $line1 = $home?->line_1;
-                $line2 = $home?->line_2;
+                $line1 = $fallback['line_1'] ?: null;
+                $line2 = $fallback['line_2'] ?: null;
             } else {
                 $line1 = $employment->address_line_1;
                 $line2 = $employment->address_line_2;
@@ -703,7 +706,7 @@ class Resolver
         }
         $value = $employment->{$item} ?? null;
         if ($this->businessAddressFieldFromResidential($customer, $employment, $item)) {
-            $value = $home?->{$item} ?? null;
+            $value = $fallback[$item] ?: null;
         }
 
         return $this->text($value, $this->titled('Employer', $item));

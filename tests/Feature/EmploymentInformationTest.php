@@ -107,7 +107,7 @@ class EmploymentInformationTest extends TestCase
             ->assertOk()->assertSee('Work Information')->assertSee('Employment Status')->assertSee('Employment History');
     }
 
-    public function test_self_employed_blank_office_fields_are_filled_from_residential(): void
+    public function test_self_employed_blank_office_fields_prefer_mailing_then_residential(): void
     {
         $staff = User::factory()->staff()->create();
         $customer = Customer::factory()->for($staff, 'creator')->create([
@@ -124,13 +124,23 @@ class EmploymentInformationTest extends TestCase
             'postcode' => '18500',
             'country' => 'Malaysia',
         ]);
+        CustomerAddress::query()->create([
+            'customer_id' => $customer->id,
+            'type' => AddressType::Mailing,
+            'line_1' => 'Lot 9 Pasar',
+            'city' => 'Tanah Merah',
+            'state' => 'Kelantan',
+            'postcode' => '17500',
+            'country' => 'Malaysia',
+            'same_as_residential' => false,
+        ]);
 
         Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer->fresh()])
             ->call('add')
             ->assertSet('form.arrangement', 'self_employed')
-            ->assertSet('form.address_line_1', 'LOT 244')
-            ->assertSet('form.city', 'Machang')
-            ->assertSet('form.postcode', '18500')
+            ->assertSet('form.address_line_1', 'Lot 9 Pasar')
+            ->assertSet('form.city', 'Tanah Merah')
+            ->assertSet('form.postcode', '17500')
             ->assertSet('form.general_telephone', '0128834419')
             ->set('form.occupation', 'BUSINESS')
             ->set('form.address_line_1', 'SUHAIZA CONSTRUCTION')
@@ -144,9 +154,9 @@ class EmploymentInformationTest extends TestCase
         $job = $customer->employments()->firstOrFail();
         $this->assertSame('SUHAIZA CONSTRUCTION', $job->address_line_1);
         $this->assertSame('JALAN PASAR MACHANG', $job->address_line_2);
-        $this->assertSame('Machang', $job->city);
+        $this->assertSame('Tanah Merah', $job->city);
         $this->assertSame('Kelantan', $job->state);
-        $this->assertSame('18500', $job->postcode);
+        $this->assertSame('17500', $job->postcode);
         $this->assertSame('Malaysia', $job->country);
         $this->assertSame('0128834419', $job->general_telephone);
     }

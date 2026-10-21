@@ -14,6 +14,7 @@ use App\Models\CustomerEmployment;
 use App\Models\CustomerFinancialDeclaration;
 use App\Models\CustomerRelationship;
 use App\Models\User;
+use App\Services\BankStatementProfileRules;
 use App\Services\Bimbsec\Catalog;
 use App\Services\Bimbsec\Generator;
 use App\Services\Bimbsec\Resolver;
@@ -681,11 +682,11 @@ class Show extends Component
         $job = $resolver->subjects($customer, $this->application->choices ?? [])['employment'];
         if ($reference === 'employment.business_address' && $job !== null) {
             if ($resolver->businessAddressFieldFromResidential($customer, $job, $item === '' ? 'address_lines' : $item)) {
-                $home = $customer->residentialAddress;
+                $fallback = BankStatementProfileRules::preferredSelfEmployedAddressFromCustomer($customer);
 
                 return $item === 'address_lines'
-                    ? trim(implode(' ', array_filter([$home?->line_1, $home?->line_2])))
-                    : (string) ($home?->{$item} ?? '');
+                    ? trim(implode(' ', array_filter([$fallback['line_1'] ?? null, $fallback['line_2'] ?? null])))
+                    : (string) ($fallback[$item] ?? '');
             }
 
             return $item === 'address_lines'

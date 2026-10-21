@@ -1511,6 +1511,28 @@ class Show extends Component
             ));
             unset($byId['customer.employment_status'], $byId['employments[].arrangement']);
         }
+        $addrValue = function (string $kind, string $addrField) use ($byId, $derived): mixed {
+            return $byId['addresses['.$kind.'].'.$addrField]['value']
+                ?? ($derived['addresses['.$kind.'].'.$addrField] ?? null);
+        };
+        $selfEmployedSource = BankStatementProfileRules::preferredSelfEmployedAddressParts(
+            [
+                'line_1' => $addrValue('mailing', 'line_1'),
+                'line_2' => $addrValue('mailing', 'line_2'),
+                'postcode' => $addrValue('mailing', 'postcode'),
+                'city' => $addrValue('mailing', 'city'),
+                'state' => $addrValue('mailing', 'state'),
+                'country' => $addrValue('mailing', 'country'),
+            ],
+            [
+                'line_1' => $addrValue('residential', 'line_1'),
+                'line_2' => $addrValue('residential', 'line_2'),
+                'postcode' => $addrValue('residential', 'postcode'),
+                'city' => $addrValue('residential', 'city'),
+                'state' => $addrValue('residential', 'state'),
+                'country' => $addrValue('residential', 'country'),
+            ],
+        );
         if ($kind === 'self_employed') {
             $map = [
                 'address_line_1' => 'line_1',
@@ -1525,12 +1547,7 @@ class Show extends Component
                     && trim((string) $byId['employments[].'.$employmentField]['value']) !== '') {
                     continue;
                 }
-                $value = $byId['addresses[residential].'.$addrField]['value']
-                    ?? ($derived['addresses[residential].'.$addrField] ?? null);
-                if (($value === null || $value === '') && $statement) {
-                    $value = $byId['addresses[mailing].'.$addrField]['value']
-                        ?? ($derived['addresses[mailing].'.$addrField] ?? null);
-                }
+                $value = $selfEmployedSource[$addrField] ?? null;
                 if ($value === null || $value === '') {
                     continue;
                 }
@@ -1557,8 +1574,7 @@ class Show extends Component
                 if (isset($byId[$path]) && trim((string) $byId[$path]['value']) !== '') {
                     continue;
                 }
-                $value = $byId['addresses[residential].'.$addrField]['value']
-                    ?? ($derived['addresses[residential].'.$addrField] ?? null);
+                $value = $selfEmployedSource[$addrField] ?? null;
                 if ($value === null || $value === '') {
                     continue;
                 }

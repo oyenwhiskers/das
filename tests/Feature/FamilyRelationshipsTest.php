@@ -209,7 +209,7 @@ class FamilyRelationshipsTest extends TestCase
         $this->assertFalse($customer->relationships()->firstOrFail()->is_next_of_kin);
     }
 
-    public function test_self_employed_next_of_kin_gets_applicant_residential_as_employer_address(): void
+    public function test_self_employed_next_of_kin_gets_applicant_mailing_then_residential_as_employer_address(): void
     {
         $staff = User::factory()->staff()->create();
         $customer = Customer::factory()->for($staff, 'creator')->create();
@@ -221,6 +221,15 @@ class FamilyRelationshipsTest extends TestCase
             'postcode' => '18500',
             'country' => 'Malaysia',
         ]);
+        $customer->addresses()->create([
+            'type' => \App\Enums\AddressType::Mailing,
+            'line_1' => '88 Jalan Pos',
+            'city' => 'PJ',
+            'state' => 'Selangor',
+            'postcode' => '46000',
+            'country' => 'Malaysia',
+            'same_as_residential' => false,
+        ]);
 
         Livewire::actingAs($staff)->test(FamilyRelationships::class, ['customer' => $customer->fresh()])
             ->call('add')
@@ -228,14 +237,13 @@ class FamilyRelationshipsTest extends TestCase
             ->set('relationship', 'father')
             ->set('occupation', 'BUSINESS')
             ->set('mobile', '+60123456789')
-            ->set('isNextOfKin', true)
-            ->set('isPrimaryNextOfKin', true)
+            ->set('isActive', true)
             ->call('save')->assertHasNoErrors();
 
         $person = $customer->relationships()->firstOrFail()->relatedPerson;
-        $this->assertSame('LOT 244 KG BARU', $person->employer_address_line_1);
-        $this->assertSame('Machang', $person->employer_city);
-        $this->assertSame('18500', $person->employer_postcode);
+        $this->assertSame('88 Jalan Pos', $person->employer_address_line_1);
+        $this->assertSame('PJ', $person->employer_city);
+        $this->assertSame('46000', $person->employer_postcode);
         $this->assertSame('Malaysia', $person->employer_country);
     }
 

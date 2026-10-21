@@ -70,4 +70,29 @@ class BankStatementProfileRulesTest extends TestCase
         $this->assertSame([], BankStatementProfileRules::copyMobileIntoEmploymentPhoneIfBlank([], null));
         $this->assertSame([], BankStatementProfileRules::copyMobileIntoEmploymentPhoneIfBlank([], ''));
     }
+
+    #[Test]
+    public function preferred_self_employed_address_uses_mailing_then_residential(): void
+    {
+        $mailing = [
+            'line_1' => 'Lot 9', 'line_2' => '', 'city' => 'Tanah Merah',
+            'postcode' => '17500', 'state' => 'Kelantan', 'country' => 'Malaysia',
+        ];
+        $residential = [
+            'line_1' => '12 Melati', 'line_2' => '', 'city' => 'Kota Bharu',
+            'postcode' => '15000', 'state' => 'Kelantan', 'country' => 'Malaysia',
+        ];
+        $this->assertSame('Lot 9', BankStatementProfileRules::preferredSelfEmployedAddressParts($mailing, $residential)['line_1']);
+        $this->assertSame(
+            '12 Melati',
+            BankStatementProfileRules::preferredSelfEmployedAddressParts([], $residential)['line_1'],
+        );
+        $this->assertSame(
+            '12 Melati',
+            BankStatementProfileRules::preferredSelfEmployedAddressParts(
+                ['line_1' => '', 'line_2' => '', 'city' => '', 'postcode' => '', 'state' => '', 'country' => ''],
+                $residential,
+            )['line_1'],
+        );
+    }
 }

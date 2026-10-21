@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AddressType;
 use App\Enums\ContactType;
 use App\Enums\IdentificationType;
 use App\Livewire\Bimbsec\Index;
@@ -379,7 +380,7 @@ class BimbsecModuleTest extends TestCase
         $this->assertTrue($mailingDraws->isEmpty(), 'Mailing PDF fields must stay blank when same as residential.');
     }
 
-    public function test_self_employed_with_empty_office_address_uses_residential_on_the_form(): void
+    public function test_self_employed_with_empty_office_address_prefers_mailing_then_residential_on_the_form(): void
     {
         $user = User::factory()->staff()->create();
         $customer = $this->customer($user, 'ALI BIN ABU', '900101011234');
@@ -391,6 +392,36 @@ class BimbsecModuleTest extends TestCase
             'is_primary' => true,
             'is_current' => true,
         ]);
+        $customer->addresses()->updateOrCreate(
+            ['type' => AddressType::Mailing],
+            [
+                'line_1' => 'LOT 9 PASAR',
+                'city' => 'Tanah Merah',
+                'postcode' => '17500',
+                'state' => 'Kelantan',
+                'country' => 'Malaysia',
+                'same_as_residential' => false,
+            ],
+        );
+
+        $draws = collect(app(Resolver::class)->resolve($customer->fresh(), [])['draws']);
+        $officeLines = $draws->first(
+            fn (array $draw): bool => ($draw['field']['source']['reference_key'] ?? '') === 'employment.business_address'
+                && ($draw['field']['printed_item'] ?? '') === 'address_lines',
+        );
+        $this->assertSame('LOT 9 PASAR', $officeLines['text'] ?? null);
+        $employerPhone = $draws->first(
+            fn (array $draw): bool => ($draw['field']['source']['reference_key'] ?? '') === 'employment.employer_general_phone',
+        );
+        $this->assertSame('0123456789', $employerPhone['text'] ?? null);
+
+        CustomerEmployment::query()->where('customer_id', $customer->id)->update([
+            'address_line_1' => null,
+            'address_line_2' => null,
+            'city' => null,
+            'postcode' => null,
+        ]);
+        $customer->mailingAddress?->delete();
         $long = str_repeat('JALAN PANJANG ', 8).'TAMAN';
         $customer->residentialAddress->update(['line_1' => $long, 'line_2' => null]);
 
