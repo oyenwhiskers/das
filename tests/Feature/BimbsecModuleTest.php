@@ -70,6 +70,31 @@ class BimbsecModuleTest extends TestCase
             ->assertSeeInOrder(['Ali Bin Abu', 'Mira Binti Lim', 'Zara Binti Omar']);
     }
 
+    public function test_migration_clears_stored_non_face_verification_default(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = $this->customer($user, 'ALI BIN ABU', '900101011234');
+        $choices = BimbsecApplication::normalizeChoices([]);
+        $choices['verification_mode'] = 'non_face';
+        $application = $customer->bimbsecApplications()->create([
+            'choices' => $choices,
+            'created_by' => $user->id,
+            'updated_by' => $user->id,
+        ]);
+        $ticked = collect(app(Resolver::class)->resolve($customer, $application->choices)['draws'])
+            ->first(fn (array $draw): bool => ($draw['field']['printed_item'] ?? '') === 'Non Face-To-Face');
+        $this->assertTrue($ticked['on'] ?? false);
+
+        $migration = require database_path('migrations/2026_10_21_094700_clear_bimbsec_default_verification_mode.php');
+        $migration->up();
+
+        $application->refresh();
+        $this->assertNull($application->choices['verification_mode']);
+        $blank = collect(app(Resolver::class)->resolve($customer, $application->choices)['draws'])
+            ->first(fn (array $draw): bool => ($draw['field']['printed_item'] ?? '') === 'Non Face-To-Face');
+        $this->assertNull($blank);
+    }
+
     public function test_profile_maps_name_nric_and_does_not_copy_another_customers_relative(): void
     {
         $user = User::factory()->staff()->create();
