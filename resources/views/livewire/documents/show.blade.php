@@ -510,7 +510,7 @@
                 <div role="dialog" aria-modal="true" aria-labelledby="match-all-title" x-data="{ filter: 'all' }" class="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
                     <div class="border-b border-slate-200 px-5 py-4">
                         <h3 id="match-all-title" class="text-base font-semibold text-navy-900">Auto-Match all</h3>
-                        <p class="mt-1 text-sm text-slate-600">Tick who to include, then choose a strategy.</p>
+                        <p class="mt-1 text-sm text-slate-600">Tick who to include, then choose a strategy and sections.</p>
                         <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
                             <div class="flex flex-wrap gap-2" role="group" aria-label="Filter applicants">
                                 <button type="button" x-on:click="filter = 'all'" :class="filter === 'all' ? 'border-navy-800 bg-navy-800 text-white' : 'border-slate-300 bg-white text-slate-700'" class="inline-flex h-8 items-center gap-2 rounded-full border px-3 text-sm font-medium">All <span class="rounded-full px-1.5 text-xs" :class="filter === 'all' ? 'bg-white/20' : 'bg-slate-100'">{{ $existingCount + $newCount }}</span></button>
@@ -575,6 +575,22 @@
                                 <option value="replace_all">Replace all</option>
                             </select>
                         </div>
+                        @if ($matchSections !== [])
+                            <fieldset>
+                                <legend class="text-sm text-slate-600">Sections to match</legend>
+                                <p class="mt-1 text-xs text-slate-500">Unchecked sections are left unchanged on every selected customer.</p>
+                                <ul class="mt-2 space-y-2">
+                                    @foreach ($matchSections as $index => $section)
+                                        <li>
+                                            <label class="flex items-center gap-2 text-sm text-slate-700">
+                                                <input type="checkbox" wire:model="matchSections.{{ $index }}.include" class="rounded border-slate-300 text-navy-800 focus:ring-navy-800" />
+                                                <span>{{ $section['label'] }}</span>
+                                            </label>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            </fieldset>
+                        @endif
                         <div class="flex items-center justify-end gap-3">
                             <button type="button" wire:click="closeMatchAll" class="text-sm text-slate-600 hover:text-slate-800">Cancel</button>
                             <button type="button" x-on:click="matchWithLoader($wire, 'confirmMatchAll', 'Matching applicants')" wire:loading.attr="disabled" wire:target="confirmMatchAll" @disabled($selectedCount === 0) class="rounded-md bg-navy-800 px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">

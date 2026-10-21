@@ -440,6 +440,7 @@ class Show extends Component
         $this->matchAllSkipped = $skipped;
         $this->matchAllSelected = $this->matchAllIdsForFilter('all');
         $this->matchStrategy = 'fill_empty';
+        $this->matchSections = $this->sectionsForMatchRows($rows);
         $this->matchAll = true;
         $this->resetValidation();
     }
@@ -488,6 +489,7 @@ class Show extends Component
         $this->matchAllRows = [];
         $this->matchAllSkipped = [];
         $this->matchAllSelected = [];
+        $this->matchSections = [];
         $this->resetValidation();
     }
 
@@ -508,8 +510,9 @@ class Show extends Component
         if (! in_array($this->matchStrategy, ['fill_empty', 'overwrite', 'replace_all'], true)) {
             throw ValidationException::withMessages(['merge' => 'Choose a merge strategy.']);
         }
+        $excluded = $this->matchExcludedModules();
         $count = count($rows);
-        DB::transaction(function () use ($preview, $merge, $rows): void {
+        DB::transaction(function () use ($preview, $merge, $rows, $excluded): void {
             foreach ($rows as $row) {
                 $profile = $this->documentScan->extractedProfiles()->find($row['profile_id']);
                 if (! $profile instanceof ExtractedProfile) {
@@ -530,12 +533,12 @@ class Show extends Component
                 }
                 $this->authorize('update', $customer);
                 $this->copyCardOnto($profile);
-                $built = $preview->make($profile->fresh(), $customer, $this->matchStrategy, [], []);
+                $built = $preview->make($profile->fresh(), $customer, $this->matchStrategy, [], $excluded);
                 if (! $built['ready']) {
                     throw ValidationException::withMessages(['merge' => $row['heading'].': '.$this->matchRefusal($built)]);
                 }
                 try {
-                    $merge->commit($profile->fresh(), $customer, auth()->user(), $this->matchStrategy, (string) Str::uuid(), $built['baseline'], [], []);
+                    $merge->commit($profile->fresh(), $customer, auth()->user(), $this->matchStrategy, (string) Str::uuid(), $built['baseline'], [], $excluded);
                 } catch (ValidationException $exception) {
                     $messages = collect($exception->errors())->flatten()->unique()->implode("\n");
                     throw ValidationException::withMessages(['merge' => $row['heading'].': '.($messages !== '' ? $messages : 'This applicant cannot be matched.')]);
@@ -614,6 +617,30 @@ class Show extends Component
     /** @return list<array{module: string, label: string, include: bool}> */
     private function sectionsForMatch(ExtractedProfile $profile): array
     {
+        return $this->sectionsFromPresentModules($this->presentMatchModules($profile));
+    }
+
+    /**
+     * @param  list<array{profile_id: int}>  $rows
+     * @return list<array{module: string, label: string, include: bool}>
+     */
+    private function sectionsForMatchRows(array $rows): array
+    {
+        $present = [];
+        foreach ($rows as $row) {
+            $profile = $this->documentScan->extractedProfiles()->find($row['profile_id']);
+            if (! $profile instanceof ExtractedProfile) {
+                continue;
+            }
+            $present += $this->presentMatchModules($profile);
+        }
+
+        return $this->sectionsFromPresentModules($present);
+    }
+
+    /** @return array<string, true> */
+    private function presentMatchModules(ExtractedProfile $profile): array
+    {
         $preview = app(ProfileMergePreview::class);
         $present = [];
         foreach ($profile->reviewed_projection['values'] ?? [] as $value) {
@@ -622,6 +649,16 @@ class Show extends Component
             }
             $present[$preview->moduleOf($value['field_id'])] = true;
         }
+
+        return $present;
+    }
+
+    /**
+     * @param  array<string, true>  $present
+     * @return list<array{module: string, label: string, include: bool}>
+     */
+    private function sectionsFromPresentModules(array $present): array
+    {
         $order = [
             'personal', 'contacts', 'addresses', 'relationships', 'employment_status', 'employments',
             'bank_accounts', 'tin', 'tax_residencies', 'fatca', 'financial', 'investment',

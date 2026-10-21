@@ -591,12 +591,59 @@ class ProfileMergeTest extends TestCase
             ->call('autoMatchAll')
             ->assertSet('matchAll', true)
             ->assertSee('Kept Name')
+            ->assertSee('Sections to match')
             ->set('matchStrategy', 'fill_empty')
             ->call('confirmMatchAll')
             ->assertSet('matchAll', false)
             ->assertDispatched('matched', message: 'Matched 1 applicant.');
 
         $this->assertSame('MALAY', $customer->fresh()->race);
+    }
+
+    public function test_auto_match_all_leaves_unchecked_sections_unchanged(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->create([
+            'full_legal_name' => 'Section Keep',
+            'primary_identification_number' => '900101-14-5678',
+            'race' => 'Malay',
+            'country_of_residence' => 'Malaysia',
+            'marital_status' => null,
+        ]);
+        $customer->identifications()->create([
+            'type' => IdentificationType::Nric,
+            'number' => '900101-14-5678',
+            'normalized_number' => '900101145678',
+            'is_primary' => true,
+        ]);
+        $account = CustomerBankAccount::factory()->for($customer)->create(['branch_address' => null]);
+        [$scan] = $this->reviewed('Section Keep', [
+            $this->value('primary_identification.number', '900101-14-5678'),
+            $this->value('customer.marital_status', 'Married'),
+            $this->value('bank_accounts[].bank_name', $account->bank_name, 'acct-1'),
+            $this->value('bank_accounts[].bank_country', 'Malaysia', 'acct-1'),
+            $this->value('bank_accounts[].account_number', $account->account_number, 'acct-1'),
+            $this->value('bank_accounts[].account_holder_name', $account->account_holder_name, 'acct-1'),
+            $this->value('bank_accounts[].branch_address', 'Jalan Ampang', 'acct-1'),
+        ]);
+
+        $component = Livewire::actingAs($staff)->test(Show::class, ['documentScan' => $scan])
+            ->call('autoMatchAll')
+            ->assertSee('Sections to match')
+            ->assertSee('Bank accounts')
+            ->assertSee('Personal details');
+        $bankIndex = collect($component->get('matchSections'))->search(fn (array $section): bool => $section['module'] === 'bank_accounts');
+        $this->assertNotFalse($bankIndex);
+        $component->set('matchSections.'.$bankIndex.'.include', false)
+            ->set('matchStrategy', 'overwrite')
+            ->call('confirmMatchAll')
+            ->assertHasNoErrors()
+            ->assertDispatched('matched');
+
+        $customer->refresh();
+        $this->assertSame('MARRIED', $customer->marital_status);
+        $this->assertSame(1, $customer->bankAccounts()->count());
+        $this->assertNull($account->fresh()->branch_address);
     }
 
     public function test_auto_match_recommends_creating_a_customer_when_nobody_has_that_identification(): void
