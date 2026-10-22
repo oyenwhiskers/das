@@ -507,7 +507,7 @@
             @endphp
             <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div class="absolute inset-0 bg-slate-900/40" wire:click="closeMatchAll"></div>
-                <div role="dialog" aria-modal="true" aria-labelledby="match-all-title" x-data="{ filter: 'all' }" class="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
+                <div role="dialog" aria-modal="true" aria-labelledby="match-all-title" x-data="{ filter: 'all' }" class="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col overflow-visible rounded-lg bg-white shadow-xl">
                     <div class="border-b border-slate-200 px-5 py-4">
                         <h3 id="match-all-title" class="text-base font-semibold text-navy-900">Auto-Match all</h3>
                         <p class="mt-1 text-sm text-slate-600">Tick who to include, then choose a strategy and sections.</p>
@@ -524,7 +524,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="space-y-4 overflow-y-auto px-5 py-4">
+                    <div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
                         <p x-show="filter === 'existing' && {{ $existingCount }} === 0" x-cloak class="rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">No applicant matches an existing customer.</p>
                         <p x-show="filter === 'new' && {{ $newCount }} === 0" x-cloak class="rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">No applicant needs a new customer.</p>
                         <ul class="space-y-2" role="list" aria-label="Applicants to match">
@@ -566,7 +566,7 @@
                         @endif
                         @error('merge') <p class="whitespace-pre-line text-sm text-red-700">{{ $message }}</p> @enderror
                     </div>
-                    <div class="space-y-3 border-t border-slate-200 px-5 py-4">
+                    <div class="relative z-10 space-y-3 overflow-visible rounded-b-lg border-t border-slate-200 bg-white px-5 py-4">
                         <div>
                             <label for="match-all-strategy" class="text-sm text-slate-600">Strategy</label>
                             <select id="match-all-strategy" wire:model="matchStrategy" class="mt-1 block w-full rounded-md border-slate-300 text-sm">
@@ -576,20 +576,7 @@
                             </select>
                         </div>
                         @if ($matchSections !== [])
-                            <fieldset>
-                                <legend class="text-sm text-slate-600">Sections to match</legend>
-                                <p class="mt-1 text-xs text-slate-500">Unchecked sections are left unchanged on every selected customer.</p>
-                                <ul class="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
-                                    @foreach ($matchSections as $index => $section)
-                                        <li>
-                                            <label class="flex items-center gap-2 text-sm text-slate-700">
-                                                <input type="checkbox" wire:model="matchSections.{{ $index }}.include" class="rounded border-slate-300 text-navy-800 focus:ring-navy-800" />
-                                                <span>{{ $section['label'] }}</span>
-                                            </label>
-                                        </li>
-                                    @endforeach
-                                </ul>
-                            </fieldset>
+                            @include('livewire.documents.partials.match-sections', ['hint' => 'Unchecked sections are left unchanged on every selected customer.'])
                         @endif
                         <div class="flex items-center justify-end gap-3">
                             <button type="button" wire:click="closeMatchAll" class="text-sm text-slate-600 hover:text-slate-800">Cancel</button>
@@ -605,11 +592,11 @@
         @if ($matchProfileId)
             <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div class="absolute inset-0 bg-slate-900/40" wire:click="closeMatch"></div>
-                <div role="dialog" aria-modal="true" aria-labelledby="match-title" class="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
+                <div role="dialog" aria-modal="true" aria-labelledby="match-title" class="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-xl flex-col overflow-visible rounded-lg bg-white shadow-xl">
                     <div class="border-b border-slate-200 px-5 py-4">
                         <h3 id="match-title" class="text-base font-semibold text-navy-900">Match applicant</h3>
                     </div>
-                    <div class="space-y-4 overflow-y-auto px-5 py-4">
+                    <div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
                         @if ($matchRecommendation !== '')
                             <p class="text-sm text-slate-700">{{ $matchRecommendation }}</p>
                         @endif
@@ -626,6 +613,9 @@
                                 @endforelse
                             </ul>
                         </div>
+                        @error('merge') <p class="whitespace-pre-line text-sm text-red-700">{{ $message }}</p> @enderror
+                    </div>
+                    <div class="relative z-10 space-y-3 overflow-visible rounded-b-lg border-t border-slate-200 bg-white px-5 py-4">
                         <div>
                             <label for="match-strategy" class="text-sm text-slate-600">Strategy</label>
                             <select id="match-strategy" wire:model="matchStrategy" class="mt-1 block w-full rounded-md border-slate-300 text-sm">
@@ -635,26 +625,12 @@
                             </select>
                         </div>
                         @if ($matchSections !== [])
-                            <fieldset>
-                                <legend class="text-sm text-slate-600">Sections to match</legend>
-                                <p class="mt-1 text-xs text-slate-500">Unchecked sections are left unchanged on the customer.</p>
-                                <ul class="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
-                                    @foreach ($matchSections as $index => $section)
-                                        <li>
-                                            <label class="flex items-center gap-2 text-sm text-slate-700">
-                                                <input type="checkbox" wire:model="matchSections.{{ $index }}.include" class="rounded border-slate-300 text-navy-800 focus:ring-navy-800" />
-                                                <span>{{ $section['label'] }}</span>
-                                            </label>
-                                        </li>
-                                    @endforeach
-                                </ul>
-                            </fieldset>
+                            @include('livewire.documents.partials.match-sections')
                         @endif
-                        @error('merge') <p class="whitespace-pre-line text-sm text-red-700">{{ $message }}</p> @enderror
-                    </div>
-                    <div class="flex justify-end gap-3 border-t border-slate-200 px-5 py-4">
-                        <button type="button" wire:click="closeMatch" class="text-sm text-slate-600">Cancel</button>
-                        <button type="button" x-on:click="matchWithLoader($wire, 'confirmMatch', 'Matching')" wire:loading.attr="disabled" wire:target="confirmMatch" class="rounded-md bg-navy-800 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">{{ $recommendCreate && $matchCustomerId === '' ? 'Create and match' : 'Match' }}</button>
+                        <div class="flex justify-end gap-3">
+                            <button type="button" wire:click="closeMatch" class="text-sm text-slate-600">Cancel</button>
+                            <button type="button" x-on:click="matchWithLoader($wire, 'confirmMatch', 'Matching')" wire:loading.attr="disabled" wire:target="confirmMatch" class="rounded-md bg-navy-800 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">{{ $recommendCreate && $matchCustomerId === '' ? 'Create and match' : 'Match' }}</button>
+                        </div>
                     </div>
                 </div>
             </div>

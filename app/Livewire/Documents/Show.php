@@ -638,6 +638,21 @@ class Show extends Component
         return $this->sectionsFromPresentModules($present);
     }
 
+    /**
+     * Parent checkbox + popover groups for match sections.
+     *
+     * @return list<array{key: string, label: string, prefix?: string, modules?: list<string>}>
+     */
+    public function matchSectionGroups(): array
+    {
+        return [
+            ['key' => 'addresses', 'label' => 'Addresses', 'prefix' => 'addresses:'],
+            ['key' => 'contacts', 'label' => 'Contacts', 'prefix' => 'contacts:'],
+            ['key' => 'employment', 'label' => 'Employment', 'modules' => ['employment_status', 'employments']],
+            ['key' => 'compliance', 'label' => 'Compliance', 'prefix' => 'compliance:'],
+        ];
+    }
+
     /** @return array<string, true> */
     private function presentMatchModules(ExtractedProfile $profile): array
     {
@@ -645,6 +660,17 @@ class Show extends Component
         $present = [];
         foreach ($profile->reviewed_projection['values'] ?? [] as $value) {
             if (($value['state'] ?? '') !== 'provided' || ! is_string($value['field_id'] ?? null)) {
+                continue;
+            }
+            if (preg_match('/^addresses\[(residential|mailing)\]/', $value['field_id'], $match) === 1) {
+                $present['addresses:'.$match[1]] = true;
+
+                continue;
+            }
+            if (preg_match('/^contacts\[([^\]]+)\]/', $value['field_id'], $match) === 1) {
+                $kind = str_starts_with($match[1], 'social') ? 'social' : $match[1];
+                $present['contacts:'.$kind] = true;
+
                 continue;
             }
             $present[$preview->moduleOf($value['field_id'])] = true;
@@ -660,7 +686,10 @@ class Show extends Component
     private function sectionsFromPresentModules(array $present): array
     {
         $order = [
-            'personal', 'contacts', 'addresses', 'relationships', 'employment_status', 'employments',
+            'personal',
+            'contacts:mobile', 'contacts:home', 'contacts:email', 'contacts:social',
+            'addresses:residential', 'addresses:mailing',
+            'relationships', 'employment_status', 'employments',
             'bank_accounts', 'tin', 'tax_residencies', 'fatca', 'financial', 'investment',
             'brokerage_declaration', 'brokerage_accounts', 'pep_associations',
             'compliance:pep', 'compliance:bankruptcy', 'compliance:petition', 'other',
@@ -684,11 +713,15 @@ class Show extends Component
     {
         return match ($module) {
             'personal' => 'Personal details',
-            'contacts' => 'Contacts',
-            'addresses' => 'Addresses',
+            'contacts:mobile' => 'Mobile',
+            'contacts:home' => 'Home telephone',
+            'contacts:email' => 'Email',
+            'contacts:social' => 'Social',
+            'addresses:residential' => 'Residential',
+            'addresses:mailing' => 'Mailing',
             'relationships' => 'Family and next of kin',
             'employment_status' => 'Employment status',
-            'employments' => 'Employment',
+            'employments' => 'Employment details',
             'bank_accounts' => 'Bank accounts',
             'tin' => 'Tax identification',
             'tax_residencies' => 'Foreign tax residency',
@@ -698,11 +731,44 @@ class Show extends Component
             'brokerage_declaration' => 'Brokerage declaration',
             'brokerage_accounts' => 'Other brokerage accounts',
             'pep_associations' => 'PEP associations',
-            'compliance:pep' => 'PEP compliance',
+            'compliance:pep' => 'PEP',
             'compliance:bankruptcy' => 'Bankruptcy',
             'compliance:petition' => 'Petition',
-            default => 'Other',
+            default => str_starts_with($module, 'contacts:') ? ucfirst(substr($module, 9)) : 'Other',
         };
+    }
+
+    public function toggleMatchSectionGroup(string $key): void
+    {
+        $indexes = $this->indexesForMatchSectionGroup($key);
+        if ($indexes === []) {
+            return;
+        }
+        $include = ! collect($indexes)->every(fn (int|string $index): bool => (bool) $this->matchSections[$index]['include']);
+        foreach ($indexes as $index) {
+            $this->matchSections[$index]['include'] = $include;
+        }
+    }
+
+    /** @return list<int|string> */
+    private function indexesForMatchSectionGroup(string $key): array
+    {
+        $def = collect($this->matchSectionGroups())->firstWhere('key', $key);
+        if (! is_array($def)) {
+            return [];
+        }
+
+        return collect($this->matchSections)
+            ->filter(function (array $section) use ($def): bool {
+                $module = $section['module'];
+                if (isset($def['prefix']) && is_string($def['prefix']) && str_starts_with($module, $def['prefix'])) {
+                    return true;
+                }
+
+                return isset($def['modules']) && is_array($def['modules']) && in_array($module, $def['modules'], true);
+            })
+            ->keys()
+            ->all();
     }
 
     /** @return list<string> */

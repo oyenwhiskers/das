@@ -160,6 +160,20 @@ class ProfileProjection
         return preg_replace('/\s*[Ưư]/u', 'ff', $value) ?? $value;
     }
 
+    public function isAddressLinePath(string $path): bool
+    {
+        return preg_match('/(?:^|\.)((?:employer_)?address_line_[12]|line_[12])$/', $path) === 1;
+    }
+
+    public function stripAddressLineCommas(string $value): string
+    {
+        if (! str_contains($value, ',')) {
+            return $value;
+        }
+
+        return trim(preg_replace('/\s+/u', ' ', str_replace(',', ' ', $value)) ?? $value);
+    }
+
     public function dayFirstDate(string $value): ?string
     {
         // shortcut: these forms print day-first dates; accept month-first only if a document uses it.

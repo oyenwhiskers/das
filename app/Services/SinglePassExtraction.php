@@ -20,7 +20,7 @@ use UnexpectedValueException;
 
 class SinglePassExtraction
 {
-    public const PROMPT_VERSION = '21';
+    public const PROMPT_VERSION = '23';
 
     public const CONTRACT = '2.0';
 
@@ -205,8 +205,8 @@ class SinglePassExtraction
             .'When the spouse or next of kin looks self-employed (for example occupation Self-employed, Business, Trader, self-working, or similar), emit relationships[].related_person.occupation as ENTREPRENEUR in capital letters, and when their employer address components are blank, also emit the applicant\'s mailing address into relationships[].related_person.employer_address_line_1, employer_address_line_2, postcode, city, state, and country; if mailing is blank, use the applicant\'s residential address instead. Keep any employer address text that is actually printed for them. '
             .'An employer, bank, account number, or income printed on the page is its own field. '
             .'When a Bank Reference or bank block prints Bank, Branch, Account type, and Account number, emit each filled printed line on its matching bank_accounts[] field under the same row_ref. Do not stop after bank name and account number if branch is printed. For account_type, emit only when one of SAVINGS, CURRENT, or OTHER is clearly selected, not when the page only prints the options label savings/current/others. '
-            .'On a bank statement or passbook, treat the header as a bank block: emit bank_name, account_number, account_holder_name, and branch_address when printed, under one row_ref. Map printed account-type labels to the enum: savings-like including Savings-i to SAVINGS, current-like to CURRENT, any other clear type to OTHER; omit account_type when it is not printed. The printed account-holder or customer name on the statement must emit customer.full_legal_name; the same text may also fill bank_accounts[].account_holder_name. Do not leave customer.full_legal_name blank when a holder name is printed. Put the account-holder or correspondence address into addresses[mailing] line, postcode, city, state, and country as printed; never put that address on addresses[residential] or bank_accounts[].branch_address. Put bank branch or bank office text into branch_address only. When employment status or arrangement is self_employed, also emit that same correspondence (mailing) address on blank employments[] address fields. When not self_employed, do not put the statement address on employment. Do not emit transaction table rows as profile fields. Each distinct statement header is a new record; do not skip a printed account holder on these pages. '
-            .'When employment status or arrangement is self_employed, emit employments[].occupation as ENTREPRENEUR in capital letters. When Office/Business Address components are blank, emit the mailing address into those blank employments[] address fields; if mailing is blank, emit the residential address instead. Emit only components that are blank on the office block; keep any printed office line, city, state, postcode, or country as written. Do not invent an office address when the person is employed by someone else. '
+            .'On a bank statement or passbook, treat the header as a bank block: emit bank_name, account_number, account_holder_name, and branch_address when printed, under one row_ref. Map printed account-type labels to the enum: savings-like including Savings-i to SAVINGS, current-like to CURRENT, any other clear type to OTHER; omit account_type when it is not printed. The printed account-holder or customer name on the statement must emit customer.full_legal_name; the same text may also fill bank_accounts[].account_holder_name. Do not leave customer.full_legal_name blank when a holder name is printed. Put the account-holder or correspondence address into addresses[mailing] line, postcode, city, state, and country as printed; never put that address on addresses[residential] or bank_accounts[].branch_address. The top letterhead often shows the bank HQ, head office, or registered-office address; that is not branch_address. Emit branch_address only from a Branch or Cawangan label for this account (often printed lower than the HQ block). Never put HQ, head office, registered office, or Menara/tower letterhead text into branch_address. If only the HQ address is shown, or you are unsure whether the text is HQ versus the account branch versus the customer city or mailing address, omit branch_address entirely. Put the account Branch or Cawangan text into branch_address only. When employment status or arrangement is self_employed, also emit that same correspondence (mailing) address on blank employments[] address fields. When not self_employed, do not put the statement address on employment. Do not emit transaction table rows as profile fields. Each distinct statement header is a new record; do not skip a printed account holder on these pages. '
+            .'When employment status or arrangement is self_employed, or when occupation wording looks self-employed (for example Business, Trader, self-working, kerja sendiri, bekerja sendiri, or similar), emit employments[].occupation as ENTREPRENEUR in capital letters. When Office/Business Address components are blank in those cases, emit the mailing address into those blank employments[] address fields; if mailing is blank, emit the residential address instead. Emit only components that are blank on the office block; keep any printed office line, city, state, postcode, or country as written. Do not invent self_employed or ENTREPRENEUR merely because employer name is blank, and do not invent an office address when the person is employed by someone else. '
             .'The printed heading "Spouse/Next of kin" is a label, not proof of marriage. Set relationships[].relationship to spouse only when customer.marital_status is Married (or the form clearly names husband/wife/spouse). Opposite gender alone is not enough. When marital status is Single, Divorced, Widowed, or blank, or both people are the same gender, set relationships[].relationship to other and relationships[].other_relationship to Next of kin. An NRIC with an odd last digit is male and an even last digit is female. '
             .'Copy repeatable field ids exactly, including the []. Put the row number only in row_ref. Do not write [0] or [1] inside a field id. '
             .'Repeatable fields need a stable row_ref. Leave observations that fit no listed field in unresolved. '
@@ -324,6 +324,9 @@ class SinglePassExtraction
                 continue;
             }
             $built = $this->values($record, $fields, $start, $end);
+            if (BankStatementProfileRules::isStatementLabel($meta['document_type'], $meta['title'])) {
+                $built['values'] = BankStatementProfileRules::dropUncertainStatementBranches($built['values']);
+            }
             if ($built['pages'] === []) {
                 $unresolved[] = ['warning' => 'Record '.$ref.' has no supported page.'];
 
@@ -686,6 +689,9 @@ class SinglePassExtraction
         }
         if (is_string($value)) {
             $value = $this->projection->repairBrokenFfLigature($value);
+            if ($this->projection->isAddressLinePath((string) ($field['path'] ?? ''))) {
+                $value = $this->projection->stripAddressLineCommas($value);
+            }
         }
         if (($field['type'] ?? '') === 'date' && is_string($value) && ($iso = $this->projection->dayFirstDate($value)) !== null) {
             $value = $iso;

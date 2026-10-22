@@ -750,7 +750,7 @@ class Resolver
             return null;
         }
 
-        return number_format((float) $value, 2, '.', '');
+        return number_format((float) $value, 2, '.', ',');
     }
 
     private function brokers(Customer $customer, string $item): mixed

@@ -192,7 +192,7 @@ class BimbsecModuleTest extends TestCase
         $personal = collect($resolved['draws'])->first(fn (array $draw): bool => ($draw['field']['printed_item'] ?? '') === 'RM60,001-RM120,000');
         $salary = collect($resolved['draws'])->first(fn (array $draw): bool => ($draw['field']['printed_item'] ?? '') === 'Salary');
         $this->assertSame(['MAYBANK'], $bank['rows'] ?? null);
-        $this->assertSame('8000.00', $income['text'] ?? null);
+        $this->assertSame('8,000.00', $income['text'] ?? null);
         $this->assertTrue($personal['on'] ?? false);
         $this->assertTrue($salary['on'] ?? false);
         $joint = collect(app(Resolver::class)->resolve($other->fresh(), [])['draws'])->first(fn (array $draw): bool => ($draw['field']['printed_item'] ?? '') === 'bank');

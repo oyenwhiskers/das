@@ -97,18 +97,26 @@ class BankStatementProfileRules
     }
 
     /**
-     * Applicant employment kind: keep a clear tick; when confusing, employer filled → employed, else self_employed.
+     * Applicant employment kind: keep a clear tick; when unclear, self-employed wording → self_employed,
+     * employer filled → employed, else leave unset (do not invent self_employed).
      *
-     * @return 'employed'|'self_employed'|'retired'|'other'
+     * @return 'employed'|'self_employed'|'retired'|'other'|null
      */
-    public static function resolveApplicantEmploymentKind(?string $status, ?string $arrangement, ?string $employerName): string
-    {
+    public static function resolveApplicantEmploymentKind(
+        ?string $status,
+        ?string $arrangement,
+        ?string $employerName,
+        ?string $occupation = null,
+    ): ?string {
         $clear = self::clearEmploymentKind($status, $arrangement);
         if ($clear !== null) {
             return $clear;
         }
+        if (self::relatedLooksSelfEmployed($occupation, $employerName)) {
+            return 'self_employed';
+        }
 
-        return filled(trim((string) $employerName)) ? 'employed' : 'self_employed';
+        return filled(trim((string) $employerName)) ? 'employed' : null;
     }
 
     /**
@@ -232,12 +240,136 @@ class BankStatementProfileRules
         if ($blob === '') {
             return false;
         }
-        if (preg_match('/\b(self[-\s]?employed?|self[-\s]?working|own business|business owner|sole prop(?:rietor)?|freelancer|entrepreneur|enterpreneur|berniaga|kerja sendiri)\b/u', $blob) === 1) {
+        if (preg_match('/\b(self[-\s]?employed?|self[-\s]?working|own business|business owner|sole prop(?:rietor)?|freelancer|entrepreneur|enterpreneur|berniaga|bekerja sendiri|kerja sendiri)\b/u', $blob) === 1) {
             return true;
         }
 
         // Form-3 shorthand occupations that usually mean self-employed.
         return in_array($occupation, ['business', 'bisnes', 'trader', 'trading'], true);
+    }
+
+    /**
+     * Letterhead / HQ / registered-office text is not the account branch.
+     * Statements often print HQ at the top and the real Branch/Cawangan lower down.
+     */
+    public static function looksLikeBankHeadquarters(mixed $branch, mixed $evidence = null): bool
+    {
+        $blob = self::normalize(trim((string) $evidence).' '.trim((string) $branch));
+        if ($blob === '') {
+            return false;
+        }
+        if (preg_match('/\b(hq|h q|head office|headquarters|ibu pejabat|pejabat utama|registered office|pejabat berdaftar|corporate hq|corporate head office)\b/u', $blob) === 1) {
+            return true;
+        }
+        foreach ([
+            'menara maybank', 'jalan tun perak', 'menara cimb', 'menara public bank',
+            'menara rhb', 'menara hong leong', 'menara alliance', 'menara mbsb',
+        ] as $landmark) {
+            if (str_contains($blob, $landmark)) {
+                return true;
+            }
+        }
+
+        // Floor/level + tower/menara is typical HQ letterhead, not a retail branch name.
+        return preg_match('/\b(level|lvl|floor|tingkat)\s*\d+\b/u', $blob) === 1
+            && preg_match('/\b(menara|tower|wisma)\b/u', $blob) === 1;
+    }
+
+    /**
+     * Statement branch: keep only when evidence/value clearly marks the account Branch/Cawangan,
+     * not HQ letterhead, mailing address, or bank name. Unsure → null.
+     *
+     * @param  array{line_1?: mixed, line_2?: mixed, postcode?: mixed, city?: mixed, state?: mixed, country?: mixed}  $mailing
+     */
+    public static function confidentStatementBranch(
+        mixed $branch,
+        mixed $evidence = null,
+        array $mailing = [],
+        mixed $bankName = null,
+    ): ?string {
+        $branch = trim((string) $branch);
+        if ($branch === '') {
+            return null;
+        }
+        $normBranch = self::normalize($branch);
+        if ($normBranch === '' || $normBranch === self::normalize($bankName)) {
+            return null;
+        }
+        if (self::looksLikeBankHeadquarters($branch, $evidence)) {
+            return null;
+        }
+        $mailingBits = [];
+        foreach (['line_1', 'line_2', 'postcode', 'city', 'state', 'country'] as $key) {
+            $part = self::normalize($mailing[$key] ?? '');
+            if ($part !== '') {
+                $mailingBits[] = $part;
+            }
+        }
+        if (in_array($normBranch, $mailingBits, true)) {
+            return null;
+        }
+        $composed = trim(implode(' ', $mailingBits));
+        if ($composed !== '' && (
+            $normBranch === $composed
+            || str_contains($composed, $normBranch)
+            || str_contains($normBranch, $composed)
+        )) {
+            return null;
+        }
+        $cue = '/\b(branch|cawangan|kod\s*cawangan|branch\s*(?:name|code|address|no\.?|number)?)\b/ui';
+        if (preg_match($cue, trim((string) $evidence).' '.$branch) !== 1) {
+            return null;
+        }
+
+        return $branch;
+    }
+
+    /**
+     * Drop uncertain statement branch_address values from an extracted value list.
+     *
+     * @param  list<array<string, mixed>>  $values
+     * @return list<array<string, mixed>>
+     */
+    public static function dropUncertainStatementBranches(array $values): array
+    {
+        $mailingByRow = [];
+        $bankByRow = [];
+        foreach ($values as $value) {
+            $field = is_string($value['field_id'] ?? null) ? $value['field_id'] : '';
+            $row = is_string($value['row_ref'] ?? null) ? $value['row_ref'] : '';
+            if (($value['state'] ?? null) !== 'provided' || ! is_string($value['value'] ?? null)) {
+                continue;
+            }
+            if (preg_match('/^addresses\[mailing\]\.(.+)$/', $field, $match) === 1) {
+                $mailingByRow[''][$match[1]] = $value['value'];
+            }
+            if ($field === 'bank_accounts[].bank_name') {
+                $bankByRow[$row] = $value['value'];
+            }
+        }
+        $kept = [];
+        foreach ($values as $value) {
+            if (($value['field_id'] ?? null) !== 'bank_accounts[].branch_address'
+                || ($value['state'] ?? null) !== 'provided') {
+                $kept[] = $value;
+
+                continue;
+            }
+            $row = is_string($value['row_ref'] ?? null) ? $value['row_ref'] : '';
+            $confident = self::confidentStatementBranch(
+                $value['value'] ?? null,
+                $value['evidence_text'] ?? null,
+                $mailingByRow[''] ?? [],
+                $bankByRow[$row] ?? null,
+            );
+            if ($confident === null) {
+                continue;
+            }
+            $value['value'] = $confident;
+            $kept[] = $value;
+        }
+
+        return $kept;
     }
 
     /**

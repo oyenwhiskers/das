@@ -68,7 +68,8 @@ class ProfileMergePreview
             }
             $included = in_array($action, ['add', 'replace', 'clear'], true)
                 && ! in_array($key, $excluded, true)
-                && ! in_array('module:'.$module, $excluded, true);
+                && ! in_array('module:'.$module, $excluded, true)
+                && ! $this->kindExcluded((string) $value['field_id'], $excluded);
             $lines[] = [
                 'key' => $key,
                 'field_id' => $value['field_id'],
@@ -184,14 +185,16 @@ class ProfileMergePreview
         }
         $proposedEmployer = $this->proposedModuleValue($included, $proposed, 'employments[].employer_name');
         $proposedArrangement = $this->proposedModuleValue($included, $proposed, 'employments[].arrangement');
+        $proposedOccupation = $this->proposedModuleValue($included, $proposed, 'employments[].occupation');
         if ($changes = $changesFor('employment_status')) {
             $statusPayload = $this->overlay($this->employmentStatus($customer), $included, $proposed, 'employment_status');
             $statusKind = BankStatementProfileRules::resolveApplicantEmploymentKind(
                 is_string($statusPayload['employmentStatus'] ?? null) ? $statusPayload['employmentStatus'] : null,
                 is_string($proposedArrangement) ? $proposedArrangement : null,
                 is_string($proposedEmployer) ? $proposedEmployer : null,
+                is_string($proposedOccupation) ? $proposedOccupation : null,
             );
-            if (BankStatementProfileRules::clearEmploymentKind(
+            if ($statusKind !== null && BankStatementProfileRules::clearEmploymentKind(
                 is_string($statusPayload['employmentStatus'] ?? null) ? $statusPayload['employmentStatus'] : null,
                 is_string($proposedArrangement) ? $proposedArrangement : null,
             ) === null) {
@@ -216,8 +219,9 @@ class ProfileMergePreview
                     ?? $customer->employment_status;
                 $arrangement = is_string($payload['arrangement'] ?? null) ? $payload['arrangement'] : null;
                 $employer = is_string($payload['employer_name'] ?? null) ? $payload['employer_name'] : null;
-                $kind = BankStatementProfileRules::resolveApplicantEmploymentKind($status, $arrangement, $employer);
-                if (BankStatementProfileRules::clearEmploymentKind($status, $arrangement) === null) {
+                $occupation = is_string($payload['occupation'] ?? null) ? $payload['occupation'] : null;
+                $kind = BankStatementProfileRules::resolveApplicantEmploymentKind($status, $arrangement, $employer, $occupation);
+                if ($kind !== null && BankStatementProfileRules::clearEmploymentKind($status, $arrangement) === null) {
                     $payload['arrangement'] = $kind;
                 }
                 if ($kind === 'self_employed') {
@@ -1094,6 +1098,21 @@ class ProfileMergePreview
     public function moduleOf(string $path): string
     {
         return $this->module($path);
+    }
+
+    /** @param  list<string>  $excluded */
+    private function kindExcluded(string $fieldId, array $excluded): bool
+    {
+        if (preg_match('/^addresses\[(residential|mailing)\]/', $fieldId, $match) === 1) {
+            return in_array('module:addresses:'.$match[1], $excluded, true);
+        }
+        if (preg_match('/^contacts\[([^\]]+)\]/', $fieldId, $match) === 1) {
+            $kind = str_starts_with($match[1], 'social') ? 'social' : $match[1];
+
+            return in_array('module:contacts:'.$kind, $excluded, true);
+        }
+
+        return false;
     }
 
     private function module(string $path): string

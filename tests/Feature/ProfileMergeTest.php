@@ -419,6 +419,97 @@ class ProfileMergeTest extends TestCase
         $this->assertNull($account->fresh()->branch_address);
     }
 
+    public function test_unchecked_address_kind_is_left_unchanged(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->create([
+            'full_legal_name' => 'Address Keep',
+            'race' => 'Malay',
+            'country_of_residence' => 'Malaysia',
+        ]);
+        $customer->addresses()->create([
+            'type' => AddressType::Residential,
+            'line_1' => 'Old Residential',
+            'city' => 'KL',
+            'state' => 'Wilayah',
+            'postcode' => '50000',
+            'country' => 'Malaysia',
+        ]);
+        $customer->addresses()->create([
+            'type' => AddressType::Mailing,
+            'same_as_residential' => false,
+            'line_1' => 'Kept Mailing',
+            'city' => 'PJ',
+            'state' => 'Selangor',
+            'postcode' => '46000',
+            'country' => 'Malaysia',
+        ]);
+        [$scan, $profile] = $this->reviewed('Address Keep', [
+            $this->value('addresses[residential].line_1', 'New Residential'),
+            $this->value('addresses[residential].city', 'KL'),
+            $this->value('addresses[residential].state', 'Wilayah'),
+            $this->value('addresses[residential].postcode', '50000'),
+            $this->value('addresses[residential].country', 'Malaysia'),
+            $this->value('addresses[mailing].line_1', 'New Mailing'),
+            $this->value('addresses[mailing].city', 'Shah Alam'),
+            $this->value('addresses[mailing].state', 'Selangor'),
+            $this->value('addresses[mailing].postcode', '40000'),
+            $this->value('addresses[mailing].country', 'Malaysia'),
+        ]);
+
+        $component = Livewire::actingAs($staff)->test(Show::class, ['documentScan' => $scan])
+            ->call('openMatch', $profile->id)
+            ->assertSee('Addresses')
+            ->assertSee('Residential')
+            ->assertSee('Mailing')
+            ->call('selectMatchCustomer', $customer->id);
+        $mailingIndex = collect($component->get('matchSections'))->search(fn (array $section): bool => $section['module'] === 'addresses:mailing');
+        $this->assertNotFalse($mailingIndex);
+        $component->set('matchSections.'.$mailingIndex.'.include', false)
+            ->set('matchStrategy', 'overwrite')
+            ->call('confirmMatch')
+            ->assertHasNoErrors()
+            ->assertDispatched('matched');
+
+        $customer->refresh();
+        $this->assertSame('NEW RESIDENTIAL', $customer->addresses()->where('type', AddressType::Residential)->value('line_1'));
+        $this->assertSame('Kept Mailing', $customer->addresses()->where('type', AddressType::Mailing)->value('line_1'));
+    }
+
+    public function test_unchecked_contact_kind_is_left_unchanged(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->create([
+            'full_legal_name' => 'Contact Keep',
+            'race' => 'Malay',
+            'country_of_residence' => 'Malaysia',
+            'primary_mobile' => '0123456789',
+            'primary_email' => 'kept@example.com',
+        ]);
+        [$scan, $profile] = $this->reviewed('Contact Keep', [
+            $this->value('contacts[mobile].value', '0199999999'),
+            $this->value('contacts[email].value', 'new@example.com'),
+        ]);
+
+        $component = Livewire::actingAs($staff)->test(Show::class, ['documentScan' => $scan])
+            ->call('openMatch', $profile->id)
+            ->assertSee('Contacts')
+            ->assertSee('Mobile')
+            ->assertSee('Email')
+            ->call('selectMatchCustomer', $customer->id);
+        $emailIndex = collect($component->get('matchSections'))->search(fn (array $section): bool => $section['module'] === 'contacts:email');
+        $this->assertNotFalse($emailIndex);
+        $component->set('matchSections.'.$emailIndex.'.include', false)
+            ->set('matchStrategy', 'overwrite')
+            ->call('confirmMatch')
+            ->assertHasNoErrors()
+            ->assertDispatched('matched');
+
+        $customer->refresh();
+        $this->assertSame('0199999999', $customer->primary_mobile);
+        $this->assertSame('kept@example.com', $customer->primary_email);
+    }
+
     public function test_matching_with_every_section_unchecked_is_refused(): void
     {
         $staff = User::factory()->staff()->create();

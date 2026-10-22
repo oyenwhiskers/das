@@ -136,6 +136,30 @@ class SinglePassExtractionTest extends TestCase
             ->assertSee('abdulrahmanyusoff8@gmail.com');
     }
 
+    public function test_address_line_commas_are_stripped_after_extract(): void
+    {
+        $scan = $this->scan();
+        $this->fake($this->payload([[
+            'record_ref' => 'applicant_1', 'anchor' => 'Application', 'source_pages' => [1], 'warnings' => [],
+            'values' => [
+                $this->value('addresses[residential].line_1', 'provided', 'NO 11,RESIDENSI CYBERJAYA LAKEFRONT,'),
+                $this->value('addresses[residential].line_2', 'provided', 'LORONG MASJID, KAMPUNG PANGKAL MELERET'),
+                $this->value('addresses[residential].city', 'provided', 'Cyberjaya'),
+                $this->value('employments[].address_line_1', 'provided', '67,LORONG SERI KUANTAN 65', '67,LORONG SERI KUANTAN 65', 'job-1'),
+                $this->value('bank_accounts[].branch_address', 'provided', '15th Floor, Tower A', '15th Floor, Tower A', 'bank-1'),
+            ],
+        ]]));
+
+        app(SinglePassExtraction::class)->run($scan, app(GeminiDocumentReader::class));
+
+        $values = collect($scan->extractedProfiles()->sole()->original_projection['values'])->pluck('value', 'field_id');
+        $this->assertSame('NO 11 RESIDENSI CYBERJAYA LAKEFRONT', $values['addresses[residential].line_1']);
+        $this->assertSame('LORONG MASJID KAMPUNG PANGKAL MELERET', $values['addresses[residential].line_2']);
+        $this->assertSame('Cyberjaya', $values['addresses[residential].city']);
+        $this->assertSame('67 LORONG SERI KUANTAN 65', $values['employments[].address_line_1']);
+        $this->assertSame('15th Floor, Tower A', $values['bank_accounts[].branch_address']);
+    }
+
     public function test_a_name_used_as_the_record_reference_is_still_shown(): void
     {
         $staff = User::factory()->staff()->create();
@@ -739,17 +763,23 @@ class SinglePassExtractionTest extends TestCase
         $fields = $pass->fieldList($snapshot);
         $prompt = $pass->prompt($snapshot, 1, 2);
 
-        $this->assertSame('21', SinglePassExtraction::PROMPT_VERSION);
+        $this->assertSame('23', SinglePassExtraction::PROMPT_VERSION);
         $this->assertStringContainsString('bank_accounts[].branch_address', $fields);
         $this->assertStringContainsString('When a Bank Reference or bank block prints Bank, Branch, Account type, and Account number', $prompt);
         $this->assertStringContainsString('Do not stop after bank name and account number if branch is printed', $prompt);
         $this->assertStringContainsString('On a bank statement or passbook, treat the header as a bank block', $prompt);
+        $this->assertStringContainsString('The top letterhead often shows the bank HQ, head office, or registered-office address; that is not branch_address', $prompt);
+        $this->assertStringContainsString('Emit branch_address only from a Branch or Cawangan label for this account', $prompt);
+        $this->assertStringContainsString('Never put HQ, head office, registered office, or Menara/tower letterhead text into branch_address', $prompt);
+        $this->assertStringContainsString('If only the HQ address is shown, or you are unsure whether the text is HQ versus the account branch versus the customer city or mailing address, omit branch_address entirely', $prompt);
         $this->assertStringContainsString('The printed account-holder or customer name on the statement must emit customer.full_legal_name', $prompt);
         $this->assertStringContainsString('Do not leave customer.full_legal_name blank when a holder name is printed', $prompt);
         $this->assertStringContainsString('Put the account-holder or correspondence address into addresses[mailing]', $prompt);
         $this->assertStringContainsString('never put that address on addresses[residential]', $prompt);
         $this->assertStringContainsString('also emit that same correspondence (mailing) address on blank employments[]', $prompt);
         $this->assertStringContainsString('emit employments[].occupation as ENTREPRENEUR in capital letters', $prompt);
+        $this->assertStringContainsString('or when occupation wording looks self-employed', $prompt);
+        $this->assertStringContainsString('Do not invent self_employed or ENTREPRENEUR merely because employer name is blank', $prompt);
         $this->assertStringContainsString('emit the mailing address into those blank employments[] address fields; if mailing is blank, emit the residential address instead', $prompt);
         $this->assertStringContainsString('When the spouse or next of kin looks self-employed', $prompt);
         $this->assertStringContainsString('emit relationships[].related_person.occupation as ENTREPRENEUR in capital letters', $prompt);
@@ -911,7 +941,7 @@ class SinglePassExtractionTest extends TestCase
                     $this->value('bank_accounts[].account_number', 'provided', '1234567890', '1234567890', 'acct-1'),
                     $this->value('bank_accounts[].account_holder_name', 'provided', 'Amina Noor', 'Amina Noor', 'acct-1'),
                     $this->value('bank_accounts[].account_type', 'provided', 'SAVINGS', 'Savings-i', 'acct-1'),
-                    $this->value('bank_accounts[].branch_address', 'provided', 'Jalan Ampang', 'Jalan Ampang', 'acct-1'),
+                    $this->value('bank_accounts[].branch_address', 'provided', 'Jalan Ampang', 'Branch: Jalan Ampang', 'acct-1'),
                     $this->value('addresses[mailing].line_1', 'provided', '12 Jalan Melati', '12 Jalan Melati'),
                     $this->value('addresses[mailing].postcode', 'provided', '50000', '50000'),
                     $this->value('addresses[mailing].city', 'provided', 'Kuala Lumpur', 'Kuala Lumpur'),
@@ -931,6 +961,68 @@ class SinglePassExtractionTest extends TestCase
         $this->assertSame('Jalan Ampang', $values['bank_accounts[].branch_address']);
         $this->assertSame('12 Jalan Melati', $values['addresses[mailing].line_1']);
         $this->assertSame('Malaysia', $values['addresses[mailing].country']);
+    }
+
+    public function test_bank_statement_drops_uncertain_branch_address(): void
+    {
+        $snapshot = CustomerProfileSchema::snapshot();
+        $pass = app(SinglePassExtraction::class);
+        $response = [
+            'contract_version' => '2.0', 'schema_hash' => $snapshot->hash,
+            'document_type' => 'Bank Statement', 'title' => 'Maybank Statement', 'summary' => 'One account statement.',
+            'readable' => true, 'limitations' => null,
+            'records' => [[
+                'record_ref' => 'r1', 'source_pages' => [1], 'warnings' => [],
+                'values' => [
+                    $this->value('customer.full_legal_name', 'provided', 'Amina Noor', 'Amina Noor'),
+                    $this->value('bank_accounts[].bank_name', 'provided', 'Maybank', 'Maybank', 'acct-1'),
+                    $this->value('bank_accounts[].account_number', 'provided', '1234567890', '1234567890', 'acct-1'),
+                    $this->value('bank_accounts[].branch_address', 'provided', 'Kuala Lumpur', 'Kuala Lumpur', 'acct-1'),
+                    $this->value('addresses[mailing].city', 'provided', 'Kuala Lumpur', 'Kuala Lumpur'),
+                ],
+            ]],
+            'unresolved' => [],
+        ];
+
+        $accepted = $pass->accept($response, $snapshot->schema(), $snapshot->hash, 1, 1);
+        $fields = collect($accepted['records']['r1']['values'])->pluck('field_id');
+
+        $this->assertFalse($fields->contains('bank_accounts[].branch_address'));
+        $this->assertTrue($fields->contains('bank_accounts[].bank_name'));
+    }
+
+    public function test_bank_statement_drops_hq_letterhead_as_branch_address(): void
+    {
+        $snapshot = CustomerProfileSchema::snapshot();
+        $pass = app(SinglePassExtraction::class);
+        $response = [
+            'contract_version' => '2.0', 'schema_hash' => $snapshot->hash,
+            'document_type' => 'Bank Statement', 'title' => 'Maybank Statement', 'summary' => 'One account statement.',
+            'readable' => true, 'limitations' => null,
+            'records' => [[
+                'record_ref' => 'r1', 'source_pages' => [1], 'warnings' => [],
+                'values' => [
+                    $this->value('customer.full_legal_name', 'provided', 'Amina Noor', 'Amina Noor'),
+                    $this->value('bank_accounts[].bank_name', 'provided', 'Maybank', 'Maybank', 'acct-1'),
+                    $this->value('bank_accounts[].account_number', 'provided', '1234567890', '1234567890', 'acct-1'),
+                    $this->value(
+                        'bank_accounts[].branch_address',
+                        'provided',
+                        'Menara Maybank, 100 Jalan Tun Perak',
+                        'Branch: Menara Maybank, 100 Jalan Tun Perak',
+                        'acct-1',
+                    ),
+                    $this->value('addresses[mailing].city', 'provided', 'Kota Bharu', 'Kota Bharu'),
+                ],
+            ]],
+            'unresolved' => [],
+        ];
+
+        $accepted = $pass->accept($response, $snapshot->schema(), $snapshot->hash, 1, 1);
+        $fields = collect($accepted['records']['r1']['values'])->pluck('field_id');
+
+        $this->assertFalse($fields->contains('bank_accounts[].branch_address'));
+        $this->assertTrue($fields->contains('bank_accounts[].account_number'));
     }
 
     public function test_an_empty_terms_batch_may_use_the_page_number_as_its_contract_version(): void
