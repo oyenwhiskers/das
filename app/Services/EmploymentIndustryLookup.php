@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Services\Bimbsec\Catalog;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -13,14 +14,23 @@ use UnexpectedValueException;
 class EmploymentIndustryLookup
 {
     /**
-     * @param  array{employer_name: string, occupation?: string|null, arrangement?: string|null, registration_number?: string|null, city?: string|null, state?: string|null, country?: string|null}  $employment
+     * @param  array{employer_name?: string|null, occupation?: string|null, arrangement?: string|null, registration_number?: string|null, city?: string|null, state?: string|null, country?: string|null, industry?: string|null, sub_industry?: string|null}  $employment
+     * @param  array{age?: int, date_of_birth?: string, employment_status?: string, employment_status_other?: string, nationality?: string, country_of_residence?: string, residential?: array<string, string>}  $profile
      * @return array{industry: ?string, sub_industry: ?string}
      */
-    public function suggest(array $employment): array
+    public function suggest(array $employment, array $profile = []): array
     {
-        $employer = trim((string) ($employment['employer_name'] ?? ''));
-        if ($employer === '') {
-            throw new RuntimeException('Employer name is required to search industry.');
+        $employmentContext = $this->nonEmpty($employment, [
+            'employer_name', 'occupation', 'arrangement', 'registration_number', 'city', 'state', 'country',
+            'industry', 'sub_industry',
+        ]);
+        $profileContext = $this->profileContext($profile);
+        $hasPersonSignal = isset($profileContext['age'])
+            || isset($profileContext['residential'])
+            || isset($profileContext['employment_status']);
+
+        if ($employmentContext === [] && ! $hasPersonSignal) {
+            throw new RuntimeException('Enter employer or occupation, or complete customer age/address before searching industry.');
         }
 
         $apiKey = config('services.gemini.api_key');
@@ -28,19 +38,25 @@ class EmploymentIndustryLookup
             throw new RuntimeException('Gemini is not configured.');
         }
 
-        $support = [];
-        foreach (['occupation', 'arrangement', 'registration_number', 'city', 'state', 'country'] as $key) {
-            $value = trim((string) ($employment[$key] ?? ''));
-            if ($value !== '') {
-                $support[$key] = $value;
-            }
-        }
-
-        $prompt = 'Identify the employer company from the employer_name and return its industry and sub-industry as short free-text labels suitable for a Malaysian investment account form. '
-            .'Use Google Search to research the company when needed. Supporting employment fields may disambiguate only; do not invent a company that does not match the employer_name. '
-            .'Return null for both industry and sub_industry when the company is unknown, ambiguous, or the industry is unclear. '
-            .'employer_name: '.$employer.'. '
-            .'supporting: '.json_encode($support, JSON_THROW_ON_ERROR).'.';
+        [$maxIndustry, $maxSub] = $this->bimbsecLimits();
+        $prompt = 'Recommend industry and sub_industry labels for the BIMBSEC Malaysian investment account form. '
+            .'Use Google Search when it helps (especially for a named employer). '
+            .'Customer profile (for person context and plausibility; do not invent missing facts): '
+            .json_encode($profileContext, JSON_THROW_ON_ERROR).'. '
+            .'Employment details from the form (prefer when present): '
+            .json_encode($employmentContext, JSON_THROW_ON_ERROR).'. '
+            .'BIMBSEC fit: each label must be a short printable phrase of at most '.$maxIndustry.' characters for industry and '.$maxSub.' characters for sub_industry (spaces count). '
+            .'Prefer concise Title Case words a clerk would write in character boxes (for example "Manufacturing" / "Aluminium", "Construction" / "General Building", "Professional Services" / "Accounting"). Avoid slogans, company names, punctuation-heavy text, or long descriptions. '
+            .'CRITICAL — always return BOTH fields together as non-null strings when you can identify a sector: '
+            .'industry is the broad sector; sub_industry MUST be a narrower specialty of that same industry and MUST differ from industry '
+            .'(never copy the industry word into sub_industry; never leave sub_industry null or empty when industry is known). '
+            .'If the form already has industry or sub_industry, correct obvious typos and complete the missing field so the final pair is coherent. '
+            .'Do not copy misspellings from employer_name into labels (for example employer "ROHADI CONTRACTION" → industry "Construction", sub_industry "General Building" or "Civil Works", not "Contraction"). '
+            .'Rules: '
+            .'1) When employer_name is present, identify that employer\'s industry; supporting employment fields and profile may disambiguate only — do not invent a company that does not match employer_name. '
+            .'2) When employer_name is absent or too thin, recommend a logical related pair from occupation and the customer profile. '
+            .'Recommendations must be age-appropriate and location-plausible (for example, do not suggest physically demanding sectors such as construction for older customers unless occupation or employer clearly indicates that). Prefer Malaysian market norms. '
+            .'3) Return null for BOTH industry and sub_industry only when the answer is unknown, ambiguous, or not supported by the context — never return only one of the two.';
 
         try {
             $response = Http::withHeaders(['x-goog-api-key' => $apiKey])
@@ -79,11 +95,62 @@ class EmploymentIndustryLookup
             throw new RuntimeException('Gemini could not look up the employer industry.');
         }
 
-        return $this->decode($response);
+        return $this->decode($response, $maxIndustry, $maxSub);
+    }
+
+    /** @return array{0: int, 1: int} */
+    private function bimbsecLimits(): array
+    {
+        $catalog = app(Catalog::class);
+
+        return [
+            $catalog->cellCapacity('employment.industry', 'Industry') ?? 32,
+            $catalog->cellCapacity('employment.sub_industry', 'Sub-industry') ?? 32,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $profile
+     * @return array<string, mixed>
+     */
+    private function profileContext(array $profile): array
+    {
+        $context = $this->nonEmpty($profile, [
+            'date_of_birth', 'employment_status', 'employment_status_other', 'nationality', 'country_of_residence',
+        ]);
+        if (isset($profile['age']) && is_numeric($profile['age'])) {
+            $context['age'] = (int) $profile['age'];
+        }
+        if (isset($profile['residential']) && is_array($profile['residential'])) {
+            $residential = $this->nonEmpty($profile['residential'], ['city', 'state', 'postcode', 'country']);
+            if ($residential !== []) {
+                $context['residential'] = $residential;
+            }
+        }
+
+        return $context;
+    }
+
+    /**
+     * @param  array<string, mixed>  $source
+     * @param  list<string>  $keys
+     * @return array<string, string>
+     */
+    private function nonEmpty(array $source, array $keys): array
+    {
+        $out = [];
+        foreach ($keys as $key) {
+            $value = trim((string) ($source[$key] ?? ''));
+            if ($value !== '') {
+                $out[$key] = $value;
+            }
+        }
+
+        return $out;
     }
 
     /** @return array{industry: ?string, sub_industry: ?string} */
-    private function decode(Response $response): array
+    private function decode(Response $response, int $maxIndustry, int $maxSub): array
     {
         $payload = $response->json();
         if (! is_array($payload) || ($payload['status'] ?? null) !== 'completed') {
@@ -114,19 +181,27 @@ class EmploymentIndustryLookup
             throw new UnexpectedValueException('Gemini returned invalid industry lookup data.');
         }
 
-        $industry = $this->label($result['industry'] ?? null);
-        $sub = $this->label($result['sub_industry'] ?? null);
+        $industry = $this->label($result['industry'] ?? null, $maxIndustry);
+        $sub = $this->label($result['sub_industry'] ?? null, $maxSub);
+        // shortcut: hard relatedness check is limited; AI must keep the pair coherent, upgrade if we add a taxonomy
+        if ($industry === null || $sub === null || mb_strtolower($industry) === mb_strtolower($sub)) {
+            return ['industry' => null, 'sub_industry' => null];
+        }
 
         return ['industry' => $industry, 'sub_industry' => $sub];
     }
 
-    private function label(mixed $value): ?string
+    private function label(mixed $value, int $max): ?string
     {
         if (! is_string($value)) {
             return null;
         }
-        $trimmed = trim($value);
+        $trimmed = trim(preg_replace('/\s+/', ' ', $value) ?? '');
+        if ($trimmed === '') {
+            return null;
+        }
+        $cut = rtrim(mb_substr($trimmed, 0, $max));
 
-        return $trimmed === '' ? null : mb_substr($trimmed, 0, 255);
+        return $cut === '' ? null : $cut;
     }
 }

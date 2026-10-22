@@ -559,6 +559,32 @@ class DocumentReaderTest extends TestCase
         Queue::assertNotPushed(ProcessDocumentScan::class);
     }
 
+    public function test_completed_scan_shows_summary_near_the_top_for_review(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $scan = DocumentScan::factory()->for($staff, 'uploader')->create([
+            'status' => DocumentScanStatus::Completed,
+            'document_type' => 'Bank Statement',
+            'document_title' => 'Maybank Statement',
+            'summary' => 'One account holder statement for March.',
+            'readable' => true,
+            'limitations' => 'Stamp partially obscured.',
+            'extraction_status' => 'completed',
+        ]);
+
+        Livewire::actingAs($staff)
+            ->test(Show::class, ['documentScan' => $scan])
+            ->assertSee('Scan summary')
+            ->assertSee('One account holder statement for March.')
+            ->assertSee('Stamp partially obscured.')
+            ->assertSeeInOrder(['Processing', 'Scan summary', 'One account holder statement for March.']);
+
+        Livewire::actingAs($staff)
+            ->test(Index::class)
+            ->assertSee('Summary')
+            ->assertSee('One account holder statement for March.');
+    }
+
     public function test_completed_job_is_not_processed_twice(): void
     {
         Http::preventStrayRequests();

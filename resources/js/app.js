@@ -139,11 +139,111 @@ window.prepareBimbsecPrint = async (wire, customerId) => {
     }
 };
 
+const escapeHtml = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+const industryStatusLabel = (status) => {
+    if (status === 'filled') {
+        return { text: 'Filled', color: '#15803d' };
+    }
+    if (status === 'failed') {
+        return { text: 'Failed', color: '#b91c1c' };
+    }
+    return { text: 'Skipped', color: '#64748b' };
+};
+
+window.showIndustrySuggestSummary = async (result) => {
+    const rows = Array.isArray(result.results) ? result.results : [];
+    const list = rows.length
+        ? `<div style="max-height:16rem;overflow-y:auto;margin-top:0.75rem;padding-right:0.25rem;text-align:left;">
+            <ul style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:0.5rem;font-size:0.875rem;">
+                ${rows.map((row) => {
+                    const status = industryStatusLabel(row.status);
+                    const detail = row.detail ? `<div style="color:#64748b;margin-top:0.125rem;">${escapeHtml(row.detail)}</div>` : '';
+                    return `<li style="border:1px solid #e2e8f0;border-radius:0.375rem;padding:0.5rem 0.75rem;"><div style="font-weight:600;color:${status.color};">${status.text}</div><div style="color:#1e293b;">${escapeHtml(row.name)}</div>${detail}</li>`;
+                }).join('')}
+            </ul>
+        </div>`
+        : '';
+
+    await Swal.fire({
+        icon: result.type === 'error' ? 'error' : 'success',
+        title: 'Industry suggestion summary',
+        html: `<p style="margin:0;font-size:0.875rem;color:#475569;">${escapeHtml(result.message || 'Done.')}</p>${list}`,
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#163044',
+        width: rows.length > 3 ? '32rem' : undefined,
+        heightAuto: true,
+        scrollbarPadding: false,
+        didOpen: (popup) => {
+            popup.style.overflow = 'hidden';
+            const html = popup.querySelector('.swal2-html-container');
+            if (html) {
+                html.style.overflow = 'visible';
+                html.style.maxHeight = 'none';
+            }
+        },
+    });
+};
+
+window.prepareIndustrySuggest = async (wire) => {
+    let selected = [];
+    try {
+        selected = await wire.get('selected');
+    } catch (error) {
+        selected = wire.selected || [];
+    }
+    if (! Array.isArray(selected) || selected.length === 0) {
+        window.showToast('error', 'Select at least one customer.');
+        return;
+    }
+
+    const confirmed = await window.confirmAction({
+        title: 'Fill missing industry details?',
+        text: 'For each selected customer, AI fills industry and sub-industry together on every job where either field is blank (prefers primary current, then any current, then other employment). Large selections run one customer at a time with progress.',
+        confirmButtonText: 'Continue',
+    });
+    if (! confirmed) {
+        return;
+    }
+
+    const title = 'Suggesting industry';
+    bimbsecLoader(title, { done: 0, total: selected.length, percent: 0, label: 'Starting…' });
+    try {
+        let result = bimbsecPayload(await wire.call('beginIndustrySuggest'));
+        if (! result.ok) {
+            closeBimbsecLoader();
+            window.showToast('error', result.message || 'Select at least one customer.');
+            return;
+        }
+        let steps = 0;
+        while (result.pending && steps < 500) {
+            bimbsecLoader(title, result);
+            steps += 1;
+            result = bimbsecPayload(await wire.call('advanceIndustrySuggest'));
+        }
+        closeBimbsecLoader();
+        if (result.pending) {
+            window.showToast('error', 'Stopped after too many steps. Run Suggest again for the remaining customers.');
+            return;
+        }
+        await window.showIndustrySuggestSummary(result);
+    } catch (error) {
+        closeBimbsecLoader();
+        window.showToast('error', 'Could not fill industry.');
+    }
+};
+
 window.prepareBimbsec = async (wire, action) => {
-    const title = action === 'print' ? 'Preparing print' : 'Preparing download';
+    const titles = { print: 'Preparing print', download: 'Preparing download', generate: 'Generating PDFs' };
+    const title = titles[action] || 'Preparing PDF';
+    const start = action === 'print' ? 'printAll' : action === 'generate' ? 'generateSelected' : 'downloadAll';
     bimbsecLoader(title, { done: 0, total: 0, percent: 0, label: 'Starting…' });
     try {
-        let result = bimbsecPayload(await wire.call(action === 'print' ? 'printAll' : 'downloadAll'));
+        let result = bimbsecPayload(await wire.call(start));
         let steps = 0;
         while (result.pending && result.batchId && steps < 500) {
             bimbsecLoader(title, result);
@@ -154,8 +254,21 @@ window.prepareBimbsec = async (wire, action) => {
             await bimbsecFailed(result.message);
             return;
         }
-        bimbsecLoader(title, { done: result.done, total: result.total, percent: 100, label: action === 'print' ? 'Opening PDF…' : 'Starting download…' });
+        bimbsecLoader(title, {
+            done: result.done,
+            total: result.total,
+            percent: 100,
+            label: action === 'print' ? 'Opening PDF…' : action === 'generate' ? 'Opening batch…' : 'Starting download…',
+        });
         closeBimbsecLoader();
+        if (action === 'generate') {
+            if (window.Livewire?.navigate) {
+                window.Livewire.navigate(result.url);
+            } else {
+                window.location.assign(result.url);
+            }
+            return;
+        }
         await bimbsecOpen(result.url, action);
     } catch (error) {
         await bimbsecFailed();

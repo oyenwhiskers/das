@@ -41,8 +41,14 @@ class Index extends Component
         $this->resetPage();
     }
 
+    public function updatedSelected(): void
+    {
+        $this->selected = array_values(array_unique(array_map(intval(...), $this->selected)));
+    }
+
     public function toggle(int $customerId): void
     {
+        $this->updatedSelected();
         if (in_array($customerId, $this->selected, true)) {
             $this->selected = array_values(array_filter($this->selected, fn (int $id): bool => $id !== $customerId));
 
@@ -54,6 +60,7 @@ class Index extends Component
     /** @param  list<int>  $ids */
     public function togglePage(array $ids): void
     {
+        $this->updatedSelected();
         $ids = array_map(intval(...), $ids);
         $all = $ids !== [] && collect($ids)->every(fn (int $id): bool => in_array($id, $this->selected, true));
         $this->selected = $all
@@ -69,13 +76,10 @@ class Index extends Component
 
     public function askGenerate(): void
     {
-        $max = max(1, (int) config('bimbsec.max_selection'));
         if ($this->selected === []) {
             return;
         }
-        if (count($this->selected) > $max) {
-            $this->notifyError('Select at most '.$max.' customers at a time.');
-
+        if ($this->selectionOverMax()) {
             return;
         }
         $this->confirming = true;
@@ -86,13 +90,10 @@ class Index extends Component
         $this->confirming = false;
     }
 
-    public function generateSelected(BatchRunner $runner): void
+    /** @return array{ok: bool, pending?: bool, url?: string, batchId?: int, message?: string, done?: int, total?: int, percent?: int, label?: string} */
+    public function generateSelected(BatchRunner $runner): array
     {
-        $batch = $this->batchForSelection($runner);
-        if ($batch === null) {
-            return;
-        }
-        $this->redirect(route('bimbsec.batches.show', $batch));
+        return $this->beginOutput($runner, 'generate');
     }
 
     public function downloadAll(BatchRunner $runner): array
@@ -109,11 +110,13 @@ class Index extends Component
     {
         $batch = BimbsecBatch::query()->findOrFail($batchId);
         $this->authorize('view', $batch);
-        if (in_array($batch->status, ['queued', 'running'], true)) {
+        $chunk = max(1, (int) config('bimbsec.chunk_size'));
+        for ($i = 0; $i < $chunk && in_array($batch->status, ['queued', 'running'], true); $i++) {
             $runner->processNext($batch);
+            $batch->refresh();
         }
 
-        return $this->outputPayload($batch->refresh(), $action);
+        return $this->outputPayload($batch, $action);
     }
 
     public function batchStatus(int $batchId, string $action): array
@@ -192,39 +195,32 @@ class Index extends Component
         ])->layout('layouts.app');
     }
 
-    private function batchForSelection(BatchRunner $runner): ?BimbsecBatch
-    {
-        return $this->selectionBatch($runner, process: true);
-    }
-
     /** @return array{ok: bool, pending?: bool, url?: string, batchId?: int, message?: string, done?: int, total?: int, percent?: int, label?: string} */
     private function beginOutput(BatchRunner $runner, string $action): array
-    {
-        $batch = $this->selectionBatch($runner, process: false);
-        if ($batch === null) {
-            return ['ok' => false, 'message' => 'Select at least one customer.'];
-        }
-
-        return $this->outputPayload($batch, $action);
-    }
-
-    private function selectionBatch(BatchRunner $runner, bool $process): ?BimbsecBatch
     {
         $this->authorize('viewAny', Customer::class);
         $this->confirming = false;
         if ($this->selected === []) {
-            return null;
+            return ['ok' => false, 'message' => 'Select at least one customer.'];
         }
-        $max = max(1, (int) config('bimbsec.max_selection'));
-        if (count($this->selected) > $max) {
-            $this->notifyError('Select at most '.$max.' customers at a time.');
+        if ($this->selectionOverMax()) {
+            $max = (int) config('bimbsec.max_selection');
 
-            return null;
+            return ['ok' => false, 'message' => 'Select at most '.$max.' customers at a time.'];
         }
 
-        return $process
-            ? $runner->start($this->selected, auth()->user())
-            : $runner->open($this->selected, auth()->user());
+        return $this->outputPayload($runner->open($this->selected, auth()->user()), $action);
+    }
+
+    private function selectionOverMax(): bool
+    {
+        $max = (int) config('bimbsec.max_selection');
+        if ($max <= 0 || count($this->selected) <= $max) {
+            return false;
+        }
+        $this->notifyError('Select at most '.$max.' customers at a time.');
+
+        return true;
     }
 
     /** @return array{ok: bool, pending?: bool, url?: string, batchId?: int, message?: string, done?: int, total?: int, percent?: int, label?: string} */
@@ -249,6 +245,12 @@ class Index extends Component
             ];
         }
         if ($batch->complete) {
+            $url = match ($action) {
+                'download' => route('bimbsec.batches.file', [$batch, 'download' => 1]),
+                'print' => route('bimbsec.batches.print', $batch),
+                default => route('bimbsec.batches.show', $batch),
+            };
+
             return [
                 'ok' => true,
                 'pending' => false,
@@ -257,9 +259,7 @@ class Index extends Component
                 'total' => $total,
                 'percent' => 100,
                 'label' => 'Ready',
-                'url' => $action === 'download'
-                    ? route('bimbsec.batches.file', [$batch, 'download' => 1])
-                    : route('bimbsec.batches.print', $batch),
+                'url' => $url,
             ];
         }
         $names = collect($batch->summary ?? [])->where('ok', false)->pluck('name')->filter()->implode(', ');

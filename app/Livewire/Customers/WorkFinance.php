@@ -156,20 +156,32 @@ class WorkFinance extends Component
     {
         $this->authorize('update', $this->customer);
         $this->resetErrorBag();
-        if (trim((string) ($this->form['employer_name'] ?? '')) === '') {
-            throw ValidationException::withMessages(['form.employer_name' => 'Enter an employer name before searching industry.']);
+
+        $employment = [
+            'employer_name' => $this->form['employer_name'] ?? '',
+            'occupation' => $this->form['occupation'] ?? '',
+            'arrangement' => $this->form['arrangement'] ?? '',
+            'registration_number' => $this->form['registration_number'] ?? '',
+            'city' => $this->form['city'] ?? '',
+            'state' => $this->form['state'] ?? '',
+            'country' => $this->form['country'] ?? '',
+            'industry' => $this->form['industry'] ?? '',
+            'sub_industry' => $this->form['sub_industry'] ?? '',
+        ];
+        $profile = $this->industrySearchProfile();
+        $signalKeys = ['employer_name', 'occupation', 'arrangement', 'registration_number', 'city', 'state', 'country'];
+        $hasEmploymentSignal = collect($signalKeys)->contains(
+            fn (string $key): bool => trim((string) ($employment[$key] ?? '')) !== ''
+        );
+        $hasPersonSignal = isset($profile['age']) || isset($profile['residential']) || isset($profile['employment_status']);
+        if (! $hasEmploymentSignal && ! $hasPersonSignal) {
+            throw ValidationException::withMessages([
+                'form.employer_name' => 'Enter employer or occupation, or complete customer age/address before searching industry.',
+            ]);
         }
 
         try {
-            $result = $lookup->suggest([
-                'employer_name' => $this->form['employer_name'],
-                'occupation' => $this->form['occupation'] ?? '',
-                'arrangement' => $this->form['arrangement'] ?? '',
-                'registration_number' => $this->form['registration_number'] ?? '',
-                'city' => $this->form['city'] ?? '',
-                'state' => $this->form['state'] ?? '',
-                'country' => $this->form['country'] ?? '',
-            ]);
+            $result = $lookup->suggest($employment, $profile);
         } catch (RuntimeException $exception) {
             $this->notifyError($exception->getMessage());
 
@@ -181,15 +193,48 @@ class WorkFinance extends Component
             return;
         }
 
-        if ($result['industry'] === null && $result['sub_industry'] === null) {
-            $this->notifyError('Could not determine industry from the employer details.');
+        if ($result['industry'] === null || $result['sub_industry'] === null) {
+            $this->notifyError('Could not determine both industry and sub-industry. Try again or enter them manually.');
 
             return;
         }
 
-        $this->form['industry'] = $result['industry'] ?? '';
-        $this->form['sub_industry'] = $result['sub_industry'] ?? '';
-        $this->notifySuccess('Industry suggestion ready. Review and save when correct.');
+        $this->form['industry'] = $result['industry'];
+        $this->form['sub_industry'] = $result['sub_industry'];
+        $this->notifySuccess('Industry and sub-industry ready. Review and save when correct.');
+    }
+
+    /** @return array{age?: int, date_of_birth?: string, employment_status?: string, employment_status_other?: string, nationality?: string, country_of_residence?: string, residential?: array<string, string>} */
+    private function industrySearchProfile(): array
+    {
+        $this->customer->loadMissing('residentialAddress');
+        $profile = [];
+        $dob = $this->customer->date_of_birth;
+        if ($dob !== null) {
+            $profile['date_of_birth'] = $dob->toDateString();
+            $profile['age'] = $dob->age;
+        }
+        foreach (['employment_status', 'employment_status_other', 'nationality', 'country_of_residence'] as $key) {
+            $value = trim((string) ($this->customer->{$key} ?? ''));
+            if ($value !== '') {
+                $profile[$key] = $value;
+            }
+        }
+        $address = $this->customer->residentialAddress;
+        if ($address !== null) {
+            $residential = [];
+            foreach (['city', 'state', 'postcode', 'country'] as $key) {
+                $value = trim((string) ($address->{$key} ?? ''));
+                if ($value !== '') {
+                    $residential[$key] = $value;
+                }
+            }
+            if ($residential !== []) {
+                $profile['residential'] = $residential;
+            }
+        }
+
+        return $profile;
     }
 
     private function employment(int $id): CustomerEmployment

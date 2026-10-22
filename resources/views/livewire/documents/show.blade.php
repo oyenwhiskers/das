@@ -43,6 +43,56 @@
             </div>
         </section>
 
+        @if ($scan->status->value === 'completed')
+            <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm space-y-4" aria-labelledby="scan-summary-title">
+                <h2 id="scan-summary-title" class="text-sm font-semibold text-navy-900">Scan summary</h2>
+                <dl class="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                    <div><dt class="text-slate-500">Document type</dt><dd class="mt-1 font-medium text-slate-900">{{ $scan->document_type ?? 'Unknown' }}</dd></div>
+                    <div><dt class="text-slate-500">Title</dt><dd class="mt-1 font-medium text-slate-900">{{ $scan->document_title ?? 'Unknown' }}</dd></div>
+                    <div><dt class="text-slate-500">Readability</dt><dd class="mt-1 font-medium text-slate-900">{{ $scan->readable ? 'Readable' : 'Not readable' }}</dd></div>
+                </dl>
+                <div>
+                    <h3 class="text-sm font-medium text-slate-500">Summary</h3>
+                    <p class="mt-1 whitespace-pre-wrap text-sm text-slate-800">{{ filled($scan->summary) ? $scan->summary : 'No summary available.' }}</p>
+                </div>
+                <div>
+                    <h3 class="text-sm font-medium text-slate-500">Reading limitations</h3>
+                    <p class="mt-1 whitespace-pre-wrap text-sm text-slate-800">{{ filled($scan->limitations) ? $scan->limitations : 'None reported.' }}</p>
+                </div>
+            </section>
+        @elseif ($scan->status->value === 'failed')
+            <div class="rounded-lg border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800" role="alert">
+                <p>{{ $scan->processing_error }}</p>
+                <button type="button" wire:click="retryScan" wire:loading.attr="disabled" class="mt-3 rounded-md border border-red-300 px-3 py-2 font-medium hover:bg-red-100 disabled:opacity-50">Retry scan</button>
+            </div>
+        @else
+            @php
+                $progressDone = (int) ($readProgress['done'] ?? 0);
+                $progressTotal = (int) ($readProgress['total'] ?? 0);
+                $progressPercent = $progressTotal > 0 ? (int) round(min(100, $progressDone / $progressTotal * 100)) : 0;
+            @endphp
+            <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm" role="status" aria-live="polite">
+                <div class="flex items-center justify-between gap-3">
+                    <h2 class="text-sm font-semibold text-navy-900">{{ $readProgress['label'] ?? 'Reading the document' }}</h2>
+                    @if ($progressTotal > 0)
+                        <p class="text-sm text-slate-500">{{ $progressDone }} of {{ $progressTotal }}</p>
+                    @endif
+                </div>
+                <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+                    @if ($progressPercent > 0)
+                        <div class="h-full rounded-full bg-navy-800" style="width: {{ $progressPercent }}%"></div>
+                    @else
+                        <div class="h-full w-1/3 animate-pulse rounded-full bg-navy-800"></div>
+                    @endif
+                </div>
+                <p class="mt-3 text-sm text-slate-600">This page refreshes automatically.</p>
+                <div class="mt-4 flex flex-wrap gap-2">
+                    <button type="button" wire:click="cancelScan" wire:loading.attr="disabled" class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel scan</button>
+                    <button type="button" wire:click="rescan" wire:loading.attr="disabled" class="rounded-md bg-navy-800 px-3 py-2 text-sm font-medium text-white hover:bg-navy-900 disabled:opacity-50">Rescan</button>
+                </div>
+            </section>
+        @endif
+
         @php
             $storedFindings = $scan->findings
                 ? count($scan->findings->observations['fields'] ?? []) + count($scan->findings->observations['tables'] ?? []) + count($scan->findings->observations['content_blocks'] ?? [])
@@ -453,50 +503,6 @@
                     @endforeach
                 </div>
             </details>
-        @endif
-
-        @if ($scan->status->value === 'completed')
-            <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm space-y-4">
-                <h2 class="text-sm font-semibold text-navy-900">Basic document understanding</h2>
-                <dl class="grid gap-4 text-sm sm:grid-cols-2">
-                    <div><dt class="text-slate-500">Document type</dt><dd class="mt-1 font-medium text-slate-900">{{ $scan->document_type ?? 'Unknown' }}</dd></div>
-                    <div><dt class="text-slate-500">Title</dt><dd class="mt-1 font-medium text-slate-900">{{ $scan->document_title ?? 'Unknown' }}</dd></div>
-                    <div><dt class="text-slate-500">Readability</dt><dd class="mt-1 font-medium text-slate-900">{{ $scan->readable ? 'Readable' : 'Not readable' }}</dd></div>
-                </dl>
-                <div><h3 class="text-sm font-medium text-slate-500">Summary</h3><p class="mt-1 whitespace-pre-wrap text-sm text-slate-800">{{ $scan->summary ?? 'No summary available.' }}</p></div>
-                <div><h3 class="text-sm font-medium text-slate-500">Reading limitations</h3><p class="mt-1 whitespace-pre-wrap text-sm text-slate-800">{{ $scan->limitations ?? 'None reported.' }}</p></div>
-            </section>
-        @elseif ($scan->status->value === 'failed')
-            <div class="rounded-lg border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800" role="alert">
-                <p>{{ $scan->processing_error }}</p>
-                <button type="button" wire:click="retryScan" wire:loading.attr="disabled" class="mt-3 rounded-md border border-red-300 px-3 py-2 font-medium hover:bg-red-100 disabled:opacity-50">Retry scan</button>
-            </div>
-        @else
-            @php
-                $progressDone = (int) ($readProgress['done'] ?? 0);
-                $progressTotal = (int) ($readProgress['total'] ?? 0);
-                $progressPercent = $progressTotal > 0 ? (int) round(min(100, $progressDone / $progressTotal * 100)) : 0;
-            @endphp
-            <section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm" role="status" aria-live="polite">
-                <div class="flex items-center justify-between gap-3">
-                    <h2 class="text-sm font-semibold text-navy-900">{{ $readProgress['label'] ?? 'Reading the document' }}</h2>
-                    @if ($progressTotal > 0)
-                        <p class="text-sm text-slate-500">{{ $progressDone }} of {{ $progressTotal }}</p>
-                    @endif
-                </div>
-                <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
-                    @if ($progressPercent > 0)
-                        <div class="h-full rounded-full bg-navy-800" style="width: {{ $progressPercent }}%"></div>
-                    @else
-                        <div class="h-full w-1/3 animate-pulse rounded-full bg-navy-800"></div>
-                    @endif
-                </div>
-                <p class="mt-3 text-sm text-slate-600">This page refreshes automatically.</p>
-                <div class="mt-4 flex flex-wrap gap-2">
-                    <button type="button" wire:click="cancelScan" wire:loading.attr="disabled" class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel scan</button>
-                    <button type="button" wire:click="rescan" wire:loading.attr="disabled" class="rounded-md bg-navy-800 px-3 py-2 text-sm font-medium text-white hover:bg-navy-900 disabled:opacity-50">Rescan</button>
-                </div>
-            </section>
         @endif
 
         @if ($matchAll)

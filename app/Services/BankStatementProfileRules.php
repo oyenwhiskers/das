@@ -9,6 +9,8 @@ class BankStatementProfileRules
 {
     public const SELF_EMPLOYED_OCCUPATION = 'ENTREPRENEUR';
 
+    public const SELF_EMPLOYED_EMPLOYER_NAME = 'OWNER';
+
     public static function isStatementScan(?DocumentScan $scan): bool
     {
         if ($scan === null) {
@@ -230,6 +232,18 @@ class BankStatementProfileRules
         $employment['general_telephone'] = trim((string) $mobile);
 
         return $employment;
+    }
+
+    /** Self-employed: blank employer name ← OWNER. Supports employer_name or employerName. */
+    public static function copyOwnerIntoEmployerNameIfBlank(array $fields): array
+    {
+        $key = array_key_exists('employerName', $fields) ? 'employerName' : 'employer_name';
+        if (filled($fields[$key] ?? null)) {
+            return $fields;
+        }
+        $fields[$key] = self::SELF_EMPLOYED_EMPLOYER_NAME;
+
+        return $fields;
     }
 
     public static function relatedLooksSelfEmployed(?string $occupation, ?string $employerName = null): bool

@@ -242,6 +242,7 @@ class FamilyRelationshipsTest extends TestCase
 
         $person = $customer->relationships()->firstOrFail()->relatedPerson;
         $this->assertSame('ENTREPRENEUR', $person->occupation);
+        $this->assertSame('OWNER', $person->employer_name);
         $this->assertSame('88 Jalan Pos', $person->employer_address_line_1);
         $this->assertSame('PJ', $person->employer_city);
         $this->assertSame('46000', $person->employer_postcode);

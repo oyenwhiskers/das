@@ -1567,7 +1567,8 @@ class Show extends Component
         $status = strtolower((string) ($byId['customer.employment_status']['value'] ?? ($derived['customer.employment_status'] ?? '')));
         $arrangement = strtolower((string) ($byId['employments[].arrangement']['value'] ?? ''));
         $employer = (string) ($byId['employments[].employer_name']['value'] ?? '');
-        $kind = BankStatementProfileRules::resolveApplicantEmploymentKind($status, $arrangement, $employer);
+        $occupation = (string) ($byId['employments[].occupation']['value'] ?? '');
+        $kind = BankStatementProfileRules::resolveApplicantEmploymentKind($status, $arrangement, $employer, $occupation);
         if (BankStatementProfileRules::clearEmploymentKind($status, $arrangement) === null) {
             $derived['customer.employment_status'] = $kind;
             $derived['employments[].arrangement'] = $kind;
@@ -1606,6 +1607,10 @@ class Show extends Component
                 fn (array $row): bool => $row['field_id'] !== 'employments[].occupation',
             ));
             unset($byId['employments[].occupation']);
+            if (! isset($byId['employments[].employer_name'])
+                || trim((string) $byId['employments[].employer_name']['value']) === '') {
+                $derived['employments[].employer_name'] = BankStatementProfileRules::SELF_EMPLOYED_EMPLOYER_NAME;
+            }
             $map = [
                 'address_line_1' => 'line_1',
                 'address_line_2' => 'line_2',
@@ -1641,6 +1646,11 @@ class Show extends Component
                 fn (array $row): bool => $row['field_id'] !== $occPath,
             ));
             unset($byId[$occPath]);
+            $relatedEmployerPath = 'relationships[].related_person.employer_name';
+            if (! isset($byId[$relatedEmployerPath])
+                || trim((string) $byId[$relatedEmployerPath]['value']) === '') {
+                $derived[$relatedEmployerPath] = BankStatementProfileRules::SELF_EMPLOYED_EMPLOYER_NAME;
+            }
             foreach ([
                 'employer_address_line_1' => 'line_1',
                 'employer_address_line_2' => 'line_2',

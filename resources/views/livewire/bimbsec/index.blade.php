@@ -26,7 +26,7 @@
                     </button>
                 @else
                     <span class="text-slate-600">Generate PDFs for {{ count($selected) }} selected customers?</span>
-                    <button type="button" wire:click="generateSelected" class="rounded-md bg-navy-800 px-3 py-1.5 font-medium text-white hover:bg-navy-900">Confirm</button>
+                    <button type="button" x-on:click="prepareBimbsec($wire, 'generate')" class="rounded-md bg-navy-800 px-3 py-1.5 font-medium text-white hover:bg-navy-900">Confirm</button>
                     <button type="button" wire:click="cancelGenerate" class="rounded-md border border-slate-300 px-2.5 py-1 text-slate-700">Cancel</button>
                 @endunless
             </div>
@@ -46,7 +46,7 @@
                         <thead class="bg-slate-50">
                             <tr>
                                 <th scope="col" class="px-4 py-2.5 text-left">
-                                    <input type="checkbox" @checked($pageSelected) wire:click="togglePage(@js($pageIds))" aria-label="Select all customers on this page" class="rounded border-slate-300 text-navy-800 focus:ring-navy-500" />
+                                    <input type="checkbox" wire:key="bimbsec-select-all-{{ $pageSelected ? '1' : '0' }}" @checked($pageSelected) wire:click.prevent="togglePage(@js($pageIds))" aria-label="Select all customers on this page" class="h-4 w-4 rounded border-slate-300 text-navy-800 checked:border-navy-800 checked:bg-navy-800 focus:ring-offset-0 focus-visible:ring-2 focus-visible:ring-navy-500" />
                                 </th>
                                 <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Customer name</th>
                                 <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">NRIC / passport</th>
@@ -89,7 +89,7 @@
                                     @endif
                                 >
                                     <td class="px-4 py-3 align-middle" @click.stop @keydown.stop>
-                                        <input type="checkbox" @checked(in_array($customer->id, $selected, true)) wire:click="toggle({{ $customer->id }})" aria-label="Select {{ $customer->full_legal_name }}" class="rounded border-slate-300 text-navy-800 focus:ring-navy-500" />
+                                        <input type="checkbox" wire:key="bimbsec-select-{{ $customer->id }}" value="{{ $customer->id }}" wire:model.live="selected" aria-label="Select {{ $customer->full_legal_name }}" class="h-4 w-4 rounded border-slate-300 text-navy-800 checked:border-navy-800 checked:bg-navy-800 focus:ring-offset-0 focus-visible:ring-2 focus-visible:ring-navy-500" />
                                     </td>
                                     <td class="px-4 py-3 align-middle">
                                         {{ $customer->full_legal_name }}

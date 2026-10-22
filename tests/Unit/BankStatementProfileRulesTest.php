@@ -89,6 +89,32 @@ class BankStatementProfileRulesTest extends TestCase
     }
 
     #[Test]
+    public function copy_owner_into_blank_employer_name_only(): void
+    {
+        $this->assertSame(
+            ['employer_name' => 'OWNER'],
+            BankStatementProfileRules::copyOwnerIntoEmployerNameIfBlank([]),
+        );
+        $this->assertSame(
+            ['employer_name' => 'OWNER'],
+            BankStatementProfileRules::copyOwnerIntoEmployerNameIfBlank(['employer_name' => '']),
+        );
+        $this->assertSame(
+            ['employer_name' => 'Pasar Besar'],
+            BankStatementProfileRules::copyOwnerIntoEmployerNameIfBlank(['employer_name' => 'Pasar Besar']),
+        );
+        $this->assertSame(
+            ['employerName' => 'OWNER'],
+            BankStatementProfileRules::copyOwnerIntoEmployerNameIfBlank(['employerName' => '']),
+        );
+        $this->assertSame(
+            ['employerName' => 'Kin Co'],
+            BankStatementProfileRules::copyOwnerIntoEmployerNameIfBlank(['employerName' => 'Kin Co']),
+        );
+        $this->assertSame('OWNER', BankStatementProfileRules::SELF_EMPLOYED_EMPLOYER_NAME);
+    }
+
+    #[Test]
     public function related_looks_self_employed_includes_business_and_self_working(): void
     {
         $this->assertTrue(BankStatementProfileRules::relatedLooksSelfEmployed('Business'));

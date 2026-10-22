@@ -6,10 +6,25 @@
                 <h1 class="text-xl sm:text-2xl font-semibold text-navy-900">Customers</h1>
                 <p class="mt-1 text-sm text-slate-500">Manage and maintain customer records.</p>
             </div>
-            <a href="{{ route('customers.create') }}" wire:navigate
-               class="inline-flex items-center justify-center self-start rounded-md bg-navy-800 px-3.5 py-2 text-sm font-medium text-white hover:bg-navy-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-500 focus-visible:ring-offset-2">
-                + Add Customer
-            </a>
+            <div class="flex flex-wrap items-center gap-2 self-start">
+                <div class="relative" x-data="{ open: false }" x-on:click.outside="open = false" x-on:keydown.escape.window="if (open) open = false">
+                    <button type="button" x-on:click="open = ! open" :aria-expanded="open.toString()" aria-haspopup="menu" aria-controls="customers-bulk-menu" class="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-500">
+                        Bulk Action
+                        <svg class="h-3.5 w-3.5 text-slate-400 transition-transform" :class="{ 'rotate-180': open }" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                        </svg>
+                    </button>
+                    <div id="customers-bulk-menu" role="menu" x-cloak x-show="open" x-transition class="absolute end-0 z-50 mt-2 w-64 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5">
+                        <button type="button" role="menuitem" @disabled($selected === []) x-on:click.prevent="open = false; prepareIndustrySuggest($wire)" class="block w-full px-4 py-2 text-start text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50">
+                            Suggest industry / sub-industry
+                        </button>
+                    </div>
+                </div>
+                <a href="{{ route('customers.create') }}" wire:navigate
+                   class="inline-flex items-center justify-center rounded-md bg-navy-800 px-3.5 py-2 text-sm font-medium text-white hover:bg-navy-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-500 focus-visible:ring-offset-2">
+                    + Add Customer
+                </a>
+            </div>
         </div>
 
         {{-- Search & filters --}}
@@ -79,6 +94,7 @@
                 <p class="text-sm text-slate-700">{{ count($selected) }} {{ count($selected) === 1 ? 'customer' : 'customers' }} selected</p>
                 <div class="flex flex-wrap gap-2">
                     <button type="button" wire:click="clearSelection" class="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Clear</button>
+                    <button type="button" x-on:click.prevent="prepareIndustrySuggest($wire)" class="rounded-md border border-navy-800 px-3 py-1.5 text-sm font-medium text-navy-800 hover:bg-navy-50">Suggest industry</button>
                     <button type="button" x-on:click.prevent="if (await confirmAction({ title: 'Delete selected customers?', text: 'Selected customers, their records, and links from other customers will be permanently deleted. This cannot be undone.', confirmButtonText: 'Delete', confirmButtonColor: '#b91c1c' })) $wire.deleteSelected()" class="rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50">Delete selected</button>
                 </div>
             </div>
@@ -108,7 +124,7 @@
                         <thead class="bg-slate-50">
                             <tr>
                                 <th scope="col" class="px-4 py-2.5 text-left">
-                                    <input type="checkbox" @checked($allSelected) wire:click="toggleAll" aria-label="Select all customers" class="rounded border-slate-300 text-navy-800 focus:ring-navy-500" />
+                                    <input type="checkbox" wire:key="select-all-desktop-{{ $allSelected ? '1' : '0' }}" @checked($allSelected) wire:click.prevent="toggleAll" aria-label="Select all customers" class="h-4 w-4 rounded border-slate-300 text-navy-800 checked:border-navy-800 checked:bg-navy-800 focus:ring-offset-0 focus-visible:ring-2 focus-visible:ring-navy-500" />
                                 </th>
                                 <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">#</th>
                                 <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500" aria-sort="{{ $sort === 'name_asc' ? 'ascending' : ($sort === 'name_desc' ? 'descending' : 'none') }}">
@@ -137,7 +153,7 @@
                                     x-on:keydown.space.prevent="Livewire.navigate(@js(route('customers.show', $customer)))"
                                 >
                                     <td class="px-4 py-3 align-middle" @click.stop @keydown.stop>
-                                        <input type="checkbox" @checked(in_array($customer->id, $selected, true)) wire:click="toggle({{ $customer->id }})" aria-label="Select {{ $customer->full_legal_name }}" class="rounded border-slate-300 text-navy-800 focus:ring-navy-500" />
+                                        <input type="checkbox" wire:key="select-{{ $customer->id }}" value="{{ $customer->id }}" wire:model.live="selected" aria-label="Select {{ $customer->full_legal_name }}" class="h-4 w-4 rounded border-slate-300 text-navy-800 checked:border-navy-800 checked:bg-navy-800 focus:ring-offset-0 focus-visible:ring-2 focus-visible:ring-navy-500" />
                                     </td>
                                     <td class="px-4 py-3 align-middle whitespace-nowrap text-slate-500">
                                         {{ $customers->firstItem() + $loop->index }}
@@ -179,13 +195,13 @@
 
                 {{-- Mobile cards --}}
                 <div class="flex items-center gap-2 border-b border-slate-100 px-4 py-2 md:hidden">
-                    <input type="checkbox" @checked($allSelected) wire:click="toggleAll" aria-label="Select all customers" class="rounded border-slate-300 text-navy-800 focus:ring-navy-500" />
+                    <input type="checkbox" wire:key="select-all-mobile-{{ $allSelected ? '1' : '0' }}" @checked($allSelected) wire:click.prevent="toggleAll" aria-label="Select all customers" class="h-4 w-4 rounded border-slate-300 text-navy-800 checked:border-navy-800 checked:bg-navy-800 focus:ring-offset-0 focus-visible:ring-2 focus-visible:ring-navy-500" />
                     <span class="text-sm text-slate-600">Select all</span>
                 </div>
                 <ul class="divide-y divide-slate-100 md:hidden" role="list">
                     @foreach ($customers as $customer)
                         <li class="flex items-start gap-3 px-4 py-3">
-                            <input type="checkbox" @checked(in_array($customer->id, $selected, true)) wire:click="toggle({{ $customer->id }})" aria-label="Select {{ $customer->full_legal_name }}" class="mt-1 rounded border-slate-300 text-navy-800 focus:ring-navy-500" />
+                            <input type="checkbox" wire:key="select-m-{{ $customer->id }}" value="{{ $customer->id }}" wire:model.live="selected" aria-label="Select {{ $customer->full_legal_name }}" class="mt-1 h-4 w-4 rounded border-slate-300 text-navy-800 checked:border-navy-800 checked:bg-navy-800 focus:ring-offset-0 focus-visible:ring-2 focus-visible:ring-navy-500" />
                             <a
                                 href="{{ route('customers.show', $customer) }}"
                                 wire:navigate

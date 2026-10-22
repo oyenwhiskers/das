@@ -104,7 +104,7 @@ class EmploymentInformationTest extends TestCase
 
         $job = $customer->employments()->firstOrFail();
         $this->assertSame('ENTREPRENEUR', $job->occupation);
-        $this->assertNull($job->employer_name);
+        $this->assertSame('OWNER', $job->employer_name);
         $this->actingAs($staff)->get(route('customers.show', $customer).'?tab=work')
             ->assertOk()->assertSee('Work Information')->assertSee('Employment Status')->assertSee('Employment History');
     }
@@ -141,6 +141,7 @@ class EmploymentInformationTest extends TestCase
             ->call('add')
             ->assertSet('form.arrangement', 'self_employed')
             ->assertSet('form.occupation', 'ENTREPRENEUR')
+            ->assertSet('form.employer_name', 'OWNER')
             ->assertSet('form.address_line_1', 'Lot 9 Pasar')
             ->assertSet('form.city', 'Tanah Merah')
             ->assertSet('form.postcode', '17500')
@@ -285,7 +286,17 @@ class EmploymentInformationTest extends TestCase
         ])]);
 
         $staff = User::factory()->staff()->create();
-        $customer = Customer::factory()->for($staff, 'creator')->create();
+        $customer = Customer::factory()->for($staff, 'creator')->create([
+            'date_of_birth' => now()->subYears(45)->toDateString(),
+            'employment_status' => 'employed',
+        ]);
+        CustomerAddress::query()->create([
+            'customer_id' => $customer->id,
+            'type' => AddressType::Residential,
+            'city' => 'Shah Alam',
+            'state' => 'Selangor',
+            'country' => 'Malaysia',
+        ]);
 
         Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer])
             ->call('add')
@@ -299,14 +310,26 @@ class EmploymentInformationTest extends TestCase
 
         Http::assertSent(fn ($request): bool => ($request['tools'][0]['type'] ?? null) === 'google_search'
             && str_contains((string) $request['input'], 'JEY ALUMINIUM BERHAD')
-            && str_contains((string) $request['input'], 'Business'));
+            && str_contains((string) $request['input'], 'Business')
+            && str_contains((string) $request['input'], '"age":45')
+            && str_contains((string) $request['input'], 'Shah Alam')
+            && str_contains((string) $request['input'], 'age-appropriate')
+            && str_contains((string) $request['input'], 'BIMBSEC')
+            && str_contains((string) $request['input'], 'at most 32 characters')
+            && str_contains((string) $request['input'], 'always return BOTH')
+            && str_contains((string) $request['input'], 'MUST be a narrower specialty'));
     }
 
-    public function test_industry_search_requires_employer_name(): void
+    public function test_industry_search_requires_employment_or_person_context(): void
     {
         Http::fake();
         $staff = User::factory()->staff()->create();
-        $customer = Customer::factory()->for($staff, 'creator')->create();
+        $customer = Customer::factory()->for($staff, 'creator')->create([
+            'date_of_birth' => null,
+            'employment_status' => null,
+            'nationality' => null,
+            'country_of_residence' => null,
+        ]);
 
         Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer])
             ->call('add')
@@ -315,6 +338,43 @@ class EmploymentInformationTest extends TestCase
             ->assertHasErrors('form.employer_name');
 
         Http::assertNothingSent();
+    }
+
+    public function test_industry_search_can_recommend_from_customer_profile_without_employer(): void
+    {
+        config()->set('services.gemini.api_key', 'test-key');
+        config()->set('services.gemini.model', 'gemini-3.1-flash-lite');
+        Http::preventStrayRequests();
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response([
+            'status' => 'completed',
+            'output_text' => json_encode(['industry' => 'Professional Services', 'sub_industry' => 'Accounting']),
+        ])]);
+
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($staff, 'creator')->create([
+            'date_of_birth' => now()->subYears(60)->toDateString(),
+            'employment_status' => 'employed',
+        ]);
+        CustomerAddress::query()->create([
+            'customer_id' => $customer->id,
+            'type' => AddressType::Residential,
+            'city' => 'Kuala Lumpur',
+            'state' => 'W.P. Kuala Lumpur',
+            'country' => 'Malaysia',
+        ]);
+
+        Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer])
+            ->call('add')
+            ->set('form.occupation', 'Accountant')
+            ->call('searchIndustry')
+            ->assertHasNoErrors()
+            ->assertSet('form.industry', 'Professional Services')
+            ->assertSet('form.sub_industry', 'Accounting');
+
+        Http::assertSent(fn ($request): bool => str_contains((string) $request['input'], '"age":60')
+            && str_contains((string) $request['input'], 'Kuala Lumpur')
+            && str_contains((string) $request['input'], 'Accountant')
+            && str_contains((string) $request['input'], 'construction'));
     }
 
     public function test_industry_search_leaves_fields_when_uncertain(): void
@@ -339,5 +399,89 @@ class EmploymentInformationTest extends TestCase
             ->assertSet('form.industry', 'Existing')
             ->assertSet('form.sub_industry', 'Keep')
             ->assertDispatched('notify', type: 'error');
+    }
+
+    public function test_industry_search_completes_blank_sub_industry_using_existing_industry_context(): void
+    {
+        config()->set('services.gemini.api_key', 'test-key');
+        config()->set('services.gemini.model', 'gemini-3.1-flash-lite');
+        Http::preventStrayRequests();
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response([
+            'status' => 'completed',
+            'output_text' => json_encode(['industry' => 'Construction', 'sub_industry' => 'General Building']),
+        ])]);
+
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($staff, 'creator')->create([
+            'date_of_birth' => now()->subYears(40)->toDateString(),
+            'employment_status' => 'employed',
+        ]);
+
+        Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer])
+            ->call('add')
+            ->set('form.employer_name', 'ROHADI CONTRACTION')
+            ->set('form.industry', 'CONTRACTION')
+            ->set('form.sub_industry', '')
+            ->call('searchIndustry')
+            ->assertSet('form.industry', 'Construction')
+            ->assertSet('form.sub_industry', 'General Building')
+            ->assertDispatched('notify', type: 'success');
+
+        Http::assertSent(fn ($request): bool => str_contains((string) $request['input'], 'CONTRACTION')
+            && str_contains((string) $request['input'], 'ROHADI CONTRACTION'));
+    }
+
+    public function test_industry_search_truncates_labels_to_bimbsec_cell_capacity(): void
+    {
+        config()->set('services.gemini.api_key', 'test-key');
+        config()->set('services.gemini.model', 'gemini-3.1-flash-lite');
+        Http::preventStrayRequests();
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response([
+            'status' => 'completed',
+            'output_text' => json_encode([
+                'industry' => 'Professional Business Advisory And Consulting Services Group',
+                'sub_industry' => 'Chartered Public Accounting And Audit Practice Firm',
+            ]),
+        ])]);
+
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($staff, 'creator')->create();
+
+        Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer])
+            ->call('add')
+            ->set('form.employer_name', 'Example Advisory Sdn Bhd')
+            ->call('searchIndustry')
+            ->assertSet('form.industry', 'Professional Business Advisory A')
+            ->assertSet('form.sub_industry', 'Chartered Public Accounting And');
+
+        $this->assertLessThanOrEqual(32, mb_strlen('Professional Business Advisory A'));
+        $this->assertLessThanOrEqual(32, mb_strlen('Chartered Public Accounting And'));
+    }
+
+    public function test_industry_search_rejects_incomplete_or_identical_pairs(): void
+    {
+        config()->set('services.gemini.api_key', 'test-key');
+        config()->set('services.gemini.model', 'gemini-3.1-flash-lite');
+        Http::preventStrayRequests();
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::sequence()
+                ->push(['status' => 'completed', 'output_text' => json_encode(['industry' => 'Manufacturing', 'sub_industry' => null])])
+                ->push(['status' => 'completed', 'output_text' => json_encode(['industry' => 'Manufacturing', 'sub_industry' => 'Manufacturing'])]),
+        ]);
+
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($staff, 'creator')->create();
+
+        Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer])
+            ->call('add')
+            ->set('form.employer_name', 'Example Co')
+            ->set('form.industry', 'Keep')
+            ->set('form.sub_industry', 'Also')
+            ->call('searchIndustry')
+            ->assertSet('form.industry', 'Keep')
+            ->assertSet('form.sub_industry', 'Also')
+            ->call('searchIndustry')
+            ->assertSet('form.industry', 'Keep')
+            ->assertSet('form.sub_industry', 'Also');
     }
 }

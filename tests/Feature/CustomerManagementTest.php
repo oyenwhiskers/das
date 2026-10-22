@@ -9,6 +9,7 @@ use App\Livewire\Customers\Show;
 use App\Models\BimbsecApplication;
 use App\Models\BimbsecDocument;
 use App\Models\Customer;
+use App\Models\CustomerEmployment;
 use App\Models\CustomerIdentification;
 use App\Models\CustomerPepAssociation;
 use App\Models\CustomerRelationship;
@@ -18,6 +19,7 @@ use App\Models\ExtractedProfileMerge;
 use App\Models\User;
 use App\Services\CustomerReferenceGenerator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -638,6 +640,179 @@ class CustomerManagementTest extends TestCase
         $this->assertDatabaseMissing('customer_relationships', ['id' => $relationship->id]);
     }
 
+    public function test_bulk_industry_suggestion_fills_empty_primary_current_employment(): void
+    {
+        config()->set('services.gemini.api_key', 'test-key');
+        config()->set('services.gemini.model', 'gemini-3.1-flash-lite');
+        Http::preventStrayRequests();
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response([
+            'status' => 'completed',
+            'output_text' => json_encode(['industry' => 'Manufacturing', 'sub_industry' => 'Aluminium']),
+        ])]);
+
+        $user = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($user, 'creator')->create([
+            'date_of_birth' => now()->subYears(40)->toDateString(),
+            'employment_status' => 'employed',
+        ]);
+        $job = CustomerEmployment::factory()->create([
+            'customer_id' => $customer->id,
+            'employer_name' => 'JEY ALUMINIUM BERHAD',
+            'occupation' => 'Business',
+            'is_primary' => true,
+            'is_current' => true,
+            'industry' => null,
+            'sub_industry' => null,
+            'primary_current_key' => $customer->id,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(Index::class)
+            ->assertSee('Bulk Action')
+            ->call('toggle', $customer->id)
+            ->call('suggestIndustrySelected')
+            ->assertDispatched('notify', type: 'success');
+
+        $job->refresh();
+        $this->assertSame('Manufacturing', $job->industry);
+        $this->assertSame('Aluminium', $job->sub_industry);
+        Http::assertSentCount(1);
+    }
+
+    public function test_bulk_industry_suggestion_completes_missing_sub_industry(): void
+    {
+        config()->set('services.gemini.api_key', 'test-key');
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response([
+            'status' => 'completed',
+            'output_text' => json_encode(['industry' => 'Construction', 'sub_industry' => 'General Building']),
+        ])]);
+
+        $user = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($user, 'creator')->create([
+            'date_of_birth' => now()->subYears(40)->toDateString(),
+            'employment_status' => 'employed',
+        ]);
+        $job = CustomerEmployment::factory()->create([
+            'customer_id' => $customer->id,
+            'employer_name' => 'ROHADI CONTRACTION',
+            'is_primary' => true,
+            'is_current' => true,
+            'industry' => 'CONTRACTION',
+            'sub_industry' => null,
+            'primary_current_key' => $customer->id,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(Index::class)
+            ->call('toggle', $customer->id)
+            ->call('suggestIndustrySelected')
+            ->assertDispatched('notify', type: 'success');
+
+        $job->refresh();
+        $this->assertSame('Construction', $job->industry);
+        $this->assertSame('General Building', $job->sub_industry);
+        Http::assertSent(function ($request): bool {
+            $input = (string) ($request['input'] ?? data_get($request->data(), 'input') ?? '');
+
+            return str_contains($input, 'always return BOTH');
+        });
+    }
+
+    public function test_bulk_industry_suggestion_skips_when_pair_already_complete(): void
+    {
+        config()->set('services.gemini.api_key', 'test-key');
+        Http::fake();
+
+        $user = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($user, 'creator')->create();
+        $job = CustomerEmployment::factory()->create([
+            'customer_id' => $customer->id,
+            'employer_name' => 'Existing Co',
+            'is_primary' => true,
+            'is_current' => true,
+            'industry' => 'Banking',
+            'sub_industry' => 'Retail',
+            'primary_current_key' => $customer->id,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(Index::class)
+            ->call('toggle', $customer->id)
+            ->call('suggestIndustrySelected')
+            ->assertDispatched('notify', type: 'success');
+
+        $job->refresh();
+        $this->assertSame('Banking', $job->industry);
+        $this->assertSame('Retail', $job->sub_industry);
+        Http::assertNothingSent();
+    }
+
+    public function test_bulk_industry_suggestion_uses_current_job_when_not_marked_primary(): void
+    {
+        config()->set('services.gemini.api_key', 'test-key');
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response([
+            'status' => 'completed',
+            'output_text' => json_encode(['industry' => 'Manufacturing', 'sub_industry' => 'Aluminium']),
+        ])]);
+
+        $user = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($user, 'creator')->create([
+            'date_of_birth' => now()->subYears(40)->toDateString(),
+            'employment_status' => 'employed',
+        ]);
+        $job = CustomerEmployment::factory()->create([
+            'customer_id' => $customer->id,
+            'employer_name' => 'Imported Co',
+            'is_primary' => false,
+            'is_current' => true,
+            'industry' => null,
+            'sub_industry' => null,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(Index::class)
+            ->call('toggle', $customer->id)
+            ->call('suggestIndustrySelected')
+            ->assertDispatched('notify', type: 'success');
+
+        $job->refresh();
+        $this->assertSame('Manufacturing', $job->industry);
+        $this->assertSame('Aluminium', $job->sub_industry);
+        Http::assertSentCount(1);
+    }
+
+    public function test_bulk_industry_suggestion_fills_non_primary_previous_job_when_needed(): void
+    {
+        config()->set('services.gemini.api_key', 'test-key');
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response([
+            'status' => 'completed',
+            'output_text' => json_encode(['industry' => 'Manufacturing', 'sub_industry' => 'Aluminium']),
+        ])]);
+
+        $user = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($user, 'creator')->create([
+            'date_of_birth' => now()->subYears(40)->toDateString(),
+            'employment_status' => 'employed',
+        ]);
+        $previous = CustomerEmployment::factory()->previous()->create([
+            'customer_id' => $customer->id,
+            'employer_name' => 'Old Co',
+            'industry' => null,
+            'sub_industry' => null,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(Index::class)
+            ->call('toggle', $customer->id)
+            ->call('suggestIndustrySelected')
+            ->assertDispatched('notify', type: 'success');
+
+        $previous->refresh();
+        $this->assertSame('Manufacturing', $previous->industry);
+        $this->assertSame('Aluminium', $previous->sub_industry);
+        Http::assertSentCount(1);
+    }
+
     public function test_select_all_includes_customers_on_every_page(): void
     {
         $user = User::factory()->staff()->create();
@@ -646,6 +821,132 @@ class CustomerManagementTest extends TestCase
         Livewire::actingAs($user)
             ->test(Index::class)
             ->call('toggleAll')
-            ->assertCount('selected', 16);
+            ->assertCount('selected', 16)
+            ->assertSeeHtml('wire:key="select-all-desktop-1"');
+    }
+
+    public function test_bulk_industry_suggestion_accepts_more_than_twenty_and_batches(): void
+    {
+        config()->set('services.gemini.api_key', 'test-key');
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response([
+            'status' => 'completed',
+            'output_text' => json_encode(['industry' => 'Manufacturing', 'sub_industry' => 'Aluminium']),
+        ])]);
+
+        $user = User::factory()->staff()->create();
+        $customers = Customer::factory()->count(25)->for($user, 'creator')->create([
+            'date_of_birth' => now()->subYears(40)->toDateString(),
+            'employment_status' => 'employed',
+        ]);
+        foreach ($customers as $customer) {
+            CustomerEmployment::factory()->create([
+                'customer_id' => $customer->id,
+                'employer_name' => 'Batch Co',
+                'occupation' => 'Staff',
+                'is_primary' => true,
+                'is_current' => true,
+                'industry' => null,
+                'sub_industry' => null,
+                'primary_current_key' => $customer->id,
+            ]);
+        }
+
+        $component = Livewire::actingAs($user)->test(Index::class);
+        foreach ($customers as $customer) {
+            $component->call('toggle', $customer->id);
+        }
+
+        $component->call('beginIndustrySuggest')
+            ->assertReturned(fn (array $data): bool => $data['ok'] === true
+                && $data['pending'] === true
+                && ($data['total'] ?? 0) === 25);
+
+        for ($i = 0; $i < 24; $i++) {
+            $component->call('advanceIndustrySuggest')
+                ->assertReturned(fn (array $data): bool => $data['ok'] === true && $data['pending'] === true);
+        }
+
+        $component->call('advanceIndustrySuggest')
+            ->assertReturned(fn (array $data): bool => $data['ok'] === true
+                && $data['pending'] === false
+                && ($data['type'] ?? '') === 'success'
+                && str_contains($data['message'] ?? '', 'Industry filled for 25'));
+
+        Http::assertSentCount(25);
+    }
+
+    public function test_bulk_industry_suggestion_mixed_selection_via_begin_and_advance(): void
+    {
+        config()->set('services.gemini.api_key', 'test-key');
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response([
+            'status' => 'completed',
+            'output_text' => json_encode(['industry' => 'Construction', 'sub_industry' => 'General Building']),
+        ])]);
+
+        $user = User::factory()->staff()->create();
+        $needsBoth = Customer::factory()->for($user, 'creator')->create([
+            'date_of_birth' => now()->subYears(35)->toDateString(),
+            'employment_status' => 'employed',
+        ]);
+        $needsSub = Customer::factory()->for($user, 'creator')->create([
+            'date_of_birth' => now()->subYears(35)->toDateString(),
+            'employment_status' => 'employed',
+        ]);
+        $alreadyComplete = Customer::factory()->for($user, 'creator')->create();
+        $noJob = Customer::factory()->for($user, 'creator')->create();
+
+        $jobBoth = CustomerEmployment::factory()->create([
+            'customer_id' => $needsBoth->id,
+            'employer_name' => 'Build Co',
+            'is_primary' => false,
+            'is_current' => true,
+            'industry' => null,
+            'sub_industry' => null,
+        ]);
+        $jobSub = CustomerEmployment::factory()->create([
+            'customer_id' => $needsSub->id,
+            'employer_name' => 'ROHADI CONTRACTION',
+            'is_primary' => false,
+            'is_current' => false,
+            'industry' => 'CONTRACTION',
+            'sub_industry' => null,
+        ]);
+        CustomerEmployment::factory()->create([
+            'customer_id' => $alreadyComplete->id,
+            'employer_name' => 'Bank Co',
+            'is_primary' => true,
+            'is_current' => true,
+            'industry' => 'Banking',
+            'sub_industry' => 'Retail',
+            'primary_current_key' => $alreadyComplete->id,
+        ]);
+
+        $component = Livewire::actingAs($user)
+            ->test(Index::class)
+            ->assertSee('Suggest industry')
+            ->call('toggle', $needsBoth->id)
+            ->call('toggle', $needsSub->id)
+            ->call('toggle', $alreadyComplete->id)
+            ->call('toggle', $noJob->id)
+            ->call('beginIndustrySuggest')
+            ->assertReturned(fn (array $data): bool => ($data['total'] ?? 0) === 4 && ($data['pending'] ?? false));
+
+        $component->call('advanceIndustrySuggest')->assertReturned(fn (array $data): bool => ($data['pending'] ?? false) === true);
+        $component->call('advanceIndustrySuggest')->assertReturned(fn (array $data): bool => ($data['pending'] ?? false) === true);
+        $component->call('advanceIndustrySuggest')->assertReturned(fn (array $data): bool => ($data['pending'] ?? false) === true);
+        $component->call('advanceIndustrySuggest')
+            ->assertReturned(fn (array $data): bool => $data['ok'] === true
+                && $data['pending'] === false
+                && ($data['type'] ?? '') === 'success'
+                && str_contains($data['message'] ?? '', 'Industry filled for 2')
+                && str_contains($data['message'] ?? '', 'skipped 2')
+                && collect($data['results'] ?? [])->contains(fn (array $row): bool => $row['status'] === 'filled' && str_contains($row['detail'] ?? '', 'Construction'))
+                && collect($data['results'] ?? [])->where('status', 'skipped')->count() === 2);
+
+        $this->assertSame('Construction', $jobBoth->fresh()->industry);
+        $this->assertSame('General Building', $jobBoth->fresh()->sub_industry);
+        $this->assertSame('Construction', $jobSub->fresh()->industry);
+        $this->assertSame('General Building', $jobSub->fresh()->sub_industry);
+        Http::assertSentCount(2);
     }
 }

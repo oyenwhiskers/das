@@ -44,19 +44,20 @@ class BimbsecModuleTest extends TestCase
     {
         $user = User::factory()->staff()->create();
         Customer::factory()->for($user, 'creator')->create(['full_legal_name' => 'Ali Bin Abu', 'primary_identification_number' => '900101011234']);
-        Customer::factory()->count(15)->for($user, 'creator')->create();
+        Customer::factory()->count(55)->for($user, 'creator')->create();
 
         Livewire::actingAs($user)
             ->test(Index::class)
             ->set('search', '900101011234')
             ->assertSee('Ali Bin Abu')
-            ->assertDontSee('Generate PDFs for 16');
+            ->assertDontSee('Generate PDFs for 56');
 
         $component = Livewire::actingAs($user)->test(Index::class);
         $pageIds = $component->viewData('pageIds');
+        $this->assertCount(50, $pageIds);
         $component->call('togglePage', $pageIds)->assertSet('selected', $pageIds);
-        $this->assertCount(15, $component->get('selected'));
-        $this->assertSame(16, Customer::query()->count());
+        $this->assertCount(50, $component->get('selected'));
+        $this->assertSame(56, Customer::query()->count());
     }
 
     public function test_index_lists_customers_alphabetically_by_name(): void
@@ -549,16 +550,26 @@ class BimbsecModuleTest extends TestCase
         $second = $this->customer($user, 'SITI BINTI OMAR', '910202021111');
         config(['bimbsec.chunk_size' => 1, 'bimbsec.max_selection' => 5]);
 
-        $batch = Livewire::actingAs($user)
+        $component = Livewire::actingAs($user)
             ->test(Index::class)
             ->call('toggle', $first->id)
             ->call('toggle', $second->id)
             ->call('askGenerate')
             ->call('generateSelected')
-            ->assertRedirect();
+            ->assertReturned(fn (array $data): bool => $data['ok'] === true
+                && $data['pending'] === true
+                && ($data['total'] ?? 0) === 2);
 
         $stored = BimbsecBatch::query()->where('user_id', $user->id)->first();
         $this->assertNotNull($stored);
+        $component->call('batchAdvance', $stored->id, 'generate')
+            ->assertReturned(fn (array $data): bool => $data['ok'] === true && $data['pending'] === true && ($data['done'] ?? 0) === 1);
+        $component->call('batchAdvance', $stored->id, 'generate')
+            ->assertReturned(fn (array $data): bool => $data['ok'] === true
+                && $data['pending'] === false
+                && str_contains($data['url'] ?? '', '/bimbsec/batches/'));
+
+        $stored->refresh();
         $this->assertTrue($stored->complete);
         $this->assertSame([$stored->summary[0]['reference'], $stored->summary[1]['reference']], [$first->reference, $second->reference]);
         $pdf = new Fpdi;
@@ -586,6 +597,7 @@ class BimbsecModuleTest extends TestCase
         $user = User::factory()->staff()->create();
         $first = $this->customer($user, 'ALI BIN ABU', '900101011234');
         $second = $this->customer($user, 'SITI BINTI OMAR', '910202021111');
+        config(['bimbsec.chunk_size' => 1]);
 
         $download = Livewire::actingAs($user)
             ->test(Index::class)
@@ -622,6 +634,30 @@ class BimbsecModuleTest extends TestCase
                 && $data['pending'] === false
                 && str_contains($data['url'] ?? '', '/print')
                 && ! str_contains($data['url'] ?? '', 'download=1'));
+    }
+
+    public function test_select_all_on_a_full_page_can_start_download_without_a_selection_cap(): void
+    {
+        $user = User::factory()->staff()->create();
+        Customer::factory()->count(45)->for($user, 'creator')->create();
+        config(['bimbsec.max_selection' => 0, 'bimbsec.chunk_size' => 8]);
+
+        $component = Livewire::actingAs($user)->test(Index::class);
+        $pageIds = $component->viewData('pageIds');
+        $this->assertCount(45, $pageIds);
+
+        $component->call('togglePage', $pageIds)
+            ->call('downloadAll')
+            ->assertReturned(fn (array $data): bool => $data['ok'] === true
+                && $data['pending'] === true
+                && ($data['total'] ?? 0) === 45);
+
+        $batch = BimbsecBatch::query()->where('user_id', $user->id)->first();
+        $this->assertNotNull($batch);
+        $component->call('batchAdvance', $batch->id, 'download')
+            ->assertReturned(fn (array $data): bool => $data['ok'] === true
+                && $data['pending'] === true
+                && ($data['done'] ?? 0) === 8);
     }
 
     public function test_another_staff_member_cannot_open_a_batch_file(): void

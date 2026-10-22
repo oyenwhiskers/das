@@ -1041,6 +1041,7 @@ class ProfileMergeTest extends TestCase
         $employmentOp = collect($preview['operations'])->firstWhere('type', 'employments');
         $this->assertNotNull($employmentOp);
         $this->assertSame('ENTREPRENEUR', $employmentOp['payload']['occupation']);
+        $this->assertSame('OWNER', $employmentOp['payload']['employer_name']);
         $this->assertSame('SUHAIZA CONSTRUCTION', $employmentOp['payload']['address_line_1']);
         $this->assertSame('JALAN PASAR MACHANG', $employmentOp['payload']['address_line_2']);
         $this->assertSame('KELANTAN', $employmentOp['payload']['state']);
@@ -1061,6 +1062,7 @@ class ProfileMergeTest extends TestCase
         );
         $employment->refresh();
         $this->assertSame('ENTREPRENEUR', $employment->occupation);
+        $this->assertSame('OWNER', $employment->employer_name);
         $this->assertSame('Machang', $employment->city);
         $this->assertSame('18500', $employment->postcode);
         $this->assertSame('Malaysia', $employment->country);

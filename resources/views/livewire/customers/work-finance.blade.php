@@ -129,23 +129,25 @@
                             <fieldset class="space-y-3">@if ($group !== 'Employment details')<legend class="text-sm font-semibold text-slate-800">{{ $group }}</legend>@endif<div class="grid gap-4 sm:grid-cols-2">
                                 @foreach ($fields as $field => $label)
                                     @if ($field === 'end_date' && $form['is_current']) @continue @endif
-                                    <div @class(['sm:col-span-2' => in_array($field, ['address_line_1', 'address_line_2', 'industry'], true)])>
-                                        @if ($field === 'industry')
-                                            <div class="flex items-end justify-between gap-3">
-                                                <x-input-label :for="'employment-'.$field" :value="$label" />
-                                                <button type="button" wire:click="searchIndustry" wire:loading.attr="disabled" wire:target="searchIndustry" class="shrink-0 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-                                                    <span wire:loading.remove wire:target="searchIndustry">Search</span>
-                                                    <span wire:loading wire:target="searchIndustry">Searching…</span>
-                                                </button>
-                                            </div>
-                                        @else
-                                            <x-input-label :for="'employment-'.$field" :value="$label" />
-                                        @endif
+                                    <div @class(['sm:col-span-2' => in_array($field, ['address_line_1', 'address_line_2'], true)])>
+                                        <x-input-label :for="'employment-'.$field" :value="$label" />
                                         @if ($field === 'arrangement')
                                             <select id="employment-arrangement" wire:model.live="form.arrangement" class="mt-1 block w-full rounded-md border-slate-300 text-sm"><option value="">Select arrangement</option><option value="employed">Employed</option><option value="self_employed">Self-Employed</option><option value="retired">Retired</option><option value="other">Others (please specify)</option></select>
                                             @if (($form['arrangement'] ?? '') === 'other')
                                                 <div class="mt-2"><x-input-label for="employment-arrangement-other" value="Others (please specify)" /><x-text-input id="employment-arrangement-other" wire:model="form.arrangement_other" class="mt-1 block w-full" maxlength="255" /><x-input-error :messages="$errors->get('form.arrangement_other')" class="mt-1" /></div>
                                             @endif
+                                        @elseif (in_array($field, ['industry', 'sub_industry'], true))
+                                            <div class="mt-1 flex items-stretch gap-2">
+                                                <x-text-input :id="'employment-'.$field" :wire:model="'form.'.$field" class="block w-full min-w-0" />
+                                                <button type="button" wire:click="searchIndustry" wire:loading.attr="disabled" wire:target="searchIndustry" aria-label="Search {{ $label }}" title="Search {{ $label }}" class="inline-flex shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white px-2.5 text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+                                                    <svg wire:loading.remove wire:target="searchIndustry" class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                                                    </svg>
+                                                    <svg wire:loading wire:target="searchIndustry" class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
+                                                    </svg>
+                                                </button>
+                                            </div>
                                         @else<x-text-input :id="'employment-'.$field" :type="in_array($field, ['start_date', 'end_date']) ? 'date' : 'text'" :wire:model="'form.'.$field" class="mt-1 block w-full" />@endif
                                         @if ($field === 'address_line_2')
                                             <x-bimbsec-fit-hint :max="$bimbsecFit->cellCapacity('employment.business_address', 'address_lines')" :ids="['employment-address_line_1', 'employment-address_line_2']" together />
