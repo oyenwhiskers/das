@@ -692,6 +692,9 @@ class SinglePassExtraction
             if ($this->projection->isAddressLinePath((string) ($field['path'] ?? ''))) {
                 $value = $this->projection->stripAddressLineCommas($value);
             }
+            if ($this->projection->isPhonePath((string) ($field['path'] ?? ''))) {
+                $value = $this->projection->stripPhonePunctuation($value);
+            }
         }
         if (($field['type'] ?? '') === 'date' && is_string($value) && ($iso = $this->projection->dayFirstDate($value)) !== null) {
             $value = $iso;

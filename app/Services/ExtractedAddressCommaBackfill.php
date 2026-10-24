@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\CustomerAddress;
+use App\Models\CustomerBankAccount;
+use App\Models\CustomerBrokerageAccount;
 use App\Models\CustomerEmployment;
 use App\Models\ExtractedProfile;
 use App\Models\RelatedPerson;
@@ -42,7 +44,27 @@ class ExtractedAddressCommaBackfill
             ->orderBy('id')
             ->chunkById(100, function (Collection $people): void {
                 foreach ($people as $person) {
-                    $this->reformatColumns($person, ['employer_address_line_1', 'employer_address_line_2']);
+                    $this->reformatColumns($person, [
+                        'employer_address',
+                        'employer_address_line_1',
+                        'employer_address_line_2',
+                    ]);
+                }
+            });
+
+        CustomerBankAccount::query()
+            ->orderBy('id')
+            ->chunkById(100, function (Collection $accounts): void {
+                foreach ($accounts as $account) {
+                    $this->reformatColumns($account, ['branch_address']);
+                }
+            });
+
+        CustomerBrokerageAccount::query()
+            ->orderBy('id')
+            ->chunkById(100, function (Collection $accounts): void {
+                foreach ($accounts as $account) {
+                    $this->reformatColumns($account, ['branch_address']);
                 }
             });
     }

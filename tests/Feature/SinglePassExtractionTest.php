@@ -145,8 +145,12 @@ class SinglePassExtractionTest extends TestCase
                 $this->value('addresses[residential].line_1', 'provided', 'NO 11,RESIDENSI CYBERJAYA LAKEFRONT,'),
                 $this->value('addresses[residential].line_2', 'provided', 'LORONG MASJID, KAMPUNG PANGKAL MELERET'),
                 $this->value('addresses[residential].city', 'provided', 'Cyberjaya'),
+                $this->value('addresses[mailing].line_1', 'provided', 'UNIT 5, BLOK B,'),
                 $this->value('employments[].address_line_1', 'provided', '67,LORONG SERI KUANTAN 65', '67,LORONG SERI KUANTAN 65', 'job-1'),
+                $this->value('relationships[].related_person.employer_address', 'provided', 'LOT 1, JALAN PASAR,', 'LOT 1, JALAN PASAR,', 'rel-1', 'kin-1', 'related person'),
+                $this->value('relationships[].related_person.employer_address_line_1', 'provided', 'NO 9, PASAR BESAR,', 'NO 9, PASAR BESAR,', 'rel-1', 'kin-1', 'related person'),
                 $this->value('bank_accounts[].branch_address', 'provided', '15th Floor, Tower A', '15th Floor, Tower A', 'bank-1'),
+                $this->value('brokerage_accounts[].branch_address', 'provided', 'Level 2, Menara ABC', 'Level 2, Menara ABC', 'broker-1'),
             ],
         ]]));
 
@@ -156,8 +160,40 @@ class SinglePassExtractionTest extends TestCase
         $this->assertSame('NO 11 RESIDENSI CYBERJAYA LAKEFRONT', $values['addresses[residential].line_1']);
         $this->assertSame('LORONG MASJID KAMPUNG PANGKAL MELERET', $values['addresses[residential].line_2']);
         $this->assertSame('Cyberjaya', $values['addresses[residential].city']);
+        $this->assertSame('UNIT 5 BLOK B', $values['addresses[mailing].line_1']);
         $this->assertSame('67 LORONG SERI KUANTAN 65', $values['employments[].address_line_1']);
-        $this->assertSame('15th Floor, Tower A', $values['bank_accounts[].branch_address']);
+        $this->assertSame('LOT 1 JALAN PASAR', $values['relationships[].related_person.employer_address']);
+        $this->assertSame('NO 9 PASAR BESAR', $values['relationships[].related_person.employer_address_line_1']);
+        $this->assertSame('15th Floor Tower A', $values['bank_accounts[].branch_address']);
+        $this->assertSame('Level 2 Menara ABC', $values['brokerage_accounts[].branch_address']);
+    }
+
+    public function test_phone_punctuation_is_stripped_after_extract(): void
+    {
+        $scan = $this->scan();
+        $this->fake($this->payload([[
+            'record_ref' => 'applicant_1', 'anchor' => 'Application', 'source_pages' => [1], 'warnings' => [],
+            'values' => [
+                $this->value('contacts[mobile].value', 'provided', '012-883 4419'),
+                $this->value('contacts[home].value', 'provided', '03-7721 4400'),
+                $this->value('employments[].general_telephone', 'provided', '(03) 2118-8888', '(03) 2118-8888', 'job-1'),
+                $this->value('employments[].direct_telephone', 'provided', '03-2118 1234', '03-2118 1234', 'job-1'),
+                $this->value('employments[].fax', 'provided', '03-2118-9999', '03-2118-9999', 'job-1'),
+                $this->value('relationships[].related_person.mobile', 'provided', '+60 12-345 6789', '+60 12-345 6789', 'rel-1', 'kin-1', 'related person'),
+                $this->value('relationships[].related_person.home_telephone', 'provided', '09-123 4567', '09-123 4567', 'rel-1', 'kin-1', 'related person'),
+            ],
+        ]]));
+
+        app(SinglePassExtraction::class)->run($scan, app(GeminiDocumentReader::class));
+
+        $values = collect($scan->extractedProfiles()->sole()->original_projection['values'])->pluck('value', 'field_id');
+        $this->assertSame('0128834419', $values['contacts[mobile].value']);
+        $this->assertSame('0377214400', $values['contacts[home].value']);
+        $this->assertSame('0321188888', $values['employments[].general_telephone']);
+        $this->assertSame('0321181234', $values['employments[].direct_telephone']);
+        $this->assertSame('0321189999', $values['employments[].fax']);
+        $this->assertSame('+60123456789', $values['relationships[].related_person.mobile']);
+        $this->assertSame('091234567', $values['relationships[].related_person.home_telephone']);
     }
 
     public function test_a_name_used_as_the_record_reference_is_still_shown(): void

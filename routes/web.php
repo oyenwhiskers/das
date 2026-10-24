@@ -3,6 +3,7 @@
 use App\Http\Controllers\AttachmentFileController;
 use App\Http\Controllers\BimbsecFileController;
 use App\Http\Controllers\DocumentFileController;
+use App\Http\Controllers\WakalahFileController;
 use App\Livewire\AiUsage\Index as AiUsageIndex;
 use App\Livewire\Attachments\Index as AttachmentsIndex;
 use App\Livewire\StorageUsage\Index as StorageUsageIndex;
@@ -10,6 +11,8 @@ use App\Livewire\Attachments\Show as AttachmentsShow;
 use App\Livewire\Bimbsec\BatchShow as BimbsecBatchShow;
 use App\Livewire\Bimbsec\Index as BimbsecIndex;
 use App\Livewire\Bimbsec\Show as BimbsecShow;
+use App\Livewire\Wakalah\Index as WakalahIndex;
+use App\Livewire\Wakalah\Show as WakalahShow;
 use App\Livewire\Customers\Create as CustomersCreate;
 use App\Livewire\Customers\Index as CustomersIndex;
 use App\Livewire\Customers\Show as CustomersShow;
@@ -33,6 +36,10 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/bimbsec/{customer}/applications/{application}', BimbsecShow::class)->name('bimbsec.show');
     Route::get('/bimbsec/{customer}/applications/{application}/file', [BimbsecFileController::class, 'document'])->name('bimbsec.file');
     Route::get('/bimbsec/{customer}/applications/{application}/print', [BimbsecFileController::class, 'print'])->name('bimbsec.print');
+
+    Route::get('/wakalah', WakalahIndex::class)->name('wakalah.index');
+    Route::get('/wakalah/{customer}', WakalahShow::class)->name('wakalah.show');
+    Route::get('/wakalah/{customer}/file', WakalahFileController::class)->name('wakalah.file');
 
     Route::get('/documents', DocumentsIndex::class)->name('documents.index');
     Route::get('/documents/{documentScan}', DocumentsShow::class)->name('documents.show');

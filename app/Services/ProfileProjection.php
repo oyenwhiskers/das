@@ -162,7 +162,7 @@ class ProfileProjection
 
     public function isAddressLinePath(string $path): bool
     {
-        return preg_match('/(?:^|\.)((?:employer_)?address_line_[12]|line_[12])$/', $path) === 1;
+        return preg_match('/(?:^|\.)((?:employer_)?address_line_[12]|line_[12]|branch_address|employer_address)$/', $path) === 1;
     }
 
     public function stripAddressLineCommas(string $value): string
@@ -172,6 +172,22 @@ class ProfileProjection
         }
 
         return trim(preg_replace('/\s+/u', ' ', str_replace(',', ' ', $value)) ?? $value);
+    }
+
+    public function isPhonePath(string $path): bool
+    {
+        return str_contains($path, 'contacts[mobile]')
+            || str_contains($path, 'contacts[home]')
+            || str_ends_with($path, '.mobile')
+            || str_ends_with($path, '.home_telephone')
+            || str_ends_with($path, '.general_telephone')
+            || str_ends_with($path, '.direct_telephone')
+            || str_ends_with($path, '.fax');
+    }
+
+    public function stripPhonePunctuation(string $value): string
+    {
+        return preg_replace('/[^\d+]/', '', $value) ?? $value;
     }
 
     public function dayFirstDate(string $value): ?string

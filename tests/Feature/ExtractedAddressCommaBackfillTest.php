@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\AddressType;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
+use App\Models\CustomerBankAccount;
 use App\Models\CustomerEmployment;
 use App\Models\DocumentScan;
 use App\Models\RelatedPerson;
@@ -51,6 +52,22 @@ class ExtractedAddressCommaBackfillTest extends TestCase
                     'value' => '15th Floor, Tower A',
                     'evidence_ids' => [],
                 ],
+                [
+                    'field_id' => 'brokerage_accounts[].branch_address',
+                    'entity_ref' => 'person-1',
+                    'row_ref' => 'broker-1',
+                    'state' => 'provided',
+                    'value' => 'Level 2, Menara ABC',
+                    'evidence_ids' => [],
+                ],
+                [
+                    'field_id' => 'relationships[].related_person.employer_address',
+                    'entity_ref' => 'person-1',
+                    'row_ref' => 'rel-1',
+                    'state' => 'provided',
+                    'value' => 'LOT 1, JALAN PASAR,',
+                    'evidence_ids' => [],
+                ],
             ],
             'warnings' => [],
         ];
@@ -82,7 +99,17 @@ class ExtractedAddressCommaBackfillTest extends TestCase
         ]);
         $person = RelatedPerson::factory()->create([
             'full_legal_name' => 'Siti Amin',
+            'employer_address' => 'BLOK A, PASAR RAYA,',
             'employer_address_line_1' => 'LOT 9, PASAR BESAR,',
+        ]);
+        $bank = CustomerBankAccount::factory()->for($customer)->create([
+            'branch_address' => '15th Floor, Tower A',
+        ]);
+        $broker = $customer->brokerageAccounts()->create([
+            'broker_name' => 'Broker A',
+            'branch_address' => 'Level 2, Menara ABC',
+            'account_type' => 'trading',
+            'is_active' => true,
         ]);
 
         app(ExtractedAddressCommaBackfill::class)->run();
@@ -90,7 +117,9 @@ class ExtractedAddressCommaBackfillTest extends TestCase
         $values = collect($profile->fresh()->reviewed_projection['values'])->pluck('value', 'field_id');
         $this->assertSame('NO 11 RESIDENSI CYBERJAYA LAKEFRONT', $values['addresses[residential].line_1']);
         $this->assertSame('Cyberjaya, Selangor', $values['addresses[residential].city']);
-        $this->assertSame('15th Floor, Tower A', $values['bank_accounts[].branch_address']);
+        $this->assertSame('15th Floor Tower A', $values['bank_accounts[].branch_address']);
+        $this->assertSame('Level 2 Menara ABC', $values['brokerage_accounts[].branch_address']);
+        $this->assertSame('LOT 1 JALAN PASAR', $values['relationships[].related_person.employer_address']);
         $this->assertSame(
             'NO 11 RESIDENSI CYBERJAYA LAKEFRONT',
             collect($profile->fresh()->original_projection['values'])->firstWhere('field_id', 'addresses[residential].line_1')['value'],
@@ -101,6 +130,9 @@ class ExtractedAddressCommaBackfillTest extends TestCase
         $this->assertSame('JALAN MEGAH 8 TAMAN MEGAH', $address->line_2);
         $this->assertSame('Ajil', $address->city);
         $this->assertSame('67 LORONG SERI KUANTAN 65', $job->fresh()->address_line_1);
+        $this->assertSame('BLOK A PASAR RAYA', $person->fresh()->employer_address);
         $this->assertSame('LOT 9 PASAR BESAR', $person->fresh()->employer_address_line_1);
+        $this->assertSame('15th Floor Tower A', $bank->fresh()->branch_address);
+        $this->assertSame('Level 2 Menara ABC', $broker->fresh()->branch_address);
     }
 }
