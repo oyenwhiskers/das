@@ -44,6 +44,7 @@ class WakalahModuleTest extends TestCase
         Livewire::actingAs($user)
             ->test(Show::class, ['customer' => $customer])
             ->assertSee('ALI BIN ABU')
+            ->assertSee('Witnessed by')
             ->assertSee(route('wakalah.file', $customer), false);
 
         $response = $this->actingAs($user)
@@ -56,6 +57,58 @@ class WakalahModuleTest extends TestCase
         $this->assertTrue($this->pdfContains($served, '900101011234'));
         $this->assertTrue($this->pdfContains($served, '1 JALAN DAMAI'));
         $this->assertTrue($this->pdfContains($served, now()->format('d/m/Y')));
+        $this->assertFalse($this->pdfContains($served, 'WITNESS ONE'));
+    }
+
+    public function test_staff_can_save_wakalah_details_and_preview_updates(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = $this->customer($user, 'ALI BIN ABU', '900101011234');
+
+        Livewire::actingAs($user)
+            ->test(Show::class, ['customer' => $customer])
+            ->set('designation', 'Director')
+            ->set('witnessName', 'Witness One')
+            ->set('witnessNric', '880202025678')
+            ->set('witnessDate', '2026-10-20')
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('previewVersion', 1);
+
+        $customer->refresh();
+        $this->assertSame('Director', $customer->wakalah_designation);
+        $this->assertSame('Witness One', $customer->wakalah_witness_name);
+        $this->assertSame('880202025678', $customer->wakalah_witness_nric);
+        $this->assertSame('2026-10-20', $customer->wakalah_witness_date?->toDateString());
+
+        $served = $this->actingAs($user)
+            ->get(route('wakalah.file', $customer))
+            ->assertOk()
+            ->getContent();
+        $this->assertTrue($this->pdfContains($served, 'DIRECTOR'));
+        $this->assertTrue($this->pdfContains($served, 'WITNESS ONE'));
+        $this->assertTrue($this->pdfContains($served, '880202025678'));
+        $this->assertTrue($this->pdfContains($served, '20/10/2026'));
+
+        Livewire::actingAs($user)
+            ->test(Show::class, ['customer' => $customer])
+            ->set('witnessName', 'Witness Two')
+            ->set('witnessNric', '')
+            ->set('witnessDate', '')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $customer->refresh();
+        $this->assertSame('Witness Two', $customer->wakalah_witness_name);
+        $this->assertNull($customer->wakalah_witness_nric);
+        $this->assertNull($customer->wakalah_witness_date);
+
+        $served = $this->actingAs($user)
+            ->get(route('wakalah.file', $customer))
+            ->assertOk()
+            ->getContent();
+        $this->assertTrue($this->pdfContains($served, 'WITNESS TWO'));
+        $this->assertFalse($this->pdfContains($served, '880202025678'));
     }
 
     private function customer(User $user, string $name, string $nric): Customer
