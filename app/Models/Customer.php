@@ -273,6 +273,48 @@ class Customer extends Model
         return $query->withExists($this->profileCompletionExists());
     }
 
+    /**
+     * Same definition as profileCompletionPercent() === 100.
+     *
+     * @param  Builder<Customer>  $query
+     * @return Builder<Customer>
+     */
+    public function scopeWhereProfileComplete(Builder $query, bool $complete = true): Builder
+    {
+        return $complete
+            ? $this->constrainProfileComplete($query)
+            : $query->whereNot(fn (Builder $inner) => $this->constrainProfileComplete($inner));
+    }
+
+    /**
+     * @param  Builder<Customer>  $query
+     * @return Builder<Customer>
+     */
+    private function constrainProfileComplete(Builder $query): Builder
+    {
+        return $query
+            ->whereNotNull('full_legal_name')->where('full_legal_name', '!=', '')
+            ->whereNotNull('primary_identification_number')->where('primary_identification_number', '!=', '')
+            ->whereNotNull('date_of_birth')
+            ->whereNotNull('gender')->where('gender', '!=', '')
+            ->whereNotNull('nationality')->where('nationality', '!=', '')
+            ->whereNotNull('marital_status')->where('marital_status', '!=', '')
+            ->whereNotNull('primary_mobile')->where('primary_mobile', '!=', '')
+            ->whereNotNull('primary_email')->where('primary_email', '!=', '')
+            ->whereNotNull('employment_status')->where('employment_status', '!=', '')
+            ->whereHas('addresses', fn (Builder $q) => $q->where('type', 'residential')->where('line_1', '!=', ''))
+            ->whereHas('relationships')
+            ->whereHas('employments')
+            ->whereHas('bankAccounts')
+            ->whereHas('financialDeclarations')
+            ->whereHas('investmentProfiles')
+            ->where(fn (Builder $q) => $q
+                ->whereHas('taxIdentification')
+                ->orWhereHas('taxResidencies')
+                ->orWhereHas('fatcaDeclarations'))
+            ->whereHas('complianceDeclarations');
+    }
+
     /** Share of profile fields staff fill. Optional blanks such as social accounts, home telephone, and old NRIC are excluded. */
     public function profileCompletionPercent(): int
     {

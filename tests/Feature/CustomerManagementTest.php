@@ -9,6 +9,7 @@ use App\Livewire\Customers\Show;
 use App\Models\BimbsecApplication;
 use App\Models\BimbsecDocument;
 use App\Models\Customer;
+use App\Models\CustomerBankAccount;
 use App\Models\CustomerEmployment;
 use App\Models\CustomerIdentification;
 use App\Models\CustomerPepAssociation;
@@ -147,6 +148,63 @@ class CustomerManagementTest extends TestCase
             ->set('search', '')
             ->assertSee('Ahmad Bin Ali')
             ->assertSee('Siti Aminah');
+    }
+
+    public function test_customer_list_can_filter_by_profile_completion(): void
+    {
+        $user = User::factory()->staff()->create();
+        Customer::factory()->for($user, 'creator')->create(['full_legal_name' => 'Incomplete Customer']);
+
+        $complete = Customer::factory()->for($user, 'creator')->create([
+            'full_legal_name' => 'Complete Customer',
+            'primary_identification_number' => '900101121234',
+            'date_of_birth' => '1990-01-01',
+            'gender' => 'male',
+            'nationality' => 'Malaysian',
+            'marital_status' => 'Single',
+            'primary_mobile' => '0123456789',
+            'primary_email' => 'complete@example.com',
+            'employment_status' => 'employed',
+        ]);
+        $complete->addresses()->create(['type' => 'residential', 'line_1' => '1 Jalan Test']);
+        CustomerRelationship::factory()->for($complete)->create();
+        CustomerEmployment::factory()->for($complete)->create();
+        CustomerBankAccount::factory()->for($complete)->create();
+        $complete->financialDeclarations()->create([
+            'current_customer_key' => $complete->id,
+            'wealth_sources' => ['salary'],
+            'declared_on' => today()->toDateString(),
+            'source' => 'staff_entry',
+            'recorded_by' => $user->id,
+        ]);
+        $complete->investmentProfiles()->create([
+            'objectives' => ['long_term'],
+            'products' => [],
+            'declared_at' => now(),
+        ]);
+        $complete->complianceDeclarations()->create([
+            'kind' => 'pep',
+            'answer' => 'no',
+            'declared_on' => today()->toDateString(),
+            'source' => 'staff_entry',
+            'confirmation_status' => 'staff_recorded',
+            'recorded_by' => $user->id,
+            'current_key' => $complete->id.':pep',
+        ]);
+
+        $this->assertSame(100, $complete->fresh()->profileCompletionPercent());
+
+        Livewire::actingAs($user)
+            ->test(Index::class)
+            ->set('profile', 'complete')
+            ->assertSee('Complete Customer')
+            ->assertDontSee('Incomplete Customer')
+            ->set('profile', 'incomplete')
+            ->assertSee('Incomplete Customer')
+            ->assertDontSee('Complete Customer')
+            ->set('profile', 'all')
+            ->assertSee('Complete Customer')
+            ->assertSee('Incomplete Customer');
     }
 
     public function test_customer_list_defaults_to_name_ascending(): void

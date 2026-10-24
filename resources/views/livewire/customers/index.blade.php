@@ -71,6 +71,18 @@
                         <option value="archived">Archived</option>
                     </select>
                 </div>
+                <div class="sm:w-48">
+                    <label for="profile" class="sr-only">Profile</label>
+                    <select
+                        wire:model.live="profile"
+                        id="profile"
+                        class="w-full rounded-md border-slate-300 py-2 text-sm shadow-sm focus:border-navy-500 focus:ring-navy-500"
+                    >
+                        <option value="all">All Profiles</option>
+                        <option value="complete">Profile Complete</option>
+                        <option value="incomplete">Profile Not Complete</option>
+                    </select>
+                </div>
                 <div class="sm:w-52">
                     <label for="sort" class="sr-only">Sort</label>
                     <select
@@ -87,7 +99,7 @@
             </div>
         </div>
 
-        <p class="sr-only" wire:loading.delay wire:target="search,status,sort" aria-live="polite">Updating…</p>
+        <p class="sr-only" wire:loading.delay wire:target="search,status,profile,sort" aria-live="polite">Updating…</p>
 
         @if ($selected !== [])
             <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3">
@@ -101,7 +113,7 @@
         @endif
 
         {{-- Results --}}
-        <div class="relative rounded-lg border border-slate-200 bg-white shadow-sm" wire:loading.class="opacity-70" wire:target="search,status,sort">
+        <div class="relative rounded-lg border border-slate-200 bg-white shadow-sm" wire:loading.class="opacity-70" wire:target="search,status,profile,sort">
             @if ($customers->isEmpty())
                 <div class="px-6 py-10 text-center">
                     <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">

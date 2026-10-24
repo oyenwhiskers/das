@@ -35,6 +35,9 @@ class Index extends Component
     public string $status = 'all';
 
     #[Url]
+    public string $profile = 'all';
+
+    #[Url]
     public string $sort = 'name_asc';
 
     /** @var list<int> */
@@ -63,6 +66,12 @@ class Index extends Component
     }
 
     public function updatingStatus(): void
+    {
+        $this->resetPage();
+        $this->selected = [];
+    }
+
+    public function updatingProfile(): void
     {
         $this->resetPage();
         $this->selected = [];
@@ -409,7 +418,7 @@ class Index extends Component
     {
         $this->authorize('viewAny', Customer::class);
 
-        $hasFilters = filled($this->search) || $this->status !== 'all';
+        $hasFilters = filled($this->search) || $this->status !== 'all' || $this->profile !== 'all';
 
         $customers = $this->filteredQuery()
             ->withProfileCompletion()
@@ -433,6 +442,8 @@ class Index extends Component
         return Customer::query()
             ->search($this->search)
             ->when($this->status === 'active', fn ($query) => $query->where('status', CustomerStatus::Active))
-            ->when($this->status === 'archived', fn ($query) => $query->where('status', CustomerStatus::Archived));
+            ->when($this->status === 'archived', fn ($query) => $query->where('status', CustomerStatus::Archived))
+            ->when($this->profile === 'complete', fn ($query) => $query->whereProfileComplete())
+            ->when($this->profile === 'incomplete', fn ($query) => $query->whereProfileComplete(false));
     }
 }
