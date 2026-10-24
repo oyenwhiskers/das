@@ -51,11 +51,12 @@ class WakalahLetter
     private function writeTop(Fpdi $pdf, string $name, array $address): void
     {
         $pdf->SetFont('Helvetica', '', 11);
-        $this->writeField($pdf, 41.5, 175.0, 500.0, $name);
-        $y = 192.0;
+        // Band under WAKALAH LETTER (~156) and above APPOINTMENT (~232); leave a clear gap.
+        $this->writeField($pdf, 41.5, 170.0, 500.0, $name);
+        $y = 183.0;
         foreach ($address as $line) {
             $this->writeField($pdf, 41.5, $y, 500.0, $line);
-            $y += 14.0;
+            $y += 13.0;
         }
     }
 
