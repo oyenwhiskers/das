@@ -309,7 +309,7 @@ class Customer extends Model
             ->whereNotNull('employment_status')->where('employment_status', '!=', '')
             ->whereHas('addresses', fn (Builder $q) => $q->where('type', 'residential')->where('line_1', '!=', ''))
             ->whereHas('relationships')
-            ->whereHas('employments')
+            ->whereHas('employments', fn (Builder $q) => $q->whereNotNull('start_date'))
             ->whereHas('bankAccounts')
             ->whereHas('financialDeclarations')
             ->whereHas('investmentProfiles')
@@ -379,7 +379,7 @@ class Customer extends Model
     {
         return [
             'addresses as has_residential_address' => fn (Builder $query) => $query->where('type', 'residential')->where('line_1', '!=', ''),
-            'employments as has_employment',
+            'employments as has_employment' => fn (Builder $query) => $query->whereNotNull('start_date'),
             'relationships as has_relationship',
             'bankAccounts as has_bank_account',
             'financialDeclarations as has_financial',

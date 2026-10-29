@@ -168,7 +168,7 @@ class CustomerManagementTest extends TestCase
         ]);
         $complete->addresses()->create(['type' => 'residential', 'line_1' => '1 Jalan Test']);
         CustomerRelationship::factory()->for($complete)->create();
-        CustomerEmployment::factory()->for($complete)->create();
+        CustomerEmployment::factory()->for($complete)->create(['start_date' => '2020-01-01']);
         CustomerBankAccount::factory()->for($complete)->create();
         $complete->financialDeclarations()->create([
             'current_customer_key' => $complete->id,
@@ -671,6 +671,12 @@ class CustomerManagementTest extends TestCase
         $this->assertSame(65, $fresh->profileCompletionPercent());
         $this->assertSame(100, $fresh->profileSectionCompletion()['personal']);
         $this->assertSame(50, $fresh->profileSectionCompletion()['work']);
+
+        CustomerEmployment::factory()->for($customer)->create(['start_date' => null]);
+        $this->assertSame(50, $customer->fresh()->profileSectionCompletion()['work']);
+
+        $customer->employments()->update(['start_date' => '2020-01-01']);
+        $this->assertSame(100, $customer->fresh()->profileSectionCompletion()['work']);
 
         Livewire::actingAs($user)
             ->test(Show::class, ['customer' => $fresh])
