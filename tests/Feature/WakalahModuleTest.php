@@ -89,6 +89,7 @@ class WakalahModuleTest extends TestCase
         $this->assertTrue($this->pdfContains($served, 'WITNESS ONE'));
         $this->assertTrue($this->pdfContains($served, '880202025678'));
         $this->assertTrue($this->pdfContains($served, '20/10/2026'));
+        $this->assertTrue($this->pdfContains($served, '17/10/2026')); // client date = witness − 3 days
 
         Livewire::actingAs($user)
             ->test(Show::class, ['customer' => $customer])
@@ -109,6 +110,8 @@ class WakalahModuleTest extends TestCase
             ->getContent();
         $this->assertTrue($this->pdfContains($served, 'WITNESS TWO'));
         $this->assertFalse($this->pdfContains($served, '880202025678'));
+        $this->assertFalse($this->pdfContains($served, '20/10/2026'));
+        $this->assertTrue($this->pdfContains($served, now()->format('d/m/Y')));
     }
 
     private function customer(User $user, string $name, string $nric): Customer

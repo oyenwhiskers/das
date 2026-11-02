@@ -24,11 +24,12 @@ class WakalahLetter
         $name = mb_strtoupper(trim((string) $customer->full_legal_name));
         $nric = mb_strtoupper(trim((string) ($customer->primaryIdentification?->number ?: $customer->primary_identification_number ?: '')));
         $address = $this->addressLines($customer);
-        $date = now()->format('d/m/Y');
+        $witnessDateCarbon = $customer->wakalah_witness_date;
+        $date = ($witnessDateCarbon?->copy()->subDays(3) ?? now())->format('d/m/Y');
         $designation = mb_strtoupper(trim((string) ($customer->wakalah_designation ?? '')));
         $witnessName = mb_strtoupper(trim((string) ($customer->wakalah_witness_name ?? '')));
         $witnessNric = mb_strtoupper(trim((string) ($customer->wakalah_witness_nric ?? '')));
-        $witnessDate = $customer->wakalah_witness_date?->format('d/m/Y') ?? '';
+        $witnessDate = $witnessDateCarbon?->format('d/m/Y') ?? '';
 
         $pdf = new Fpdi('P', 'pt');
         $pdf->SetAutoPageBreak(false);
