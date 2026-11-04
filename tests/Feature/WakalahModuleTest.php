@@ -135,6 +135,32 @@ class WakalahModuleTest extends TestCase
         $this->assertSame('900101011234', $customer->primary_identification_number);
     }
 
+    public function test_staff_can_disable_nric_dash_formatting(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = $this->customer($user, 'ALI BIN ABU', '900101011234');
+
+        Livewire::actingAs($user)
+            ->test(Show::class, ['customer' => $customer])
+            ->assertSet('formatNric', true)
+            ->set('formatNric', false)
+            ->assertSet('clientNric', '900101011234')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $customer->refresh()->load('primaryIdentification');
+        $this->assertFalse($customer->wakalah_format_nric);
+        $this->assertSame('900101011234', $customer->primary_identification_number);
+        $this->assertSame('900101011234', $customer->primaryIdentification?->number);
+
+        $served = $this->actingAs($user)
+            ->get(route('wakalah.file', $customer))
+            ->assertOk()
+            ->getContent();
+        $this->assertTrue($this->pdfContains($served, '900101011234'));
+        $this->assertFalse($this->pdfContains($served, '900101-01-1234'));
+    }
+
     private function customer(User $user, string $name, string $nric): Customer
     {
         $customer = Customer::factory()->for($user, 'creator')->create([

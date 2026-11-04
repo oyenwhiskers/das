@@ -12,7 +12,7 @@
         </div>
 
         <form wire:submit="save" class="space-y-3">
-            <details class="rounded-lg border border-slate-200 bg-white px-4 py-3">
+            <details wire:ignore.self class="rounded-lg border border-slate-200 bg-white px-4 py-3">
                 <summary class="cursor-pointer text-sm font-semibold text-navy-900">Client</summary>
                 <div class="mt-3 space-y-3">
                     <p class="text-xs text-slate-500">Name comes from the customer profile. Editing NRIC updates the profile on save. Designation is optional.</p>
@@ -22,7 +22,13 @@
                             <p class="mt-1 text-sm font-medium text-slate-900">{{ $customer->full_legal_name }}</p>
                         </div>
                         <div>
-                            <label class="text-xs font-medium text-slate-500" for="wakalah-client-nric">NRIC</label>
+                            <div class="flex items-center justify-between gap-2">
+                                <label class="text-xs font-medium text-slate-500" for="wakalah-client-nric">NRIC</label>
+                                <label class="flex items-center gap-1.5 text-xs text-slate-600" for="wakalah-format-nric">
+                                    <input id="wakalah-format-nric" type="checkbox" wire:model.live="formatNric" class="rounded border-slate-300 text-navy-700" />
+                                    Dash format
+                                </label>
+                            </div>
                             <input id="wakalah-client-nric" wire:model="clientNric" autocomplete="off" class="mt-1 w-full rounded-md border-slate-300 text-sm" />
                             @error('clientNric') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
                         </div>

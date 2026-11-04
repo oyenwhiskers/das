@@ -88,6 +88,7 @@ class Customer extends Model
         'wakalah_witness_name',
         'wakalah_witness_nric',
         'wakalah_witness_date',
+        'wakalah_format_nric',
         'created_by',
         'updated_by',
     ];
@@ -104,6 +105,7 @@ class Customer extends Model
             'date_of_birth' => 'date',
             'retirement_date' => 'date',
             'wakalah_witness_date' => 'date',
+            'wakalah_format_nric' => 'boolean',
         ];
     }
 
