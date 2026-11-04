@@ -15,15 +15,16 @@
             <details class="rounded-lg border border-slate-200 bg-white px-4 py-3">
                 <summary class="cursor-pointer text-sm font-semibold text-navy-900">Client</summary>
                 <div class="mt-3 space-y-3">
-                    <p class="text-xs text-slate-500">Name and NRIC come from the customer profile. Designation is optional.</p>
+                    <p class="text-xs text-slate-500">Name comes from the customer profile. Editing NRIC updates the profile on save. Designation is optional.</p>
                     <div class="grid gap-3 sm:grid-cols-2">
                         <div>
                             <p class="text-xs font-medium text-slate-500">Name</p>
                             <p class="mt-1 text-sm font-medium text-slate-900">{{ $customer->full_legal_name }}</p>
                         </div>
                         <div>
-                            <p class="text-xs font-medium text-slate-500">NRIC</p>
-                            <p class="mt-1 text-sm font-medium text-slate-900">{{ $customer->primary_identification_number ?: '—' }}</p>
+                            <label class="text-xs font-medium text-slate-500" for="wakalah-client-nric">NRIC</label>
+                            <input id="wakalah-client-nric" wire:model="clientNric" autocomplete="off" class="mt-1 w-full rounded-md border-slate-300 text-sm" />
+                            @error('clientNric') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
                         </div>
                         <div class="sm:col-span-2">
                             <label class="text-xs font-medium text-slate-500" for="wakalah-designation">Designation</label>

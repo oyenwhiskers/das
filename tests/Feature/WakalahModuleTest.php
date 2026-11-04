@@ -67,6 +67,7 @@ class WakalahModuleTest extends TestCase
 
         Livewire::actingAs($user)
             ->test(Show::class, ['customer' => $customer])
+            ->set('clientNric', '900101-01-9999')
             ->set('designation', 'Director')
             ->set('witnessName', 'Witness One')
             ->set('witnessNric', '880202025678')
@@ -75,7 +76,10 @@ class WakalahModuleTest extends TestCase
             ->assertHasNoErrors()
             ->assertSet('previewVersion', 1);
 
-        $customer->refresh();
+        $customer->refresh()->load('primaryIdentification');
+        $this->assertSame('900101-01-9999', $customer->primary_identification_number);
+        $this->assertSame('900101-01-9999', $customer->primaryIdentification?->number);
+        $this->assertSame('900101019999', $customer->primaryIdentification?->normalized_number);
         $this->assertSame('Director', $customer->wakalah_designation);
         $this->assertSame('Witness One', $customer->wakalah_witness_name);
         $this->assertSame('880202025678', $customer->wakalah_witness_nric);
@@ -85,6 +89,7 @@ class WakalahModuleTest extends TestCase
             ->get(route('wakalah.file', $customer))
             ->assertOk()
             ->getContent();
+        $this->assertTrue($this->pdfContains($served, '900101-01-9999'));
         $this->assertTrue($this->pdfContains($served, 'DIRECTOR'));
         $this->assertTrue($this->pdfContains($served, 'WITNESS ONE'));
         $this->assertTrue($this->pdfContains($served, '880202025678'));
@@ -114,6 +119,22 @@ class WakalahModuleTest extends TestCase
         $this->assertTrue($this->pdfContains($served, now()->format('d/m/Y')));
     }
 
+    public function test_wakalah_rejects_duplicate_client_nric(): void
+    {
+        $user = User::factory()->staff()->create();
+        $this->customer($user, 'OTHER PERSON', '900101019999');
+        $customer = $this->customer($user, 'ALI BIN ABU', '900101011234');
+
+        Livewire::actingAs($user)
+            ->test(Show::class, ['customer' => $customer])
+            ->set('clientNric', '900101019999')
+            ->call('save')
+            ->assertHasErrors(['clientNric']);
+
+        $customer->refresh();
+        $this->assertSame('900101011234', $customer->primary_identification_number);
+    }
+
     private function customer(User $user, string $name, string $nric): Customer
     {
         $customer = Customer::factory()->for($user, 'creator')->create([
@@ -127,6 +148,7 @@ class WakalahModuleTest extends TestCase
             'type' => IdentificationType::Nric,
             'number' => $nric,
             'normalized_number' => $nric,
+            'issuing_jurisdiction' => 'MY',
             'is_primary' => true,
         ]);
         CustomerAddress::query()->create([
