@@ -7,6 +7,7 @@ use App\Livewire\Concerns\NotifiesBrowser;
 use App\Models\Customer;
 use App\Models\CustomerIdentification;
 use App\Services\CustomerDuplicateChecker;
+use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Facades\DB;
@@ -27,7 +28,11 @@ class Show extends Component
 
     public bool $formatNric = true;
 
+    public bool $disableDates = false;
+
     public string $designation = '';
+
+    public string $clientDate = '';
 
     public string $witnessName = '';
 
@@ -49,6 +54,25 @@ class Show extends Component
         $this->clientNric = $this->displayNric($this->clientNric);
     }
 
+    public function updatedDisableDates(bool $value): void
+    {
+        if ($value) {
+            $this->clientDate = '';
+            $this->witnessDate = '';
+        }
+    }
+
+    public function updatedWitnessDate(string $value): void
+    {
+        if ($this->disableDates) {
+            return;
+        }
+
+        if (filled($value)) {
+            $this->clientDate = Carbon::parse($value)->subDays(3)->format('Y-m-d');
+        }
+    }
+
     public function save(CustomerDuplicateChecker $duplicates): void
     {
         $this->authorize('update', $this->customer);
@@ -61,11 +85,18 @@ class Show extends Component
                 }
             }],
             'formatNric' => ['boolean'],
+            'disableDates' => ['boolean'],
             'designation' => ['nullable', 'string', 'max:120'],
+            'clientDate' => ['nullable', 'date'],
             'witnessName' => ['nullable', 'string', 'max:200'],
             'witnessNric' => ['nullable', 'string', 'max:40'],
             'witnessDate' => ['nullable', 'date'],
         ]);
+
+        if ($data['disableDates']) {
+            $data['clientDate'] = null;
+            $data['witnessDate'] = null;
+        }
 
         $type = $this->customer->primary_identification_type ?? $this->customer->primaryIdentification?->type;
         $formatted = filled($data['clientNric'])
@@ -90,7 +121,9 @@ class Show extends Component
                 $this->customer->update([
                     'primary_identification_number' => $formatted,
                     'wakalah_format_nric' => (bool) $data['formatNric'],
+                    'wakalah_disable_dates' => (bool) $data['disableDates'],
                     'wakalah_designation' => filled($data['designation']) ? trim($data['designation']) : null,
+                    'wakalah_client_date' => filled($data['clientDate']) ? $data['clientDate'] : null,
                     'wakalah_witness_name' => filled($data['witnessName']) ? trim($data['witnessName']) : null,
                     'wakalah_witness_nric' => filled($data['witnessNric']) ? trim($data['witnessNric']) : null,
                     'wakalah_witness_date' => filled($data['witnessDate']) ? $data['witnessDate'] : null,
@@ -136,13 +169,15 @@ class Show extends Component
     private function fillFromCustomer(): void
     {
         $this->formatNric = $this->customer->wakalah_format_nric ?? true;
+        $this->disableDates = (bool) ($this->customer->wakalah_disable_dates ?? false);
         $this->clientNric = $this->displayNric((string) ($this->customer->primaryIdentification?->number
             ?: $this->customer->primary_identification_number
             ?: ''));
         $this->designation = (string) ($this->customer->wakalah_designation ?? '');
+        $this->clientDate = $this->disableDates ? '' : ($this->customer->wakalah_client_date?->format('Y-m-d') ?? '');
         $this->witnessName = (string) ($this->customer->wakalah_witness_name ?? '');
         $this->witnessNric = (string) ($this->customer->wakalah_witness_nric ?? '');
-        $this->witnessDate = $this->customer->wakalah_witness_date?->format('Y-m-d') ?? '';
+        $this->witnessDate = $this->disableDates ? '' : ($this->customer->wakalah_witness_date?->format('Y-m-d') ?? '');
     }
 
     private function displayNric(string $number): string

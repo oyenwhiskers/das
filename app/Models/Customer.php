@@ -85,10 +85,12 @@ class Customer extends Model
         'employment_status_other',
         'retirement_date',
         'wakalah_designation',
+        'wakalah_client_date',
         'wakalah_witness_name',
         'wakalah_witness_nric',
         'wakalah_witness_date',
         'wakalah_format_nric',
+        'wakalah_disable_dates',
         'created_by',
         'updated_by',
     ];
@@ -104,8 +106,10 @@ class Customer extends Model
             'primary_identification_type' => IdentificationType::class,
             'date_of_birth' => 'date',
             'retirement_date' => 'date',
+            'wakalah_client_date' => 'date',
             'wakalah_witness_date' => 'date',
             'wakalah_format_nric' => 'boolean',
+            'wakalah_disable_dates' => 'boolean',
         ];
     }
 

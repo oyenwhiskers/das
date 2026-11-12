@@ -12,6 +12,14 @@
         </div>
 
         <form wire:submit="save" class="space-y-3">
+            <div class="rounded-lg border border-slate-200 bg-white px-4 py-3">
+                <label class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-700" for="wakalah-disable-dates">
+                    <input id="wakalah-disable-dates" type="checkbox" wire:model.live="disableDates" class="rounded border-slate-300 text-navy-700" />
+                    <span>Disable dates</span>
+                    <span class="text-xs font-normal text-slate-500">— Leave both client and witness dates blank for handwriting.</span>
+                </label>
+            </div>
+
             <details wire:ignore.self class="rounded-lg border border-slate-200 bg-white px-4 py-3">
                 <summary class="cursor-pointer text-sm font-semibold text-navy-900">Client</summary>
                 <div class="mt-3 space-y-3">
@@ -32,16 +40,23 @@
                             <input id="wakalah-client-nric" wire:model="clientNric" autocomplete="off" class="mt-1 w-full rounded-md border-slate-300 text-sm" />
                             @error('clientNric') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
                         </div>
-                        <div class="sm:col-span-2">
+                        <div>
                             <label class="text-xs font-medium text-slate-500" for="wakalah-designation">Designation</label>
                             <input id="wakalah-designation" wire:model="designation" autocomplete="organization-title" class="mt-1 w-full rounded-md border-slate-300 text-sm" />
                             @error('designation') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
                         </div>
+                        @unless ($disableDates)
+                            <div>
+                                <label class="text-xs font-medium text-slate-500" for="wakalah-client-date">Date</label>
+                                <input id="wakalah-client-date" type="date" wire:model="clientDate" class="mt-1 w-full rounded-md border-slate-300 text-sm" />
+                                @error('clientDate') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                        @endunless
                     </div>
                 </div>
             </details>
 
-            <details class="rounded-lg border border-slate-200 bg-white px-4 py-3">
+            <details wire:ignore.self class="rounded-lg border border-slate-200 bg-white px-4 py-3">
                 <summary class="cursor-pointer text-sm font-semibold text-navy-900">Witnessed by</summary>
                 <div class="mt-3 space-y-3">
                     <p class="text-xs text-slate-500">Optional. Leave blank to print empty lines for handwriting.</p>
@@ -56,11 +71,13 @@
                             <input id="wakalah-witness-nric" wire:model="witnessNric" autocomplete="off" class="mt-1 w-full rounded-md border-slate-300 text-sm" />
                             @error('witnessNric') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
                         </div>
-                        <div>
-                            <label class="text-xs font-medium text-slate-500" for="wakalah-witness-date">Date</label>
-                            <input id="wakalah-witness-date" type="date" wire:model="witnessDate" class="mt-1 w-full rounded-md border-slate-300 text-sm" />
-                            @error('witnessDate') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
-                        </div>
+                        @unless ($disableDates)
+                            <div>
+                                <label class="text-xs font-medium text-slate-500" for="wakalah-witness-date">Date</label>
+                                <input id="wakalah-witness-date" type="date" wire:model.live="witnessDate" class="mt-1 w-full rounded-md border-slate-300 text-sm" />
+                                @error('witnessDate') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+                            </div>
+                        @endunless
                     </div>
                 </div>
             </details>

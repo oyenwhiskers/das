@@ -72,6 +72,7 @@ class WakalahModuleTest extends TestCase
             ->set('witnessName', 'Witness One')
             ->set('witnessNric', '880202025678')
             ->set('witnessDate', '2026-10-20')
+            ->assertSet('clientDate', '2026-10-17')
             ->call('save')
             ->assertHasNoErrors()
             ->assertSet('previewVersion', 1);
@@ -81,6 +82,7 @@ class WakalahModuleTest extends TestCase
         $this->assertSame('900101-01-9999', $customer->primaryIdentification?->number);
         $this->assertSame('900101019999', $customer->primaryIdentification?->normalized_number);
         $this->assertSame('Director', $customer->wakalah_designation);
+        $this->assertSame('2026-10-17', $customer->wakalah_client_date?->toDateString());
         $this->assertSame('Witness One', $customer->wakalah_witness_name);
         $this->assertSame('880202025678', $customer->wakalah_witness_nric);
         $this->assertSame('2026-10-20', $customer->wakalah_witness_date?->toDateString());
@@ -94,13 +96,33 @@ class WakalahModuleTest extends TestCase
         $this->assertTrue($this->pdfContains($served, 'WITNESS ONE'));
         $this->assertTrue($this->pdfContains($served, '880202025678'));
         $this->assertTrue($this->pdfContains($served, '20/10/2026'));
-        $this->assertTrue($this->pdfContains($served, '17/10/2026')); // client date = witness − 3 days
+        $this->assertTrue($this->pdfContains($served, '17/10/2026'));
+
+        Livewire::actingAs($user)
+            ->test(Show::class, ['customer' => $customer])
+            ->set('clientDate', '2026-10-15')
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('clientDate', '2026-10-15');
+
+        $customer->refresh();
+        $this->assertSame('2026-10-15', $customer->wakalah_client_date?->toDateString());
+        $this->assertSame('2026-10-20', $customer->wakalah_witness_date?->toDateString());
+
+        $served = $this->actingAs($user)
+            ->get(route('wakalah.file', $customer))
+            ->assertOk()
+            ->getContent();
+        $this->assertTrue($this->pdfContains($served, '15/10/2026'));
+        $this->assertTrue($this->pdfContains($served, '20/10/2026'));
+        $this->assertFalse($this->pdfContains($served, '17/10/2026'));
 
         Livewire::actingAs($user)
             ->test(Show::class, ['customer' => $customer])
             ->set('witnessName', 'Witness Two')
             ->set('witnessNric', '')
             ->set('witnessDate', '')
+            ->set('clientDate', '')
             ->call('save')
             ->assertHasNoErrors();
 
@@ -108,6 +130,7 @@ class WakalahModuleTest extends TestCase
         $this->assertSame('Witness Two', $customer->wakalah_witness_name);
         $this->assertNull($customer->wakalah_witness_nric);
         $this->assertNull($customer->wakalah_witness_date);
+        $this->assertNull($customer->wakalah_client_date);
 
         $served = $this->actingAs($user)
             ->get(route('wakalah.file', $customer))
@@ -159,6 +182,35 @@ class WakalahModuleTest extends TestCase
             ->getContent();
         $this->assertTrue($this->pdfContains($served, '900101011234'));
         $this->assertFalse($this->pdfContains($served, '900101-01-1234'));
+    }
+
+    public function test_staff_can_disable_dates_on_wakalah_letter(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = $this->customer($user, 'ALI BIN ABU', '900101011234');
+
+        Livewire::actingAs($user)
+            ->test(Show::class, ['customer' => $customer])
+            ->set('witnessDate', '2026-10-20')
+            ->assertSet('clientDate', '2026-10-17')
+            ->set('disableDates', true)
+            ->assertSet('clientDate', '')
+            ->assertSet('witnessDate', '')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $customer->refresh();
+        $this->assertTrue($customer->wakalah_disable_dates);
+        $this->assertNull($customer->wakalah_client_date);
+        $this->assertNull($customer->wakalah_witness_date);
+
+        $served = $this->actingAs($user)
+            ->get(route('wakalah.file', $customer))
+            ->assertOk()
+            ->getContent();
+        $this->assertFalse($this->pdfContains($served, '20/10/2026'));
+        $this->assertFalse($this->pdfContains($served, '17/10/2026'));
+        $this->assertFalse($this->pdfContains($served, now()->format('d/m/Y')));
     }
 
     private function customer(User $user, string $name, string $nric): Customer
