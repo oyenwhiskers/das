@@ -47,6 +47,27 @@ class EmploymentInformationTest extends TestCase
         $this->assertNull($customer->fresh()->retirement_date);
     }
 
+    public function test_retired_arrangement_saves_start_date_as_retirement_date(): void
+    {
+        $staff = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($staff, 'creator')->create();
+
+        Livewire::actingAs($staff)->test(WorkFinance::class, ['customer' => $customer])
+            ->call('add')
+            ->set('form.arrangement', 'retired')
+            ->assertSee('Retirement Date')
+            ->set('form.occupation', 'Ketua')
+            ->set('form.employer_name', 'KTM BERHAD')
+            ->set('form.start_date', '2024-01-15')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $customer->refresh();
+        $this->assertSame('retired', $customer->employment_status);
+        $this->assertSame('2024-01-15', $customer->retirement_date?->toDateString());
+        $this->assertSame('2024-01-15', $customer->employments()->firstOrFail()->start_date?->toDateString());
+    }
+
     public function test_concurrent_jobs_require_confirmation_to_change_primary(): void
     {
         $staff = User::factory()->staff()->create();

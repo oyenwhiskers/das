@@ -108,7 +108,13 @@ class WorkFinance extends Component
             if (in_array($field, ['is_current', 'is_primary'], true)) {
                 $this->form[$field] = (bool) $employment->{$field};
             } elseif (in_array($field, ['start_date', 'end_date'], true)) {
-                $this->form[$field] = $employment->{$field}?->format('Y-m-d') ?? '';
+                if ($field === 'start_date' && $employment->arrangement === 'retired') {
+                    $this->form[$field] = $this->customer->retirement_date?->format('Y-m-d')
+                        ?? $employment->start_date?->format('Y-m-d')
+                        ?? '';
+                } else {
+                    $this->form[$field] = $employment->{$field}?->format('Y-m-d') ?? '';
+                }
             } elseif ($field === 'arrangement_other') {
                 continue;
             } else {

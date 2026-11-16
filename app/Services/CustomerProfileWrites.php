@@ -501,7 +501,9 @@ class CustomerProfileWrites
                 $this->saveEmploymentStatus($customer, [
                     'employmentStatus' => $validated['arrangement'],
                     'employmentStatusOther' => $arrangementOther,
-                    'retirementDate' => $validated['arrangement'] === 'retired' ? ($customer->retirement_date?->toDateString() ?? '') : null,
+                    'retirementDate' => $validated['arrangement'] === 'retired'
+                        ? ($validated['start_date'] ?: ($customer->retirement_date?->toDateString() ?? ''))
+                        : null,
                 ], $actor);
             }
             $this->activity->log($customer, $wasNew ? CustomerActivityAction::EmploymentAdded : ($isCorrection ? CustomerActivityAction::EmploymentRecordCorrected : CustomerActivityAction::EmploymentUpdated), $actor);

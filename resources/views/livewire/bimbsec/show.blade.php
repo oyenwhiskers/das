@@ -127,7 +127,7 @@
                         <input id="sub_industry" wire:model="sub_industry" class="mt-1 w-full rounded-md border-slate-300 text-sm" />
                     </div>
                     <div>
-                        <label class="text-xs font-medium text-slate-500" for="employment_date">Employment date</label>
+                        <label class="text-xs font-medium text-slate-500" for="employment_date">{{ $customer->employment_status === 'retired' ? 'Retirement date' : 'Employment date' }}</label>
                         <input id="employment_date" type="date" wire:model="employment_date" class="mt-1 w-full rounded-md border-slate-300 text-sm" />
                         @error('employment_date') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
                     </div>
