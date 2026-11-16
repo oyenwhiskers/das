@@ -307,6 +307,33 @@ class BimbsecModuleTest extends TestCase
         $this->actingAs($user)->get(route('bimbsec.print', [$customer, $application]))->assertOk();
     }
 
+    public function test_retired_status_maps_employment_start_date_when_retirement_date_is_blank(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = $this->customer($user, 'ALI BIN ABU', '900101011234');
+        $customer->update(['employment_status' => 'retired', 'retirement_date' => null]);
+        $customer->employments()->create([
+            'arrangement' => 'retired',
+            'occupation' => 'KETUA PENGURUSAN ASET & FASILITI',
+            'employer_name' => 'KTM BERHAD',
+            'start_date' => '2024-01-15',
+            'is_current' => true,
+            'is_primary' => true,
+            'primary_current_key' => $customer->id,
+        ]);
+        $application = $customer->bimbsecApplications()->create([
+            'choices' => BimbsecApplication::normalizeChoices([]),
+            'created_by' => $user->id,
+        ]);
+
+        Livewire::actingAs($user)->test(Show::class, ['customer' => $customer->fresh(), 'application' => $application])
+            ->assertSet('employment_date', '2024-01-15')
+            ->assertSee('Retirement date');
+
+        $draws = json_encode(app(Resolver::class)->resolve($customer->fresh(), [])['draws'], JSON_THROW_ON_ERROR);
+        $this->assertStringContainsString('15012024', $draws);
+    }
+
     public function test_an_overflowing_address_can_be_shortened_from_the_form(): void
     {
         $user = User::factory()->staff()->create();

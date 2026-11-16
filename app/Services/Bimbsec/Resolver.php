@@ -715,7 +715,7 @@ class Resolver
     private function employmentDate(Customer $customer, ?CustomerEmployment $employment): ?string
     {
         if ($customer->employment_status === 'retired') {
-            return $this->digits($customer->retirement_date, 'Retirement date');
+            return $this->digits($customer->retirement_date ?: $employment?->start_date, 'Retirement date');
         }
 
         return $this->digits($employment?->start_date, 'Employment date');

@@ -273,7 +273,7 @@ class Show extends Component
         $this->office_telephone = (string) $job?->direct_telephone;
         $this->fax = (string) $job?->fax;
         $this->employment_date = $customer->employment_status === 'retired'
-            ? (string) $customer->retirement_date?->toDateString()
+            ? (string) ($customer->retirement_date?->toDateString() ?: $job?->start_date?->toDateString())
             : (string) $job?->start_date?->toDateString();
         $financial = $customer->financialDeclarations->firstWhere('current_customer_key', $customer->id);
         $this->financial_id = $financial?->id;
