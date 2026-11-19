@@ -425,17 +425,17 @@
       "placement": {
         "type": "text",
         "rect": [
-          150.0,
-          376.0,
-          324.0,
-          395.0
+          166.5,
+          387.3,
+          315.9,
+          397.6
         ],
         "font_size_pt": 7.2,
         "vertical_align": "middle",
         "overflow": "flag_for_review",
-        "coordinate_status": "manual_visual_estimate"
+        "coordinate_status": "measured_vector"
       },
-      "coordinate_status": "needs_visual_qa",
+      "coordinate_status": "measured_vector",
       "print_setting": {
         "default_font": "Helvetica",
         "font_size_pt": 7,

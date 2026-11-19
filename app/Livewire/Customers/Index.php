@@ -2,8 +2,11 @@
 
 namespace App\Livewire\Customers;
 
+use App\Enums\AttachmentScanStatus;
+use App\Enums\AttachmentType;
 use App\Enums\CustomerActivityAction;
 use App\Enums\CustomerStatus;
+use App\Enums\CustomerType;
 use App\Livewire\Concerns\NotifiesBrowser;
 use App\Models\Customer;
 use App\Models\CustomerEmployment;
@@ -28,6 +31,8 @@ class Index extends Component
     use NotifiesBrowser;
     use WithPagination;
 
+    public string $customerType = 'individual';
+
     #[Url(as: 'q')]
     public string $search = '';
 
@@ -40,8 +45,24 @@ class Index extends Component
     #[Url]
     public string $sort = 'name_asc';
 
+    /** @var list<string> */
+    #[Url]
+    public array $attachments = [];
+
     /** @var list<int> */
     public array $selected = [];
+
+    public function mount(): void
+    {
+        $this->customerType = request()->routeIs('corporate-customers.*')
+            ? CustomerType::Corporate->value
+            : CustomerType::Individual->value;
+    }
+
+    public function isCorporate(): bool
+    {
+        return $this->customerType === CustomerType::Corporate->value;
+    }
 
     /** @var list<int> */
     public array $industryQueue = [];
@@ -80,6 +101,24 @@ class Index extends Component
     public function updatingSort(): void
     {
         $this->resetPage();
+    }
+
+    public function updatingAttachments(): void
+    {
+        $this->resetPage();
+        $this->selected = [];
+    }
+
+    public function updatedAttachments(): void
+    {
+        $this->attachments = $this->normalizedAttachments();
+    }
+
+    public function clearAttachments(): void
+    {
+        $this->attachments = [];
+        $this->resetPage();
+        $this->selected = [];
     }
 
     public function sortByName(): void
@@ -418,7 +457,8 @@ class Index extends Component
     {
         $this->authorize('viewAny', Customer::class);
 
-        $hasFilters = filled($this->search) || $this->status !== 'all' || $this->profile !== 'all';
+        $this->attachments = $this->normalizedAttachments();
+        $hasFilters = filled($this->search) || $this->status !== 'all' || $this->profile !== 'all' || $this->attachments !== [];
 
         $customers = $this->filteredQuery()
             ->withProfileCompletion()
@@ -433,17 +473,49 @@ class Index extends Component
             'customers' => $customers,
             'hasFilters' => $hasFilters,
             'allSelected' => $customers->total() > 0 && count($this->selected) === $customers->total(),
-        ])->layout('layouts.app');
+            'isCorporate' => $this->isCorporate(),
+            'indexRoute' => $this->isCorporate() ? 'corporate-customers.index' : 'customers.index',
+            'createRoute' => $this->isCorporate() ? 'corporate-customers.create' : 'customers.create',
+            'attachmentFilters' => [
+                AttachmentType::IcPdf->value => 'IC',
+                AttachmentType::Signature->value => 'Signature',
+                AttachmentType::CdsBimbsec->value => 'CDS BIMBSEC',
+                AttachmentType::CdsPhillip->value => 'CDS Phillip',
+            ],
+        ])->layout('layouts.app')->title(
+            $this->isCorporate() ? 'Corporate Customers — DAS' : 'Customers — DAS'
+        );
     }
 
     /** @return Builder<Customer> */
     private function filteredQuery(): Builder
     {
+        $attachmentTypes = $this->normalizedAttachments();
+
         return Customer::query()
+            ->where('type', $this->customerType)
             ->search($this->search)
             ->when($this->status === 'active', fn ($query) => $query->where('status', CustomerStatus::Active))
             ->when($this->status === 'archived', fn ($query) => $query->where('status', CustomerStatus::Archived))
             ->when($this->profile === 'complete', fn ($query) => $query->whereProfileComplete())
-            ->when($this->profile === 'incomplete', fn ($query) => $query->whereProfileComplete(false));
+            ->when($this->profile === 'incomplete', fn ($query) => $query->whereProfileComplete(false))
+            ->when($attachmentTypes !== [], function (Builder $query) use ($attachmentTypes): void {
+                foreach ($attachmentTypes as $type) {
+                    $query->whereHas('attachmentScans', fn (Builder $scans) => $scans
+                        ->where('attachment_type', $type)
+                        ->where('status', AttachmentScanStatus::Attached));
+                }
+            });
+    }
+
+    /** @return list<string> */
+    private function normalizedAttachments(): array
+    {
+        $allowed = array_column(AttachmentType::cases(), 'value');
+
+        return array_values(array_unique(array_filter(
+            array_map(strval(...), $this->attachments),
+            fn (string $type): bool => in_array($type, $allowed, true),
+        )));
     }
 }

@@ -2,10 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AttachmentScanStatus;
+use App\Enums\AttachmentType;
 use App\Enums\IdentificationType;
 use App\Livewire\Customers\Create;
 use App\Livewire\Customers\Index;
 use App\Livewire\Customers\Show;
+use App\Models\AttachmentScan;
 use App\Models\BimbsecApplication;
 use App\Models\BimbsecDocument;
 use App\Models\Customer;
@@ -205,6 +208,30 @@ class CustomerManagementTest extends TestCase
             ->set('profile', 'all')
             ->assertSee('Complete Customer')
             ->assertSee('Incomplete Customer');
+    }
+
+    public function test_customer_list_can_filter_by_attachments(): void
+    {
+        $user = User::factory()->staff()->create();
+        $withIc = Customer::factory()->for($user, 'creator')->create(['full_legal_name' => 'Has IC Customer']);
+        Customer::factory()->for($user, 'creator')->create(['full_legal_name' => 'No Attachment Customer']);
+
+        AttachmentScan::factory()->for($user, 'uploader')->create([
+            'customer_id' => $withIc->id,
+            'matched_by' => $user->id,
+            'attachment_type' => AttachmentType::IcPdf,
+            'status' => AttachmentScanStatus::Attached,
+            'attached_at' => now(),
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(Index::class)
+            ->set('attachments', [AttachmentType::IcPdf->value])
+            ->assertSee('Has IC Customer')
+            ->assertDontSee('No Attachment Customer')
+            ->call('clearAttachments')
+            ->assertSee('Has IC Customer')
+            ->assertSee('No Attachment Customer');
     }
 
     public function test_customer_list_defaults_to_name_ascending(): void

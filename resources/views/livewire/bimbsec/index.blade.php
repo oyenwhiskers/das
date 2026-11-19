@@ -1,17 +1,17 @@
-<div class="py-6">
-    <div class="w-full px-4 sm:px-6 lg:px-8 xl:px-10 space-y-4">
-        <div>
+<div class="flex min-h-0 flex-1 flex-col py-6">
+    <div class="flex min-h-0 flex-1 flex-col gap-4 px-4 sm:px-6 lg:px-8 xl:px-10">
+        <div class="shrink-0">
             <h1 class="text-xl sm:text-2xl font-semibold text-navy-900">BIMBSEC</h1>
             <p class="mt-1 text-sm text-slate-500">Generate BIMB Securities trading account forms from existing Customer Profiles.</p>
         </div>
 
-        <div class="relative flex-1 min-w-0">
+        <div class="relative min-w-0 shrink-0">
             <label for="bimbsec-search" class="sr-only">Search by name or NRIC</label>
             <input wire:model.live.debounce.400ms="search" id="bimbsec-search" type="search" placeholder="Search by name or NRIC / passport" class="w-full rounded-md border-slate-300 py-2 text-sm shadow-sm focus:border-navy-500 focus:ring-navy-500" />
         </div>
 
         @if ($selected !== [])
-        <div class="flex flex-wrap items-center justify-between gap-3 text-sm">
+        <div class="flex shrink-0 flex-wrap items-center justify-between gap-3 text-sm">
             <div class="flex flex-wrap items-center gap-2">
                 <button type="button" wire:click="clearSelection" class="rounded-md border border-slate-300 px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50">Clear</button>
                 @unless ($confirming)
@@ -34,16 +34,16 @@
         </div>
         @endif
 
-        <div class="rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
             @if ($customers->isEmpty())
-                <div class="px-6 py-10 text-center">
+                <div class="flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-10 text-center">
                     <p class="text-sm font-medium text-slate-800">{{ $hasFilters ? 'No customers match your search.' : 'No customers yet.' }}</p>
                     <p class="mt-1 text-sm text-slate-500">{{ $hasFilters ? 'Try another name or NRIC.' : 'Customer profiles are created in the Customers module.' }}</p>
                 </div>
             @else
-                <div class="overflow-x-auto">
+                <div class="min-h-0 flex-1 overflow-auto">
                     <table class="min-w-full divide-y divide-slate-200 text-sm font-normal">
-                        <thead class="bg-slate-50">
+                        <thead class="sticky top-0 z-10 bg-slate-50">
                             <tr>
                                 <th scope="col" class="px-4 py-2.5 text-left">
                                     <input type="checkbox" wire:key="bimbsec-select-all-{{ $pageSelected ? '1' : '0' }}" @checked($pageSelected) wire:click.prevent="togglePage(@js($pageIds))" aria-label="Select all customers on this page" class="h-4 w-4 rounded border-slate-300 text-navy-800 checked:border-navy-800 checked:bg-navy-800 focus:ring-offset-0 focus-visible:ring-2 focus-visible:ring-navy-500" />
@@ -134,7 +134,7 @@
                     </table>
                 </div>
                 @if ($customers->hasPages())
-                    <div class="border-t border-slate-200 px-4 py-3">{{ $customers->links() }}</div>
+                    <div class="shrink-0 border-t border-slate-200 px-4 py-3">{{ $customers->links() }}</div>
                 @endif
             @endif
         </div>

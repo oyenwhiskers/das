@@ -22,12 +22,34 @@
         @else
             <div class="px-4 py-3 sm:px-5">
                 <form wire:submit="saveStatus" class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                    <div class="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
-                        <div><x-input-label for="employment-status" value="Employment Status" class="sr-only" /><select id="employment-status" wire:model.live="employmentStatus" class="block w-full rounded-md border-slate-300 text-sm"><option value="">Not specified</option><option value="employed">Employed</option><option value="self_employed">Self-Employed</option><option value="retired">Retired</option><option value="other">Others (please specify)</option></select><x-input-error :messages="$errors->get('employmentStatus')" class="mt-1" /></div>
-                        @if ($employmentStatus === 'other')<div><x-input-label for="employment-other" value="Others (please specify)" /><x-text-input id="employment-other" wire:model="employmentStatusOther" class="mt-1 block w-full" maxlength="255" required /><x-input-error :messages="$errors->get('employmentStatusOther')" class="mt-1" /></div>@endif
-                        @if ($employmentStatus === 'retired')<div><x-input-label for="retirement-date" value="Retirement Date" /><x-text-input id="retirement-date" type="date" wire:model="retirementDate" class="mt-1 block w-full" /><x-input-error :messages="$errors->get('retirementDate')" class="mt-1" /></div>@endif
+                    <div class="grid min-w-0 flex-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+                        <div class="grid gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
+                            <x-input-label for="employment-status" class="sm:pt-2" value="Status" />
+                            <div>
+                                <select id="employment-status" wire:model.live="employmentStatus" class="block w-full rounded-md border-slate-300 text-sm"><option value="">Not specified</option><option value="employed">Employed</option><option value="self_employed">Self-Employed</option><option value="retired">Retired</option><option value="other">Others (please specify)</option></select>
+                                <x-input-error :messages="$errors->get('employmentStatus')" class="mt-1" />
+                            </div>
+                        </div>
+                        @if ($employmentStatus === 'other')
+                            <div class="grid gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
+                                <x-input-label for="employment-other" class="sm:pt-2" value="Please specify" />
+                                <div>
+                                    <x-text-input id="employment-other" wire:model="employmentStatusOther" class="block w-full" maxlength="255" required />
+                                    <x-input-error :messages="$errors->get('employmentStatusOther')" class="mt-1" />
+                                </div>
+                            </div>
+                        @endif
+                        @if ($employmentStatus === 'retired')
+                            <div class="grid gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
+                                <x-input-label for="retirement-date" class="sm:pt-2" value="Retirement Date" />
+                                <div>
+                                    <x-text-input id="retirement-date" type="date" wire:model="retirementDate" class="block w-full" />
+                                    <x-input-error :messages="$errors->get('retirementDate')" class="mt-1" />
+                                </div>
+                            </div>
+                        @endif
                     </div>
-                    <div class="flex shrink-0 justify-end gap-3"><button type="button" x-on:click="if (!dirty || await confirmAction({ title: 'Discard unsaved changes?', text: 'Your changes have not been saved.', confirmButtonText: 'Discard changes' })) { dirty = false; $wire.cancel() }" class="text-sm text-slate-600">Cancel</button><x-primary-button wire:loading.attr="disabled" wire:target="saveStatus">Save Status</x-primary-button></div>
+                    <div class="flex w-full shrink-0 gap-3 md:w-auto"><x-secondary-button type="button" x-on:click="if (!dirty || await confirmAction({ title: 'Discard unsaved changes?', text: 'Your changes have not been saved.', confirmButtonText: 'Discard changes' })) { dirty = false; $wire.cancel() }" class="flex-1 justify-center">Cancel</x-secondary-button><x-primary-button class="flex-1 justify-center" wire:loading.attr="disabled" wire:target="saveStatus">Save</x-primary-button></div>
                 </form>
             </div>
         @endif
@@ -39,7 +61,7 @@
                 <h2 class="text-base font-semibold text-navy-900">Employment History</h2>
             </div>
             @if ($mode !== 'status')
-                <button type="button" wire:click="add" class="inline-flex items-center rounded-md border border-navy-700 bg-navy-700 px-3 py-2 text-sm font-medium text-white hover:bg-navy-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-500">+ Add Employment</button>
+                <button type="button" wire:click="add" class="text-sm font-medium text-navy-700">Add</button>
             @endif
         </div>
         <div class="space-y-4 px-4 py-3 sm:px-5">
@@ -125,37 +147,50 @@
                                 'country' => $bimbsecFit->cellCapacity('employment.business_address', 'country'),
                             ];
                         @endphp
-                        @foreach (['Employment details' => ['arrangement' => 'Employment Arrangement', 'occupation' => 'Occupation / Designation', 'employer_name' => 'Employer / Business Name', 'registration_number' => 'Business Registration Number', 'industry' => 'Industry', 'sub_industry' => 'Sub-Industry', 'start_date' => 'Start Date', 'end_date' => 'End Date'], 'Employer contact' => ['general_telephone' => 'General Telephone', 'direct_telephone' => 'Office Direct Telephone (DID)', 'fax' => 'Fax Number'], 'Office / business address' => ['address_line_1' => 'Address Line 1', 'address_line_2' => 'Address Line 2', 'city' => 'City', 'state' => 'State', 'postcode' => 'Postcode', 'country' => 'Country']] as $group => $fields)
-                            <fieldset class="space-y-3">@if ($group !== 'Employment details')<legend class="text-sm font-semibold text-slate-800">{{ $group }}</legend>@endif<div class="grid gap-4 sm:grid-cols-2">
+                        @foreach (['Employment details' => ['arrangement' => 'Arrangement', 'occupation' => 'Occupation', 'employer_name' => 'Employer / Business', 'registration_number' => 'Registration No.', 'industry' => 'Industry', 'sub_industry' => 'Sub-Industry', 'start_date' => 'Start Date', 'end_date' => 'End Date'], 'Employer contact' => ['general_telephone' => 'General Telephone', 'direct_telephone' => 'Office Direct Tel.', 'fax' => 'Fax Number'], 'Office / business address' => ['address_line_1' => 'Address Line 1', 'address_line_2' => 'Address Line 2', 'city' => 'City', 'state' => 'State', 'postcode' => 'Postcode', 'country' => 'Country']] as $group => $fields)
+                            <fieldset class="space-y-3">@if ($group !== 'Employment details')<legend class="text-sm font-semibold text-slate-800">{{ $group }}</legend>@endif<div class="grid gap-x-6 gap-y-3 sm:grid-cols-2">
                                 @foreach ($fields as $field => $label)
                                     @if ($field === 'end_date' && $form['is_current']) @continue @endif
                                     @php $label = $field === 'start_date' && ($form['arrangement'] ?? '') === 'retired' ? 'Retirement Date' : $label; @endphp
-                                    <div @class(['sm:col-span-2' => in_array($field, ['address_line_1', 'address_line_2'], true)])>
-                                        <x-input-label :for="'employment-'.$field" :value="$label" />
-                                        @if ($field === 'arrangement')
-                                            <select id="employment-arrangement" wire:model.live="form.arrangement" class="mt-1 block w-full rounded-md border-slate-300 text-sm"><option value="">Select arrangement</option><option value="employed">Employed</option><option value="self_employed">Self-Employed</option><option value="retired">Retired</option><option value="other">Others (please specify)</option></select>
-                                            @if (($form['arrangement'] ?? '') === 'other')
-                                                <div class="mt-2"><x-input-label for="employment-arrangement-other" value="Others (please specify)" /><x-text-input id="employment-arrangement-other" wire:model="form.arrangement_other" class="mt-1 block w-full" maxlength="255" /><x-input-error :messages="$errors->get('form.arrangement_other')" class="mt-1" /></div>
+                                    <div @class([
+                                        'grid gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start',
+                                        'sm:col-span-2' => in_array($field, ['address_line_1', 'address_line_2', 'arrangement', 'employer_name'], true),
+                                    ])>
+                                        <x-input-label :for="'employment-'.$field" class="sm:pt-2" :value="$label" />
+                                        <div>
+                                            @if ($field === 'arrangement')
+                                                <select id="employment-arrangement" wire:model.live="form.arrangement" class="block w-full rounded-md border-slate-300 text-sm"><option value="">Select arrangement</option><option value="employed">Employed</option><option value="self_employed">Self-Employed</option><option value="retired">Retired</option><option value="other">Others (please specify)</option></select>
+                                                @if (($form['arrangement'] ?? '') === 'other')
+                                                    <div class="mt-2 grid gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
+                                                        <x-input-label for="employment-arrangement-other" class="sm:pt-2" value="Please specify" />
+                                                        <div>
+                                                            <x-text-input id="employment-arrangement-other" wire:model="form.arrangement_other" class="block w-full" maxlength="255" />
+                                                            <x-input-error :messages="$errors->get('form.arrangement_other')" class="mt-1" />
+                                                        </div>
+                                                    </div>
+                                                @endif
+                                            @elseif (in_array($field, ['industry', 'sub_industry'], true))
+                                                <div class="flex items-stretch gap-2">
+                                                    <x-text-input :id="'employment-'.$field" :wire:model="'form.'.$field" class="block w-full min-w-0" />
+                                                    <button type="button" wire:click="searchIndustry" wire:loading.attr="disabled" wire:target="searchIndustry" aria-label="Search {{ $label }}" title="Search {{ $label }}" class="inline-flex shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white px-2.5 text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+                                                        <svg wire:loading.remove wire:target="searchIndustry" class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                                                        </svg>
+                                                        <svg wire:loading wire:target="searchIndustry" class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            @else
+                                                <x-text-input :id="'employment-'.$field" :type="in_array($field, ['start_date', 'end_date']) ? 'date' : 'text'" :wire:model="'form.'.$field" class="block w-full" />
                                             @endif
-                                        @elseif (in_array($field, ['industry', 'sub_industry'], true))
-                                            <div class="mt-1 flex items-stretch gap-2">
-                                                <x-text-input :id="'employment-'.$field" :wire:model="'form.'.$field" class="block w-full min-w-0" />
-                                                <button type="button" wire:click="searchIndustry" wire:loading.attr="disabled" wire:target="searchIndustry" aria-label="Search {{ $label }}" title="Search {{ $label }}" class="inline-flex shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white px-2.5 text-slate-600 hover:bg-slate-50 disabled:opacity-50">
-                                                    <svg wire:loading.remove wire:target="searchIndustry" class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-                                                    </svg>
-                                                    <svg wire:loading wire:target="searchIndustry" class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
-                                                    </svg>
-                                                </button>
-                                            </div>
-                                        @else<x-text-input :id="'employment-'.$field" :type="in_array($field, ['start_date', 'end_date']) ? 'date' : 'text'" :wire:model="'form.'.$field" class="mt-1 block w-full" />@endif
-                                        @if ($field === 'address_line_2')
-                                            <x-bimbsec-fit-hint :max="$bimbsecFit->cellCapacity('employment.business_address', 'address_lines')" :ids="['employment-address_line_1', 'employment-address_line_2']" together />
-                                        @elseif (isset($employmentFit[$field]))
-                                            <x-bimbsec-fit-hint :max="$employmentFit[$field]" :for="'employment-'.$field" />
-                                        @endif
-                                        <x-input-error :messages="$errors->get('form.'.$field)" class="mt-1" />
+                                            @if ($field === 'address_line_2')
+                                                <x-bimbsec-fit-hint :max="$bimbsecFit->cellCapacity('employment.business_address', 'address_lines')" :ids="['employment-address_line_1', 'employment-address_line_2']" together />
+                                            @elseif (isset($employmentFit[$field]))
+                                                <x-bimbsec-fit-hint :max="$employmentFit[$field]" :for="'employment-'.$field" />
+                                            @endif
+                                            <x-input-error :messages="$errors->get('form.'.$field)" class="mt-1" />
+                                        </div>
                                     </div>
                                 @endforeach
                             </div></fieldset>
@@ -167,7 +202,7 @@
                             @if ($selectedId)<label class="flex items-center gap-2"><input type="checkbox" wire:model="isCorrection" class="rounded border-slate-300 text-navy-700">This edit corrects inaccurate information</label>@endif
                         </div>
                     </div>
-                    <div class="flex justify-end gap-3 border-t border-slate-200 bg-white px-4 py-3 sm:px-6"><button type="button" x-on:click="closeForm()" class="text-sm text-slate-600">Cancel</button><x-primary-button wire:loading.attr="disabled" wire:target="save">Save Employment</x-primary-button></div>
+                    <div class="flex gap-3 border-t border-slate-200 bg-white px-4 py-3 sm:px-6"><x-secondary-button type="button" x-on:click="closeForm()" class="flex-1 justify-center">Cancel</x-secondary-button><x-primary-button class="flex-1 justify-center" wire:loading.attr="disabled" wire:target="save">Save</x-primary-button></div>
                 </form>
             </div>
         </div>

@@ -7,10 +7,16 @@ use RuntimeException;
 class Catalog
 {
     /** @var array<string, mixed> */
-    private array $data;
+    protected array $data;
 
-    public function __construct()
-    {
+    public string $templateHash;
+
+    public string $mappingHash;
+
+    public function __construct(
+        protected ?string $mappingFile = null,
+        protected ?string $templateFile = null,
+    ) {
         $raw = file_get_contents($this->mappingPath());
         if ($raw === false) {
             throw new RuntimeException('The BIMBSEC mapping file could not be read.');
@@ -23,23 +29,25 @@ class Catalog
         }
     }
 
-    public string $templateHash;
-
-    public string $mappingHash;
-
     public function templatePath(): string
     {
-        return storage_path('templates/BIMBSEC_Feb2025.pdf');
+        return $this->templateFile ?? storage_path('templates/BIMBSEC_Feb2025.pdf');
     }
 
     public function mappingPath(): string
     {
-        return storage_path('templates/BIMBSEC_Feb2025_PDF_Template_Mapping.json');
+        return $this->mappingFile ?? storage_path('templates/BIMBSEC_Feb2025_PDF_Template_Mapping.json');
     }
 
     public function pageCount(): int
     {
         return (int) $this->data['template']['page_count'];
+    }
+
+    /** Last page that receives autofill draws (terms pages after this are template-only). */
+    public function fillThroughPage(): int
+    {
+        return max(1, ((int) ($this->data['terms_pages']['start'] ?? 9)) - 1);
     }
 
     /** @return list<array<string, mixed>> */

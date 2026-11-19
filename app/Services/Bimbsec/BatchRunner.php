@@ -31,7 +31,11 @@ class BatchRunner
             if ($customer === null || ! $user->can('view', $customer)) {
                 continue;
             }
-            $application = $customer->currentBimbsecApplication() ?? $customer->bimbsecApplications()->create([
+            if ($customer->isCorporate()) {
+                continue;
+            }
+            $application = $customer->currentBimbsecApplication(BimbsecApplication::KIND_INDIVIDUAL) ?? $customer->bimbsecApplications()->create([
+                'form_kind' => BimbsecApplication::KIND_INDIVIDUAL,
                 'choices' => BimbsecApplication::normalizeChoices([]),
                 'created_by' => $user->id,
                 'updated_by' => $user->id,

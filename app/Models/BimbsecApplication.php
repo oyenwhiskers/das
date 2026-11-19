@@ -9,8 +9,12 @@ use Illuminate\Support\Facades\Storage;
 
 class BimbsecApplication extends Model
 {
+    public const KIND_INDIVIDUAL = 'individual';
+
+    public const KIND_CORPORATE = 'corporate';
+
     protected $fillable = [
-        'customer_id', 'choices', 'overflow_attachment_approved', 'overflow_attachment_note', 'created_by', 'updated_by',
+        'customer_id', 'form_kind', 'choices', 'overflow_attachment_approved', 'overflow_attachment_note', 'created_by', 'updated_by',
     ];
 
     protected function casts(): array
@@ -19,6 +23,11 @@ class BimbsecApplication extends Model
             'choices' => 'array',
             'overflow_attachment_approved' => 'boolean',
         ];
+    }
+
+    public function isCorporate(): bool
+    {
+        return $this->form_kind === self::KIND_CORPORATE;
     }
 
     public function customer(): BelongsTo

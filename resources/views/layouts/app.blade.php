@@ -12,13 +12,13 @@
 
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
-    <body class="font-sans antialiased bg-[#F9F7F5] text-slate-900 h-full">
+    <body class="font-sans antialiased bg-[#F9F7F5] text-slate-900 h-full overflow-hidden">
         <x-flash-alerts />
-        <div class="flex min-h-full" x-data="{ sidebarOpen: false }">
+        <div class="flex h-full overflow-hidden" x-data="{ sidebarOpen: false }">
             <livewire:layout.navigation />
 
-            <div class="flex min-w-0 flex-1 flex-col">
-                <div class="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-slate-200 bg-white px-4 py-2 lg:hidden">
+            <div class="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
+                <div class="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 py-2 lg:hidden">
                     <button
                         type="button"
                         @click="sidebarOpen = true"
@@ -42,7 +42,7 @@
                     </header>
                 @endif
 
-                <main class="flex-1">
+                <main class="flex min-h-0 flex-1 flex-col overflow-y-auto">
                     {{ $slot }}
                 </main>
 

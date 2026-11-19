@@ -105,7 +105,7 @@ class Show extends Component
     public function mount(Customer $customer): void
     {
         $this->authorize('view', $customer);
-        $this->customer = $customer->load(['identifications', 'contacts', 'addresses', 'activities.user', 'updater', 'creator']);
+        $this->customer = $customer->load(['identifications', 'contacts', 'addresses', 'activities.user', 'updater', 'creator', 'corporateDetails']);
         $this->fillFromCustomer();
         $this->clearSensitiveFormValues();
     }
@@ -115,9 +115,10 @@ class Show extends Component
     #[On('financial-updated')]
     #[On('investment-updated')]
     #[On('tax-updated')]
+    #[On('company-updated')]
     public function refreshEmploymentActivity(): void
     {
-        $this->customer->load('activities.user');
+        $this->customer->load(['activities.user', 'corporateDetails', 'addresses', 'contacts', 'identifications']);
     }
 
     public function editSection(string $section): void
@@ -259,7 +260,9 @@ class Show extends Component
     public function openBimbsec(Generator $generator): void
     {
         $this->authorize('view', $this->customer);
-        $application = $this->customer->currentBimbsecApplication() ?? $this->customer->bimbsecApplications()->create([
+        abort_if($this->customer->isCorporate(), 404);
+        $application = $this->customer->currentBimbsecApplication(BimbsecApplication::KIND_INDIVIDUAL) ?? $this->customer->bimbsecApplications()->create([
+            'form_kind' => BimbsecApplication::KIND_INDIVIDUAL,
             'choices' => BimbsecApplication::normalizeChoices([]),
             'created_by' => auth()->id(),
             'updated_by' => auth()->id(),
@@ -270,13 +273,30 @@ class Show extends Component
         $this->redirect(route('bimbsec.show', [$this->customer, $application, 'from' => 'profile']));
     }
 
+    public function openBimbsecCorporate(\App\Services\Bimbsec\CorporateGenerator $generator): void
+    {
+        $this->authorize('view', $this->customer);
+        abort_unless($this->customer->isCorporate(), 404);
+        $application = $this->customer->currentBimbsecApplication(BimbsecApplication::KIND_CORPORATE) ?? $this->customer->bimbsecApplications()->create([
+            'form_kind' => BimbsecApplication::KIND_CORPORATE,
+            'choices' => BimbsecApplication::normalizeChoices([]),
+            'created_by' => auth()->id(),
+            'updated_by' => auth()->id(),
+        ]);
+        if ($application->document === null) {
+            $generator->generate($application, auth()->user());
+        }
+        $this->redirect(route('bimbsec-corporate.show', [$this->customer, $application, 'from' => 'profile']));
+    }
+
     public function delete(): void
     {
         $this->authorize('delete', $this->customer);
+        $indexRoute = $this->customer->isCorporate() ? 'corporate-customers.index' : 'customers.index';
         $this->customer->deleteWithDependents();
 
         session()->flash('status', 'Customer deleted.');
-        $this->redirect(route('customers.index'), navigate: true);
+        $this->redirect(route($indexRoute), navigate: true);
     }
 
     public function restore(CustomerActivityLogger $logger): void
@@ -357,7 +377,7 @@ class Show extends Component
 
     protected function refreshCustomer(): void
     {
-        $this->customer = $this->customer->fresh(['identifications', 'contacts', 'addresses', 'activities.user', 'updater', 'creator']);
+        $this->customer = $this->customer->fresh(['identifications', 'contacts', 'addresses', 'activities.user', 'updater', 'creator', 'corporateDetails']);
         $this->fillFromCustomer();
         if ($this->editingSection !== 'personal') {
             $this->clearSensitiveFormValues();
@@ -384,6 +404,7 @@ class Show extends Component
 
     #[On('relationship-updated')]
     #[On('compliance-updated')]
+    #[On('company-updated')]
     public function refreshRelationshipActivity(): void
     {
         $this->authorize('view', $this->customer);

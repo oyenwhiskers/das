@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ContactType;
+use App\Enums\RepresentativeRole;
 use Database\Factories\CustomerRelationshipFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -19,14 +20,16 @@ class CustomerRelationship extends Model
     /** @var list<string> */
     protected $fillable = [
         'customer_id', 'related_person_id', 'related_customer_id',
-        'relationship', 'other_relationship', 'is_next_of_kin',
-        'is_primary_next_of_kin', 'active_identity_key',
+        'relationship', 'other_relationship', 'representative_role',
+        'signatory_order', 'is_next_of_kin', 'is_primary_next_of_kin',
+        'active_identity_key',
     ];
 
     /** @return array<string, string> */
     protected function casts(): array
     {
         return [
+            'representative_role' => RepresentativeRole::class,
             'is_next_of_kin' => 'boolean',
             'is_primary_next_of_kin' => 'boolean',
         ];

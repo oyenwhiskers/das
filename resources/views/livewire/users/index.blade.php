@@ -1,7 +1,7 @@
-<div class="py-6">
-    <div class="w-full px-4 sm:px-6 lg:px-8 xl:px-10 space-y-4">
+<div class="flex min-h-0 flex-1 flex-col py-6">
+    <div class="flex min-h-0 flex-1 flex-col gap-4 px-4 sm:px-6 lg:px-8 xl:px-10">
         {{-- Page header --}}
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div class="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
                 <h1 class="text-xl sm:text-2xl font-semibold text-navy-900">Users</h1>
                 <p class="mt-1 text-sm text-slate-500">Manage staff and administrator access to DAS.</p>
@@ -58,7 +58,7 @@
         @endif
 
         {{-- Search & filters --}}
-        <div class="flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div class="flex shrink-0 flex-col gap-3 lg:flex-row lg:items-center">
             <div class="relative flex-1 min-w-0">
                 <label for="search" class="sr-only">Search users</label>
                 <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400" aria-hidden="true">
@@ -105,10 +105,10 @@
         <p class="sr-only" wire:loading.delay wire:target="search,status" aria-live="polite">Updating…</p>
 
         {{-- Results --}}
-        <div class="relative rounded-lg border border-slate-200 bg-white shadow-sm" wire:loading.class="opacity-70" wire:target="search,status">
+        <div class="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm" wire:loading.class="opacity-70" wire:target="search,status">
             @if ($users->isEmpty())
-                <div class="px-6 py-10 text-center">
-                    <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                <div class="flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-10 text-center">
+                    <div class="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
                         <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
                         </svg>
@@ -122,43 +122,68 @@
                     @endif
                 </div>
             @else
-                <div class="hidden md:block overflow-x-auto">
-                    <table class="min-w-full divide-y divide-slate-200 text-sm font-normal">
-                        <thead class="bg-slate-50">
-                            <tr>
-                                <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Name</th>
-                                <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Email</th>
-                                <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Role</th>
-                                <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Last Updated</th>
-                                <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100 text-sm text-slate-800">
-                            @foreach ($users as $user)
-                                <tr
-                                    class="cursor-pointer hover:bg-slate-50/80 focus-within:bg-slate-50/80"
-                                    role="link"
-                                    tabindex="0"
-                                    aria-label="View {{ $user->name }}"
-                                    x-on:click="Livewire.navigate(@js(route('users.show', $user)))"
-                                    x-on:keydown.enter.prevent="Livewire.navigate(@js(route('users.show', $user)))"
-                                    x-on:keydown.space.prevent="Livewire.navigate(@js(route('users.show', $user)))"
+                <div class="min-h-0 flex-1 overflow-auto">
+                    <div class="hidden md:block">
+                        <table class="min-w-full divide-y divide-slate-200 text-sm font-normal">
+                            <thead class="sticky top-0 z-10 bg-slate-50">
+                                <tr>
+                                    <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Name</th>
+                                    <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Email</th>
+                                    <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Role</th>
+                                    <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Last Updated</th>
+                                    <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 text-sm text-slate-800">
+                                @foreach ($users as $user)
+                                    <tr
+                                        class="cursor-pointer hover:bg-slate-50/80 focus-within:bg-slate-50/80"
+                                        role="link"
+                                        tabindex="0"
+                                        aria-label="View {{ $user->name }}"
+                                        x-on:click="Livewire.navigate(@js(route('users.show', $user)))"
+                                        x-on:keydown.enter.prevent="Livewire.navigate(@js(route('users.show', $user)))"
+                                        x-on:keydown.space.prevent="Livewire.navigate(@js(route('users.show', $user)))"
+                                    >
+                                        <td class="px-4 py-3 align-middle">
+                                            {{ $user->name }}
+                                        </td>
+                                        <td class="px-4 py-3 align-middle max-w-[16rem]">
+                                            <span class="block truncate" title="{{ $user->email }}">
+                                                {{ $user->email }}
+                                            </span>
+                                        </td>
+                                        <td class="px-4 py-3 align-middle whitespace-nowrap">
+                                            {{ $user->role->label() }}
+                                        </td>
+                                        <td class="px-4 py-3 align-middle whitespace-nowrap">
+                                            {{ $user->updated_at?->timezone(config('app.timezone'))->format('d/m/Y, h:i A') ?: '—' }}
+                                        </td>
+                                        <td class="px-4 py-3 align-middle whitespace-nowrap">
+                                            <span @class([
+                                                'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
+                                                'bg-emerald-50 text-emerald-700' => $user->is_active,
+                                                'bg-slate-100 text-slate-600' => ! $user->is_active,
+                                            ])>
+                                                {{ $user->is_active ? 'Active' : 'Inactive' }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <ul class="divide-y divide-slate-100 md:hidden" role="list">
+                        @foreach ($users as $user)
+                            <li>
+                                <a
+                                    href="{{ route('users.show', $user) }}"
+                                    wire:navigate
+                                    class="block w-full px-4 py-3 text-left hover:bg-slate-50/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-navy-500"
                                 >
-                                    <td class="px-4 py-3 align-middle">
-                                        {{ $user->name }}
-                                    </td>
-                                    <td class="px-4 py-3 align-middle max-w-[16rem]">
-                                        <span class="block truncate" title="{{ $user->email }}">
-                                            {{ $user->email }}
-                                        </span>
-                                    </td>
-                                    <td class="px-4 py-3 align-middle whitespace-nowrap">
-                                        {{ $user->role->label() }}
-                                    </td>
-                                    <td class="px-4 py-3 align-middle whitespace-nowrap">
-                                        {{ $user->updated_at?->timezone(config('app.timezone'))->format('d/m/Y, h:i A') ?: '—' }}
-                                    </td>
-                                    <td class="px-4 py-3 align-middle whitespace-nowrap">
+                                    <div class="flex flex-wrap items-center gap-2 text-sm text-slate-800">
+                                        <span>{{ $user->name }}</span>
                                         <span @class([
                                             'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
                                             'bg-emerald-50 text-emerald-700' => $user->is_active,
@@ -166,45 +191,22 @@
                                         ])>
                                             {{ $user->is_active ? 'Active' : 'Inactive' }}
                                         </span>
-                                    </td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
+                                    </div>
+                                    <p class="mt-1 text-sm text-slate-800 truncate">{{ $user->email }}</p>
+                                    <p class="mt-1 text-sm text-slate-800">{{ $user->role->label() }}</p>
+                                    @if ($user->updated_at)
+                                        <p class="mt-1 text-sm text-slate-800">
+                                            {{ $user->updated_at->timezone(config('app.timezone'))->format('d/m/Y, h:i A') }}
+                                        </p>
+                                    @endif
+                                </a>
+                            </li>
+                        @endforeach
+                    </ul>
                 </div>
 
-                <ul class="divide-y divide-slate-100 md:hidden" role="list">
-                    @foreach ($users as $user)
-                        <li>
-                            <a
-                                href="{{ route('users.show', $user) }}"
-                                wire:navigate
-                                class="block w-full px-4 py-3 text-left hover:bg-slate-50/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-navy-500"
-                            >
-                                <div class="flex flex-wrap items-center gap-2 text-sm text-slate-800">
-                                    <span>{{ $user->name }}</span>
-                                    <span @class([
-                                        'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
-                                        'bg-emerald-50 text-emerald-700' => $user->is_active,
-                                        'bg-slate-100 text-slate-600' => ! $user->is_active,
-                                    ])>
-                                        {{ $user->is_active ? 'Active' : 'Inactive' }}
-                                    </span>
-                                </div>
-                                <p class="mt-1 text-sm text-slate-800 truncate">{{ $user->email }}</p>
-                                <p class="mt-1 text-sm text-slate-800">{{ $user->role->label() }}</p>
-                                @if ($user->updated_at)
-                                    <p class="mt-1 text-sm text-slate-800">
-                                        {{ $user->updated_at->timezone(config('app.timezone'))->format('d/m/Y, h:i A') }}
-                                    </p>
-                                @endif
-                            </a>
-                        </li>
-                    @endforeach
-                </ul>
-
                 @if ($users->hasPages())
-                    <div class="border-t border-slate-200 px-4 py-3">
+                    <div class="shrink-0 border-t border-slate-200 px-4 py-3">
                         {{ $users->links() }}
                     </div>
                 @endif

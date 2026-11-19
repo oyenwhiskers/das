@@ -1,12 +1,20 @@
-<section aria-label="Data Source" class="rounded-lg border border-slate-200 bg-white">
-    <div class="border-b border-slate-100 px-4 py-3 sm:px-5">
+<section aria-label="Data Source" class="flex min-h-[calc(100dvh-16rem)] flex-col rounded-lg border border-slate-200 bg-white">
+    <div class="shrink-0 border-b border-slate-100 px-4 py-3 sm:px-5">
         <h2 class="text-base font-semibold text-navy-900">Data Source</h2>
         <p class="text-xs text-slate-500">Log of scanned documents merged into this customer profile and the strategy used.</p>
     </div>
     @if ($merges->isEmpty())
-        <p class="px-4 py-8 text-center text-sm text-slate-500 sm:px-5">No scanned documents have been merged into this profile yet.</p>
+        <div class="flex flex-1 flex-col p-4 sm:p-5">
+            <div class="flex flex-1 flex-col items-center justify-center rounded-md border border-dashed border-slate-200 bg-slate-50 px-4 py-12 text-center">
+                <svg class="h-10 w-10 text-slate-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.25" stroke="currentColor" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12H9.75m9-6.75H15m-1.5-12.75H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                </svg>
+                <p class="mt-3 text-sm font-medium text-slate-700">No scanned documents have been merged into this profile yet.</p>
+                <p class="mt-1 max-w-sm text-xs text-slate-500">Merges from document review appear here with the strategy used and a link back to the original scan.</p>
+            </div>
+        </div>
     @else
-        <div class="overflow-x-auto">
+        <div class="min-h-0 flex-1 overflow-x-auto">
             <table class="min-w-full divide-y divide-slate-100 text-sm">
                 <thead class="bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
                     <tr>
@@ -18,7 +26,7 @@
                         <th scope="col" class="px-4 py-3 sm:px-5"><span class="sr-only">Actions</span></th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-slate-100 bg-white">
                     @foreach ($merges as $merge)
                         @php
                             $scan = $merge->extractedProfile?->documentScan;

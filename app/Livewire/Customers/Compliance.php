@@ -34,6 +34,9 @@ class Compliance extends Component
 
     public string $endDate = '';
 
+    /** @var list<array{name: string, relationship: string, identification_number: string}> */
+    public array $bssbParties = [];
+
     public function mount(Customer $customer): void
     {
         $this->authorize('view', $customer);
@@ -43,24 +46,70 @@ class Compliance extends Component
     public function editDeclaration(string $kind): void
     {
         $this->authorize('update', $this->customer);
-        abort_unless(in_array($kind, ['pep', 'bankruptcy', 'petition'], true), 404);
+        $allowed = $this->customer->isCorporate()
+            ? ['pep', 'bankruptcy', 'petition', 'bssb_staff', 'bssb_client']
+            : ['pep', 'bankruptcy', 'petition'];
+        abort_unless(in_array($kind, $allowed, true), 404);
         $this->cancel();
         $current = $this->currentDeclaration($kind);
         $this->editingKind = $kind;
+        $defaultAnswer = in_array($kind, ['bssb_staff', 'bssb_client'], true) ? 'no' : 'not_declared';
         $this->declaration = [
-            'answer' => $current?->answer ?? 'not_declared',
+            'answer' => $current?->answer ?? $defaultAnswer,
             'remarks' => $current?->remarks ?? '',
             'declared_on' => $current?->declared_on?->toDateString() ?? now()->toDateString(),
             'source' => $current?->source ?? 'staff_recorded',
             'confirmation_status' => $current?->confirmation_status ?? 'unconfirmed',
         ];
+        if (in_array($kind, ['bssb_staff', 'bssb_client'], true)) {
+            $partyKind = $kind === 'bssb_staff' ? 'staff' : 'client';
+            $this->bssbParties = $this->customer->bssbRelatedParties()
+                ->where('kind', $partyKind)
+                ->get()
+                ->map(fn ($party): array => [
+                    'name' => $party->name,
+                    'relationship' => $party->relationship ?? '',
+                    'identification_number' => $party->identification_number ?? '',
+                ])->all();
+            if ($this->bssbParties === []) {
+                $this->bssbParties = [['name' => '', 'relationship' => '', 'identification_number' => '']];
+            }
+        }
+    }
+
+    public function addBssbPartyRow(): void
+    {
+        $this->bssbParties[] = ['name' => '', 'relationship' => '', 'identification_number' => ''];
+    }
+
+    public function removeBssbPartyRow(int $index): void
+    {
+        unset($this->bssbParties[$index]);
+        $this->bssbParties = array_values($this->bssbParties);
+        if ($this->bssbParties === []) {
+            $this->bssbParties = [['name' => '', 'relationship' => '', 'identification_number' => '']];
+        }
     }
 
     public function saveDeclaration(CustomerActivityLogger $logger): void
     {
         $this->authorize('update', $this->customer);
-        abort_unless(in_array($this->editingKind, ['pep', 'bankruptcy', 'petition'], true), 404);
-        app(CustomerProfileWrites::class)->saveComplianceDeclaration($this->customer, $this->editingKind, $this->declaration, auth()->user());
+        $allowed = $this->customer->isCorporate()
+            ? ['pep', 'bankruptcy', 'petition', 'bssb_staff', 'bssb_client']
+            : ['pep', 'bankruptcy', 'petition'];
+        abort_unless(in_array($this->editingKind, $allowed, true), 404);
+
+        if (in_array($this->editingKind, ['bssb_staff', 'bssb_client'], true)) {
+            app(CustomerProfileWrites::class)->saveBssbRelatedParties(
+                $this->customer,
+                $this->editingKind,
+                $this->declaration['answer'] ?? 'no',
+                $this->bssbParties,
+                auth()->user(),
+            );
+        } else {
+            app(CustomerProfileWrites::class)->saveComplianceDeclaration($this->customer, $this->editingKind, $this->declaration, auth()->user());
+        }
         $this->cancel();
         $this->dispatch('compliance-updated');
         $this->notifySuccess('Declaration saved.');
@@ -143,6 +192,7 @@ class Compliance extends Component
     {
         $this->editingKind = '';
         $this->declaration = [];
+        $this->bssbParties = [];
         $this->selectedAssociationId = null;
         $this->associationMode = '';
         $this->association = [];
@@ -168,7 +218,31 @@ class Compliance extends Component
         $associations = $this->customer->pepAssociations()->with(['relatedPerson', 'customerRelationship.relatedPerson', 'customerRelationship.relatedCustomer', 'customer'])->latest()->get();
         $relationships = $this->customer->relationships()->with(['relatedPerson', 'relatedCustomer'])->get();
         $selected = $this->selectedAssociationId ? $associations->firstWhere('id', $this->selectedAssociationId) : null;
+        $declarationKinds = $this->customer->isCorporate()
+            ? [
+                'pep' => 'PEP Declaration',
+                'bssb_staff' => 'Related to BSSB Directors / Employees / DR',
+                'bssb_client' => 'Related to BSSB Client',
+                'bankruptcy' => 'Bankruptcy Declaration',
+                'petition' => 'Bankruptcy Petition Awareness',
+            ]
+            : [
+                'pep' => 'PEP Declaration',
+                'bankruptcy' => 'Bankruptcy Declaration',
+                'petition' => 'Bankruptcy Petition Awareness',
+            ];
+        $bssbPartiesByKind = $this->customer->isCorporate()
+            ? $this->customer->bssbRelatedParties()->get()->groupBy(fn ($party) => $party->kind->value)
+            : collect();
 
-        return view('livewire.customers.compliance', compact('declarations', 'declarationHistory', 'associations', 'relationships', 'selected'));
+        return view('livewire.customers.compliance', compact(
+            'declarations',
+            'declarationHistory',
+            'associations',
+            'relationships',
+            'selected',
+            'declarationKinds',
+            'bssbPartiesByKind',
+        ));
     }
 }

@@ -3,14 +3,19 @@
 namespace App\Services;
 
 use App\Enums\AddressType;
+use App\Enums\BssbRelatedPartyKind;
 use App\Enums\ContactType;
 use App\Enums\CustomerActivityAction;
+use App\Enums\CustomerType;
 use App\Enums\IdentificationType;
 use App\Enums\OccupancyStatus;
+use App\Enums\RepresentativeRole;
 use App\Models\Customer;
 use App\Models\CustomerBankAccount;
+use App\Models\CustomerBssbRelatedParty;
 use App\Models\CustomerBrokerageAccount;
 use App\Models\CustomerContact;
+use App\Models\CustomerCorporateDetails;
 use App\Models\CustomerIdentification;
 use App\Models\CustomerPepAssociation;
 use App\Models\CustomerRelationship;
@@ -46,7 +51,7 @@ class CustomerProfileWrites
                     $fail('NRIC must be 12 digits (with or without dashes).');
                 }
             }],
-            'issuing_jurisdiction' => ['required_if:identification_type,passport,other', 'nullable', 'string', 'regex:/^[A-Za-z]{2}$/'],
+            'issuing_jurisdiction' => ['required_if:identification_type,passport,other', 'nullable', 'string', 'regex:/^[A-Za-z]{2}$/'], // NRIC + BRN force MY below
             'old_nric' => ['nullable', 'string', 'max:50'],
             'date_of_birth' => ['nullable', 'date'],
             'gender' => ['nullable', 'string', 'max:50'],
@@ -881,7 +886,7 @@ class CustomerProfileWrites
     /** @param  array<string, mixed>  $data */
     public function saveComplianceDeclaration(Customer $customer, string $kind, array $data, User $actor): void
     {
-        if (! in_array($kind, ['pep', 'bankruptcy', 'petition'], true)) {
+        if (! in_array($kind, ['pep', 'bankruptcy', 'petition', 'bssb_staff', 'bssb_client'], true)) {
             $this->fail('declaration.answer', 'Choose a declaration.');
         }
         $data = Validator::make(['declaration' => $data], [
@@ -1094,7 +1099,7 @@ class CustomerProfileWrites
         $normalized = CustomerContact::normalizeValue($type, $value);
         // Emails lowercase; phones digits-only. Both print/save as the normalized form.
         $stored = match ($type) {
-            ContactType::Email, ContactType::Mobile, ContactType::Home => $normalized,
+            ContactType::Email, ContactType::Mobile, ContactType::Home, ContactType::Fax => $normalized,
             default => $value,
         };
         $payload = ['value' => $stored, 'normalized_value' => $normalized, 'is_primary' => $isPrimary];
@@ -1161,5 +1166,345 @@ class CustomerProfileWrites
         };
 
         return 'Family and next of kin for '.$applicantLabel.': '.$who.$role.' '.$issue;
+    }
+
+    /** @param  array<string, mixed>  $data
+     * @return array{weak: list<array{reference: string, full_legal_name: string}>} */
+    public function saveCorporateCompany(Customer $customer, array $data, User $actor, bool $confirmWeakDuplicates): array
+    {
+        abort_unless($customer->type === CustomerType::Corporate, 404);
+
+        $validated = Validator::make($data, [
+            'full_legal_name' => ['required', 'string', 'max:255'],
+            'identification_number' => ['nullable', 'string', 'max:100'],
+            'mobile' => ['nullable', 'string', 'max:30', 'regex:/^[+0-9\s\-()]{6,30}$/'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'fax' => ['nullable', 'string', 'max:30', 'regex:/^[+0-9\s\-()]{6,30}$/'],
+            'registered_at' => ['nullable', 'date'],
+            'registration_country' => ['nullable', 'string', 'regex:/^[A-Za-z]{2}$/'],
+            'entity_type' => ['nullable', 'string', 'max:100'],
+            'entity_sub_type' => ['nullable', 'string', 'max:100'],
+            'industry' => ['nullable', 'string', 'max:255'],
+            'business_activity' => ['nullable', 'string', 'max:255'],
+            'authorized_capital_rm' => ['nullable', 'numeric', 'min:0'],
+            'paid_up_capital_rm' => ['nullable', 'numeric', 'min:0'],
+        ])->validate();
+
+        $identificationType = filled($validated['identification_number'] ?? null)
+            ? IdentificationType::BusinessRegistration
+            : null;
+        $matches = $this->duplicates->check(
+            $identificationType,
+            ($validated['identification_number'] ?? null) ?: null,
+            ($validated['email'] ?? null) ?: null,
+            ($validated['mobile'] ?? null) ?: null,
+            $validated['full_legal_name'],
+            $customer->id,
+            'MY',
+        );
+        if ($matches['strong']->isNotEmpty()) {
+            $this->fail('identification_number', 'This business registration already belongs to another customer, including archived customers.');
+        }
+        $weak = $matches['weak']->map(fn (Customer $match): array => [
+            'reference' => $match->reference,
+            'full_legal_name' => $match->full_legal_name,
+        ])->all();
+        if ($weak !== [] && ! $confirmWeakDuplicates) {
+            return ['weak' => $weak];
+        }
+
+        DB::transaction(function () use ($customer, $validated, $identificationType, $actor): void {
+            $identificationNumber = filled($validated['identification_number'] ?? null)
+                ? CustomerIdentification::formatNumber($validated['identification_number'], $identificationType)
+                : null;
+            $mobile = filled($validated['mobile'] ?? null)
+                ? CustomerContact::normalizeValue(ContactType::Mobile, $validated['mobile'])
+                : null;
+            $email = filled($validated['email'] ?? null)
+                ? CustomerContact::normalizeValue(ContactType::Email, $validated['email'])
+                : null;
+
+            $customer->update([
+                'full_legal_name' => trim($validated['full_legal_name']),
+                'primary_identification_type' => $identificationType,
+                'primary_identification_number' => $identificationNumber,
+                'primary_mobile' => $mobile,
+                'primary_email' => $email,
+                'updated_by' => $actor->id,
+            ]);
+
+            $primary = $customer->identifications()->where('is_primary', true)->first();
+            if ($identificationType && $identificationNumber) {
+                $payload = [
+                    'type' => $identificationType,
+                    'number' => $identificationNumber,
+                    'normalized_number' => CustomerIdentification::normalizeNumber($identificationNumber),
+                    'issuing_jurisdiction' => 'MY',
+                    'is_primary' => true,
+                ];
+                if ($primary) {
+                    $primary->update($payload);
+                } else {
+                    $customer->identifications()->create($payload);
+                }
+            } elseif ($primary) {
+                $primary->delete();
+            }
+
+            $this->syncContact($customer, ContactType::Mobile, $validated['mobile'] ?: null, true);
+            $this->syncContact($customer, ContactType::Email, $validated['email'] ?: null, true);
+            $this->syncContact($customer, ContactType::Fax, $validated['fax'] ?: null, false);
+
+            CustomerCorporateDetails::query()->updateOrCreate(
+                ['customer_id' => $customer->id],
+                [
+                    'registered_at' => $validated['registered_at'] ?: null,
+                    'registration_country' => filled($validated['registration_country'] ?? null) ? strtoupper($validated['registration_country']) : null,
+                    'entity_type' => filled($validated['entity_type'] ?? null) ? trim($validated['entity_type']) : null,
+                    'entity_sub_type' => filled($validated['entity_sub_type'] ?? null) ? trim($validated['entity_sub_type']) : null,
+                    'industry' => filled($validated['industry'] ?? null) ? trim($validated['industry']) : null,
+                    'business_activity' => filled($validated['business_activity'] ?? null) ? trim($validated['business_activity']) : null,
+                    'authorized_capital_rm' => $validated['authorized_capital_rm'] !== null && $validated['authorized_capital_rm'] !== '' ? $validated['authorized_capital_rm'] : null,
+                    'paid_up_capital_rm' => $validated['paid_up_capital_rm'] !== null && $validated['paid_up_capital_rm'] !== '' ? $validated['paid_up_capital_rm'] : null,
+                ],
+            );
+
+            $this->activity->log($customer, CustomerActivityAction::Updated, $actor, 'Company information updated');
+        });
+
+        return ['weak' => []];
+    }
+
+    /** @param  array<string, mixed>  $data */
+    public function saveCorporateAddress(Customer $customer, array $data, User $actor): void
+    {
+        abort_unless($customer->type === CustomerType::Corporate, 404);
+
+        $validated = Validator::make($data, [
+            'registered_line_1' => ['nullable', 'string', 'max:255'],
+            'registered_line_2' => ['nullable', 'string', 'max:255'],
+            'registered_city' => ['nullable', 'string', 'max:100'],
+            'registered_state' => ['nullable', 'string', 'max:100'],
+            'registered_postcode' => ['nullable', 'string', 'max:20'],
+            'registered_country' => ['nullable', 'string', 'max:100'],
+            'same_as_registered' => ['boolean'],
+            'mailing_line_1' => ['nullable', 'string', 'max:255'],
+            'mailing_line_2' => ['nullable', 'string', 'max:255'],
+            'mailing_city' => ['nullable', 'string', 'max:100'],
+            'mailing_state' => ['nullable', 'string', 'max:100'],
+            'mailing_postcode' => ['nullable', 'string', 'max:20'],
+            'mailing_country' => ['nullable', 'string', 'max:100'],
+        ])->validate();
+        $same = $validated['same_as_registered'] === true || $validated['same_as_registered'] === 1 || $validated['same_as_registered'] === '1';
+
+        DB::transaction(function () use ($customer, $validated, $actor, $same): void {
+            $customer->addresses()->updateOrCreate(['type' => AddressType::Registered], [
+                'line_1' => $validated['registered_line_1'] ?: null,
+                'line_2' => $validated['registered_line_2'] ?: null,
+                'city' => $validated['registered_city'] ?: null,
+                'state' => $validated['registered_state'] ?: null,
+                'postcode' => $validated['registered_postcode'] ?: null,
+                'country' => $validated['registered_country'] ?: null,
+                'occupancy_status' => null,
+                'occupancy_other' => null,
+                'same_as_residential' => false,
+            ]);
+            $mailing = $same ? [
+                'line_1' => $validated['registered_line_1'] ?: null,
+                'line_2' => $validated['registered_line_2'] ?: null,
+                'city' => $validated['registered_city'] ?: null,
+                'state' => $validated['registered_state'] ?: null,
+                'postcode' => $validated['registered_postcode'] ?: null,
+                'country' => $validated['registered_country'] ?: null,
+                'occupancy_status' => null,
+                'occupancy_other' => null,
+                'same_as_residential' => true,
+            ] : [
+                'line_1' => $validated['mailing_line_1'] ?: null,
+                'line_2' => $validated['mailing_line_2'] ?: null,
+                'city' => $validated['mailing_city'] ?: null,
+                'state' => $validated['mailing_state'] ?: null,
+                'postcode' => $validated['mailing_postcode'] ?: null,
+                'country' => $validated['mailing_country'] ?: null,
+                'occupancy_status' => null,
+                'occupancy_other' => null,
+                'same_as_residential' => false,
+            ];
+            $customer->addresses()->updateOrCreate(['type' => AddressType::Mailing], $mailing);
+            $this->activity->log($customer, CustomerActivityAction::Updated, $actor, 'Company address updated');
+        });
+    }
+
+    /** @param  array<string, mixed>  $data */
+    public function saveCorporateSst(Customer $customer, ?string $sst, User $actor): void
+    {
+        abort_unless($customer->type === CustomerType::Corporate, 404);
+        $sst = trim((string) Validator::make(['sst' => $sst], ['sst' => ['nullable', 'string', 'max:100']])->validate()['sst']);
+
+        DB::transaction(function () use ($customer, $sst, $actor): void {
+            $customer->corporateDetails()->updateOrCreate(
+                ['customer_id' => $customer->id],
+                ['sst' => $sst !== '' ? $sst : null],
+            );
+            $this->activity->log($customer, CustomerActivityAction::Updated, $actor, 'SST updated');
+        });
+    }
+
+    public function saveCorporateAum(Customer $customer, array $data, User $actor): void
+    {
+        abort_unless($customer->type === CustomerType::Corporate, 404);
+        $validated = Validator::make($data, [
+            'aum_bracket' => ['nullable', Rule::in(['', ...CustomerProfileSchema::options('aum_bracket')])],
+        ])->validate();
+
+        CustomerCorporateDetails::query()->updateOrCreate(
+            ['customer_id' => $customer->id],
+            ['aum_bracket' => filled($validated['aum_bracket'] ?? null) ? $validated['aum_bracket'] : null],
+        );
+        $customer->update(['updated_by' => $actor->id]);
+        $this->activity->log($customer, CustomerActivityAction::Updated, $actor, 'AUM bracket updated');
+    }
+
+    /** @param  array<string, mixed>  $input */
+    public function saveRepresentative(Customer $customer, array $input, User $actor, ?CustomerRelationship $record = null): void
+    {
+        abort_unless($customer->type === CustomerType::Corporate, 404);
+
+        if (array_key_exists('identificationType', $input) && blank($input['identificationType'])) {
+            $input['identificationType'] = null;
+        }
+
+        $validated = Validator::make($input, [
+            'representativeRole' => ['required', Rule::enum(RepresentativeRole::class)],
+            'signatoryOrder' => ['nullable', 'integer', 'in:1,2'],
+            'fullLegalName' => ['required', 'string', 'max:255'],
+            'identificationType' => ['nullable', Rule::enum(IdentificationType::class)],
+            'identificationNumber' => ['nullable', 'string', 'max:100'],
+            'mobile' => ['nullable', 'string', 'max:30', 'regex:/^[+0-9\s\-()]{6,30}$/'],
+            'homeTelephone' => ['nullable', 'string', 'max:30', 'regex:/^[+0-9\s\-()]{6,30}$/'],
+            'officeExtension' => ['nullable', 'string', 'max:20'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'occupation' => ['nullable', 'string', 'max:255'],
+        ])->validate();
+
+        $role = RepresentativeRole::from($validated['representativeRole']);
+        $signatoryOrder = $role === RepresentativeRole::AuthorizedSignatory
+            ? (int) ($validated['signatoryOrder'] ?? 0)
+            : null;
+        if ($role === RepresentativeRole::AuthorizedSignatory && ! in_array($signatoryOrder, [1, 2], true)) {
+            $this->fail('signatoryOrder', 'Choose signatory order 1 or 2.');
+        }
+
+        DB::transaction(function () use ($customer, $validated, $role, $signatoryOrder, $record, $actor): void {
+            if ($role === RepresentativeRole::PrimaryContact) {
+                $customer->relationships()
+                    ->where('representative_role', RepresentativeRole::PrimaryContact)
+                    ->when($record, fn ($q) => $q->whereKeyNot($record->id))
+                    ->update(['representative_role' => null]);
+            }
+            if ($role === RepresentativeRole::AuthorizedSignatory) {
+                $customer->relationships()
+                    ->where('representative_role', RepresentativeRole::AuthorizedSignatory)
+                    ->where('signatory_order', $signatoryOrder)
+                    ->when($record, fn ($q) => $q->whereKeyNot($record->id))
+                    ->update(['representative_role' => null, 'signatory_order' => null]);
+            }
+
+            $personPayload = [
+                'full_legal_name' => trim($validated['fullLegalName']),
+                'identification_type' => filled($validated['identificationType'] ?? null) ? IdentificationType::from($validated['identificationType']) : null,
+                'identification_number' => filled($validated['identificationNumber'] ?? null)
+                    ? CustomerIdentification::formatNumber($validated['identificationNumber'], $validated['identificationType'] ?? null)
+                    : null,
+                'normalized_identification_number' => filled($validated['identificationNumber'] ?? null)
+                    ? CustomerIdentification::normalizeNumber($validated['identificationNumber'])
+                    : null,
+                'mobile' => filled($validated['mobile'] ?? null) ? trim($validated['mobile']) : null,
+                'home_telephone' => filled($validated['homeTelephone'] ?? null) ? trim($validated['homeTelephone']) : null,
+                'office_extension' => filled($validated['officeExtension'] ?? null) ? trim($validated['officeExtension']) : null,
+                'email' => filled($validated['email'] ?? null) ? trim($validated['email']) : null,
+                'occupation' => filled($validated['occupation'] ?? null) ? trim($validated['occupation']) : null,
+            ];
+
+            if ($record) {
+                $person = $record->relatedPerson;
+                if ($person) {
+                    $person->update($personPayload);
+                } else {
+                    $person = RelatedPerson::query()->create($personPayload);
+                }
+                $record->update([
+                    'related_person_id' => $person->id,
+                    'related_customer_id' => null,
+                    'relationship' => 'other',
+                    'other_relationship' => $role->label(),
+                    'representative_role' => $role,
+                    'signatory_order' => $signatoryOrder,
+                ]);
+            } else {
+                $person = RelatedPerson::query()->create($personPayload);
+                $customer->relationships()->create([
+                    'related_person_id' => $person->id,
+                    'relationship' => 'other',
+                    'other_relationship' => $role->label(),
+                    'representative_role' => $role,
+                    'signatory_order' => $signatoryOrder,
+                ]);
+            }
+
+            $this->activity->log($customer, CustomerActivityAction::Updated, $actor, 'Representative updated');
+        });
+    }
+
+    /**
+     * @param  list<array{name?: string, relationship?: string, identification_number?: string}>  $parties
+     */
+    public function saveBssbRelatedParties(Customer $customer, string $kind, string $answer, array $parties, User $actor): void
+    {
+        abort_unless($customer->type === CustomerType::Corporate, 404);
+        $partyKind = match ($kind) {
+            'bssb_staff' => BssbRelatedPartyKind::Staff,
+            'bssb_client' => BssbRelatedPartyKind::Client,
+            default => throw ValidationException::withMessages(['kind' => 'Unknown BSSB related party kind.']),
+        };
+
+        $this->saveComplianceDeclaration($customer, $kind, [
+            'answer' => $answer,
+            'remarks' => '',
+            'declared_on' => now()->toDateString(),
+            'source' => 'staff_recorded',
+            'confirmation_status' => 'unconfirmed',
+        ], $actor);
+
+        if ($answer !== 'yes') {
+            $customer->bssbRelatedParties()->where('kind', $partyKind)->delete();
+
+            return;
+        }
+
+        $rows = [];
+        foreach (array_values($parties) as $index => $party) {
+            $name = trim((string) ($party['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $rows[] = [
+                'customer_id' => $customer->id,
+                'kind' => $partyKind->value,
+                'name' => $name,
+                'relationship' => filled($party['relationship'] ?? null) ? trim((string) $party['relationship']) : null,
+                'identification_number' => filled($party['identification_number'] ?? null) ? trim((string) $party['identification_number']) : null,
+                'sort_order' => $index,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+        }
+
+        DB::transaction(function () use ($customer, $partyKind, $rows): void {
+            $customer->bssbRelatedParties()->where('kind', $partyKind)->delete();
+            if ($rows !== []) {
+                CustomerBssbRelatedParty::query()->insert($rows);
+            }
+        });
     }
 }

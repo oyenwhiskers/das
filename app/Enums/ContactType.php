@@ -8,6 +8,7 @@ enum ContactType: string
     case Home = 'home';
     case Email = 'email';
     case Social = 'social';
+    case Fax = 'fax';
 
     public function label(): string
     {
@@ -16,6 +17,7 @@ enum ContactType: string
             self::Home => 'Home Telephone',
             self::Email => 'Email Address',
             self::Social => 'Social Media',
+            self::Fax => 'Fax Number',
         };
     }
 }

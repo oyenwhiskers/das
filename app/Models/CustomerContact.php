@@ -47,7 +47,7 @@ class CustomerContact extends Model
         // Phones: digits and leading + only — no dashes/spaces. Stored value matches this.
         return match ($type) {
             ContactType::Email => strtolower(trim($value)),
-            ContactType::Mobile, ContactType::Home => preg_replace('/[^\d+]/', '', $value) ?? '',
+            ContactType::Mobile, ContactType::Home, ContactType::Fax => preg_replace('/[^\d+]/', '', $value) ?? '',
             ContactType::Social => trim($value),
         };
     }

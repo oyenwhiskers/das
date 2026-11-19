@@ -289,7 +289,7 @@ class EmploymentInformationTest extends TestCase
             ->assertDontSee('id="employment-status"', escape: false)
             ->call('editStatus')
             ->assertSee('id="employment-status"', escape: false)
-            ->assertSee('Save Status')
+            ->assertSee('Save')
             ->assertSee('Cancel')
             ->call('cancel')
             ->assertDontSee('id="employment-status"', escape: false)

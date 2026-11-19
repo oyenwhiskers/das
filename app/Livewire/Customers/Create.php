@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Customers;
 
+use App\Enums\CustomerType;
 use App\Enums\IdentificationType;
 use App\Models\Customer;
 use App\Models\CustomerIdentification;
@@ -15,10 +16,12 @@ use Illuminate\View\View;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-#[Title('Add Customer — DAS')]
+#[Title('Add Individual — DAS')]
 class Create extends Component
 {
     use AuthorizesRequests;
+
+    public string $customerType = 'individual';
 
     public string $full_legal_name = '';
 
@@ -51,6 +54,18 @@ class Create extends Component
     public function mount(): void
     {
         $this->authorize('create', Customer::class);
+        $this->customerType = request()->routeIs('corporate-customers.*')
+            ? CustomerType::Corporate->value
+            : CustomerType::Individual->value;
+
+        if ($this->isCorporate()) {
+            $this->identification_type = IdentificationType::BusinessRegistration->value;
+        }
+    }
+
+    public function isCorporate(): bool
+    {
+        return $this->customerType === CustomerType::Corporate->value;
     }
 
     public function updatedIdentificationType(): void
@@ -67,6 +82,10 @@ class Create extends Component
     {
         $this->authorize('create', Customer::class);
         $this->applyNricSuggestions();
+
+        if ($this->isCorporate() && filled($this->identification_number)) {
+            $this->identification_type = IdentificationType::BusinessRegistration->value;
+        }
 
         $validated = $this->validate($this->rules());
 
@@ -109,15 +128,16 @@ class Create extends Component
 
         try {
             $customer = $creator->create([
+                'type' => $this->customerType,
                 'full_legal_name' => $validated['full_legal_name'],
                 'identification_type' => $validated['identification_type'] ?: null,
                 'identification_number' => $validated['identification_number'] ?: null,
                 'issuing_jurisdiction' => $validated['issuing_jurisdiction'] ?: null,
-                'date_of_birth' => $validated['date_of_birth'] ?: null,
-                'gender' => $validated['gender'] ?: null,
+                'date_of_birth' => $validated['date_of_birth'] ?? null,
+                'gender' => $validated['gender'] ?? null,
                 'mobile' => $validated['mobile'] ?: null,
                 'email' => $validated['email'] ?: null,
-                'nationality' => $validated['nationality'] ?: null,
+                'nationality' => $validated['nationality'] ?? null,
             ], auth()->user());
         } catch (UniqueConstraintViolationException $exception) {
             $matches = $duplicateChecker->check($identificationType, $validated['identification_number'] ?: null, null, null, null, issuingJurisdiction: $validated['issuing_jurisdiction'] ?: null);
@@ -136,14 +156,14 @@ class Create extends Component
             return;
         }
 
-        session()->flash('status', 'Customer created successfully.');
+        session()->flash('status', $this->isCorporate() ? 'Corporate customer created successfully.' : 'Customer created successfully.');
 
         $this->redirect(route('customers.show', $customer), navigate: true);
     }
 
     protected function applyNricSuggestions(): void
     {
-        if ($this->identification_type !== IdentificationType::Nric->value) {
+        if ($this->isCorporate() || $this->identification_type !== IdentificationType::Nric->value) {
             return;
         }
 
@@ -171,6 +191,17 @@ class Create extends Component
      */
     protected function rules(): array
     {
+        if ($this->isCorporate()) {
+            return [
+                'full_legal_name' => ['required', 'string', 'max:255'],
+                'identification_type' => ['required_with:identification_number', 'nullable', Rule::in([IdentificationType::BusinessRegistration->value])],
+                'identification_number' => ['required_with:identification_type', 'nullable', 'string', 'max:100'],
+                'issuing_jurisdiction' => ['nullable', 'string', 'regex:/^[A-Za-z]{2}$/'],
+                'mobile' => ['nullable', 'string', 'max:30', 'regex:/^[+0-9\s\-()]{6,30}$/'],
+                'email' => ['nullable', 'email', 'max:255'],
+            ];
+        }
+
         return [
             'full_legal_name' => ['required', 'string', 'max:255'],
             'issuing_jurisdiction' => ['required_if:identification_type,passport,other', 'nullable', 'string', 'regex:/^[A-Za-z]{2}$/'],
@@ -191,7 +222,14 @@ class Create extends Component
                     }
                 },
             ],
-            'identification_type' => ['required_with:identification_number', Rule::enum(IdentificationType::class)],
+            'identification_type' => [
+                'required_with:identification_number',
+                Rule::in([
+                    IdentificationType::Nric->value,
+                    IdentificationType::Passport->value,
+                    IdentificationType::Other->value,
+                ]),
+            ],
             'date_of_birth' => ['nullable', 'date'],
             'gender' => ['nullable', 'string', 'max:50'],
             'mobile' => ['nullable', 'string', 'max:30', 'regex:/^[+0-9\s\-()]{6,30}$/'],
@@ -202,6 +240,8 @@ class Create extends Component
 
     public function render(): View
     {
-        return view('livewire.customers.create')->layout('layouts.app');
+        return view('livewire.customers.create')->layout('layouts.app')->title(
+            $this->isCorporate() ? 'Add Corporate — DAS' : 'Add Individual — DAS'
+        );
     }
 }

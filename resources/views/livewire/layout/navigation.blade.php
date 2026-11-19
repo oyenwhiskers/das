@@ -14,11 +14,16 @@ new class extends Component
 }; ?>
 
 @php
-    $customersActive = request()->routeIs('customers.*');
+    $showCustomer = request()->routeIs('customers.show') ? request()->route('customer') : null;
+    $individualsActive = request()->routeIs('customers.index', 'customers.create')
+        || ($showCustomer && $showCustomer->type?->value === 'individual');
+    $corporateActive = request()->routeIs('corporate-customers.*')
+        || ($showCustomer && $showCustomer->type?->value === 'corporate');
     $usersActive = request()->routeIs('users.*');
     $documentsActive = request()->routeIs('documents.*');
     $attachmentsActive = request()->routeIs('attachments.*');
-    $bimbsecActive = request()->routeIs('bimbsec.*');
+    $bimbsecActive = request()->routeIs('bimbsec.*') && ! request()->routeIs('bimbsec-corporate.*');
+    $bimbsecCorporateActive = request()->routeIs('bimbsec-corporate.*');
     $wakalahActive = request()->routeIs('wakalah.*');
     $aiUsageActive = request()->routeIs('ai-usage.*');
     $storageUsageActive = request()->routeIs('storage-usage.*');
@@ -48,21 +53,35 @@ new class extends Component
                 </div>
             </div>
 
-            <div>
+            <div class="space-y-1">
                 <p class="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Customers</p>
                 <a
                     href="{{ route('customers.index') }}"
                     wire:navigate
                     @class([
                         'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition',
-                        'bg-navy-50 text-navy-900' => $customersActive,
-                        'text-slate-600 hover:bg-slate-50 hover:text-slate-900' => ! $customersActive,
+                        'bg-navy-50 text-navy-900' => $individualsActive,
+                        'text-slate-600 hover:bg-slate-50 hover:text-slate-900' => ! $individualsActive,
                     ])
                 >
                     <svg class="h-4 w-4 shrink-0 opacity-80" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
                     </svg>
-                    Customers
+                    Individuals
+                </a>
+                <a
+                    href="{{ route('corporate-customers.index') }}"
+                    wire:navigate
+                    @class([
+                        'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition',
+                        'bg-navy-50 text-navy-900' => $corporateActive,
+                        'text-slate-600 hover:bg-slate-50 hover:text-slate-900' => ! $corporateActive,
+                    ])
+                >
+                    <svg class="h-4 w-4 shrink-0 opacity-80" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+                    </svg>
+                    Corporate
                 </a>
             </div>
 
@@ -71,6 +90,10 @@ new class extends Component
                 <a href="{{ route('bimbsec.index') }}" wire:navigate @class(['flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition', 'bg-navy-50 text-navy-900' => $bimbsecActive, 'text-slate-600 hover:bg-slate-50 hover:text-slate-900' => ! $bimbsecActive])>
                     <svg class="h-4 w-4 shrink-0 opacity-80" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
                     BIMBSEC
+                </a>
+                <a href="{{ route('bimbsec-corporate.index') }}" wire:navigate @class(['flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition', 'bg-navy-50 text-navy-900' => $bimbsecCorporateActive, 'text-slate-600 hover:bg-slate-50 hover:text-slate-900' => ! $bimbsecCorporateActive])>
+                    <svg class="h-4 w-4 shrink-0 opacity-80" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 0h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg>
+                    BIMBSEC Corporate
                 </a>
                 <a href="{{ route('wakalah.index') }}" wire:navigate @class(['flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition', 'bg-navy-50 text-navy-900' => $wakalahActive, 'text-slate-600 hover:bg-slate-50 hover:text-slate-900' => ! $wakalahActive])>
                     <svg class="h-4 w-4 shrink-0 opacity-80" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
@@ -217,7 +240,7 @@ new class extends Component
                         <a href="{{ route('attachments.index') }}" wire:navigate @click="sidebarOpen = false" @class(['flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium', 'bg-navy-50 text-navy-900' => $attachmentsActive, 'text-slate-600 hover:bg-slate-50' => ! $attachmentsActive])>Store Attachment</a>
                     </div>
                 </div>
-                <div>
+                <div class="space-y-1">
                     <p class="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Customers</p>
                     <a
                         href="{{ route('customers.index') }}"
@@ -225,16 +248,29 @@ new class extends Component
                         @click="sidebarOpen = false"
                         @class([
                             'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium',
-                            'bg-navy-50 text-navy-900' => $customersActive,
-                            'text-slate-600 hover:bg-slate-50' => ! $customersActive,
+                            'bg-navy-50 text-navy-900' => $individualsActive,
+                            'text-slate-600 hover:bg-slate-50' => ! $individualsActive,
                         ])
                     >
-                        Customers
+                        Individuals
+                    </a>
+                    <a
+                        href="{{ route('corporate-customers.index') }}"
+                        wire:navigate
+                        @click="sidebarOpen = false"
+                        @class([
+                            'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium',
+                            'bg-navy-50 text-navy-900' => $corporateActive,
+                            'text-slate-600 hover:bg-slate-50' => ! $corporateActive,
+                        ])
+                    >
+                        Corporate
                     </a>
                 </div>
                 <div class="space-y-1">
                     <p class="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Documents</p>
                     <a href="{{ route('bimbsec.index') }}" wire:navigate @click="sidebarOpen = false" @class(['flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium', 'bg-navy-50 text-navy-900' => $bimbsecActive, 'text-slate-600 hover:bg-slate-50' => ! $bimbsecActive])>BIMBSEC</a>
+                    <a href="{{ route('bimbsec-corporate.index') }}" wire:navigate @click="sidebarOpen = false" @class(['flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium', 'bg-navy-50 text-navy-900' => $bimbsecCorporateActive, 'text-slate-600 hover:bg-slate-50' => ! $bimbsecCorporateActive])>BIMBSEC Corporate</a>
                     <a href="{{ route('wakalah.index') }}" wire:navigate @click="sidebarOpen = false" @class(['flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium', 'bg-navy-50 text-navy-900' => $wakalahActive, 'text-slate-600 hover:bg-slate-50' => ! $wakalahActive])>Wakalah Letter</a>
                 </div>
                 @if (auth()->user()?->isAdmin())

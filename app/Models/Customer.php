@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\CustomerStatus;
 use App\Enums\CustomerType;
 use App\Enums\IdentificationType;
+use App\Enums\RepresentativeRole;
 use Database\Factories\CustomerFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -22,6 +23,10 @@ class Customer extends Model
     protected static function booted(): void
     {
         static::saving(function (Customer $customer): void {
+            if ($customer->type === CustomerType::Corporate) {
+                return;
+            }
+
             $defaultSalutation = self::defaultSalutationForGender($customer->gender, $customer->marital_status);
 
             if ($defaultSalutation === null) {
@@ -158,6 +163,21 @@ class Customer extends Model
         return $this->hasOne(CustomerAddress::class)->where('type', 'mailing');
     }
 
+    public function registeredAddress(): HasOne
+    {
+        return $this->hasOne(CustomerAddress::class)->where('type', 'registered');
+    }
+
+    public function corporateDetails(): HasOne
+    {
+        return $this->hasOne(CustomerCorporateDetails::class);
+    }
+
+    public function bssbRelatedParties(): HasMany
+    {
+        return $this->hasMany(CustomerBssbRelatedParty::class)->orderBy('sort_order')->orderBy('id');
+    }
+
     public function activities(): HasMany
     {
         return $this->hasMany(CustomerActivity::class)->latest('created_at');
@@ -166,6 +186,11 @@ class Customer extends Model
     public function relationships(): HasMany
     {
         return $this->hasMany(CustomerRelationship::class);
+    }
+
+    public function isCorporate(): bool
+    {
+        return $this->type === CustomerType::Corporate;
     }
 
     public function complianceDeclarations(): HasMany
@@ -218,9 +243,14 @@ class Customer extends Model
         return $this->hasMany(BimbsecApplication::class);
     }
 
-    public function currentBimbsecApplication(): ?BimbsecApplication
+    public function currentBimbsecApplication(?string $formKind = null): ?BimbsecApplication
     {
-        $existing = $this->bimbsecApplications()->with('document')->orderBy('id')->get();
+        $formKind ??= $this->isCorporate() ? BimbsecApplication::KIND_CORPORATE : BimbsecApplication::KIND_INDIVIDUAL;
+        $existing = $this->bimbsecApplications()
+            ->where('form_kind', $formKind)
+            ->with('document')
+            ->orderBy('id')
+            ->get();
 
         return $existing->first(fn (BimbsecApplication $row): bool => $row->document !== null) ?? $existing->first();
     }
@@ -303,27 +333,48 @@ class Customer extends Model
      */
     private function constrainProfileComplete(Builder $query): Builder
     {
-        return $query
-            ->whereNotNull('full_legal_name')->where('full_legal_name', '!=', '')
-            ->whereNotNull('primary_identification_number')->where('primary_identification_number', '!=', '')
-            ->whereNotNull('date_of_birth')
-            ->whereNotNull('gender')->where('gender', '!=', '')
-            ->whereNotNull('nationality')->where('nationality', '!=', '')
-            ->whereNotNull('marital_status')->where('marital_status', '!=', '')
-            ->whereNotNull('primary_mobile')->where('primary_mobile', '!=', '')
-            ->whereNotNull('primary_email')->where('primary_email', '!=', '')
-            ->whereNotNull('employment_status')->where('employment_status', '!=', '')
-            ->whereHas('addresses', fn (Builder $q) => $q->where('type', 'residential')->where('line_1', '!=', ''))
-            ->whereHas('relationships')
-            ->whereHas('employments', fn (Builder $q) => $q->whereNotNull('start_date'))
-            ->whereHas('bankAccounts')
-            ->whereHas('financialDeclarations')
-            ->whereHas('investmentProfiles')
-            ->where(fn (Builder $q) => $q
-                ->whereHas('taxIdentification')
-                ->orWhereHas('taxResidencies')
-                ->orWhereHas('fatcaDeclarations'))
-            ->whereHas('complianceDeclarations');
+        return $query->where(function (Builder $outer): void {
+            $outer->where(function (Builder $individual): void {
+                $individual->where('type', CustomerType::Individual->value)
+                    ->whereNotNull('full_legal_name')->where('full_legal_name', '!=', '')
+                    ->whereNotNull('primary_identification_number')->where('primary_identification_number', '!=', '')
+                    ->whereNotNull('date_of_birth')
+                    ->whereNotNull('gender')->where('gender', '!=', '')
+                    ->whereNotNull('nationality')->where('nationality', '!=', '')
+                    ->whereNotNull('marital_status')->where('marital_status', '!=', '')
+                    ->whereNotNull('primary_mobile')->where('primary_mobile', '!=', '')
+                    ->whereNotNull('primary_email')->where('primary_email', '!=', '')
+                    ->whereNotNull('employment_status')->where('employment_status', '!=', '')
+                    ->whereHas('addresses', fn (Builder $q) => $q->where('type', 'residential')->where('line_1', '!=', ''))
+                    ->whereHas('relationships')
+                    ->whereHas('employments', fn (Builder $q) => $q->whereNotNull('start_date'))
+                    ->whereHas('bankAccounts')
+                    ->whereHas('financialDeclarations')
+                    ->whereHas('investmentProfiles')
+                    ->where(fn (Builder $q) => $q
+                        ->whereHas('taxIdentification')
+                        ->orWhereHas('taxResidencies')
+                        ->orWhereHas('fatcaDeclarations'))
+                    ->whereHas('complianceDeclarations');
+            })->orWhere(function (Builder $corporate): void {
+                $corporate->where('type', CustomerType::Corporate->value)
+                    ->whereNotNull('full_legal_name')->where('full_legal_name', '!=', '')
+                    ->whereNotNull('primary_identification_number')->where('primary_identification_number', '!=', '')
+                    ->where(fn (Builder $q) => $q
+                        ->where(fn (Builder $inner) => $inner->whereNotNull('primary_mobile')->where('primary_mobile', '!=', ''))
+                        ->orWhere(fn (Builder $inner) => $inner->whereNotNull('primary_email')->where('primary_email', '!=', '')))
+                    ->whereHas('addresses', fn (Builder $q) => $q->where('type', 'registered')->where('line_1', '!=', ''))
+                    ->whereHas('relationships', fn (Builder $q) => $q->where('representative_role', RepresentativeRole::PrimaryContact->value))
+                    ->whereHas('bankAccounts')
+                    ->whereHas('corporateDetails', fn (Builder $q) => $q->whereNotNull('aum_bracket')->where('aum_bracket', '!=', ''))
+                    ->whereHas('investmentProfiles')
+                    ->where(fn (Builder $q) => $q
+                        ->whereHas('taxIdentification')
+                        ->orWhereHas('taxResidencies')
+                        ->orWhereHas('fatcaDeclarations'))
+                    ->whereHas('complianceDeclarations');
+            });
+        });
     }
 
     /** Share of profile fields staff fill. Optional blanks such as social accounts, home telephone, and old NRIC are excluded. */
@@ -353,8 +404,25 @@ class Customer extends Model
      */
     private function profileCompletionChecks(): array
     {
-        if (! array_key_exists('has_residential_address', $this->attributes)) {
+        if (! array_key_exists('has_residential_address', $this->attributes)
+            && ! array_key_exists('has_registered_address', $this->attributes)) {
             $this->loadExists($this->profileCompletionExists());
+        }
+
+        if ($this->isCorporate()) {
+            return [
+                'company' => [
+                    filled($this->full_legal_name),
+                    filled($this->primary_identification_number),
+                    filled($this->primary_mobile) || filled($this->primary_email),
+                    (bool) $this->has_registered_address,
+                ],
+                'representatives' => [(bool) $this->has_primary_contact],
+                'financial' => [(bool) $this->has_bank_account, (bool) $this->has_aum_bracket],
+                'investment' => [(bool) $this->has_investment],
+                'tax' => [(bool) $this->has_tax_identification || (bool) $this->has_tax_residency || (bool) $this->has_fatca],
+                'compliance' => [(bool) $this->has_compliance],
+            ];
         }
 
         return [
@@ -385,10 +453,13 @@ class Customer extends Model
     {
         return [
             'addresses as has_residential_address' => fn (Builder $query) => $query->where('type', 'residential')->where('line_1', '!=', ''),
+            'addresses as has_registered_address' => fn (Builder $query) => $query->where('type', 'registered')->where('line_1', '!=', ''),
             'employments as has_employment' => fn (Builder $query) => $query->whereNotNull('start_date'),
             'relationships as has_relationship',
+            'relationships as has_primary_contact' => fn (Builder $query) => $query->where('representative_role', RepresentativeRole::PrimaryContact->value),
             'bankAccounts as has_bank_account',
             'financialDeclarations as has_financial',
+            'corporateDetails as has_aum_bracket' => fn (Builder $query) => $query->whereNotNull('aum_bracket')->where('aum_bracket', '!=', ''),
             'investmentProfiles as has_investment',
             'taxIdentification as has_tax_identification',
             'taxResidencies as has_tax_residency',

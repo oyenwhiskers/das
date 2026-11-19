@@ -185,7 +185,7 @@ class Investment extends Component
         $current = $this->customer->brokerageDeclarations()->where('current_customer_key', $this->customer->id)->first();
         $this->editingBrokerageDeclarationId = $current?->id;
         $this->brokerageDeclaration = [
-            'answer' => $current?->answer ?? 'not_declared',
+            'answer' => $current?->answer ?? ($this->customer->isCorporate() ? 'no' : 'not_declared'),
             'declared_on' => $current?->declared_on?->toDateString() ?? today()->toDateString(),
             'source' => $current?->source ?? 'staff_entry',
         ];

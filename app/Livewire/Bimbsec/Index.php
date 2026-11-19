@@ -165,8 +165,9 @@ class Index extends Component
     {
         $this->authorize('viewAny', Customer::class);
         $customers = Customer::query()
+            ->where('type', \App\Enums\CustomerType::Individual)
             ->search($this->search)
-            ->with(['bimbsecApplications' => fn ($query) => $query->with('document')->orderBy('id')])
+            ->with(['bimbsecApplications' => fn ($query) => $query->where('form_kind', BimbsecApplication::KIND_INDIVIDUAL)->with('document')->orderBy('id')])
             ->orderBy('full_legal_name')
             ->paginate(50);
         $pageIds = $customers->getCollection()->pluck('id')->map(fn ($id): int => (int) $id)->all();
@@ -277,7 +278,8 @@ class Index extends Component
 
     private function latest(Customer $customer): BimbsecApplication
     {
-        return $customer->currentBimbsecApplication() ?? $customer->bimbsecApplications()->create([
+        return $customer->currentBimbsecApplication(BimbsecApplication::KIND_INDIVIDUAL) ?? $customer->bimbsecApplications()->create([
+            'form_kind' => BimbsecApplication::KIND_INDIVIDUAL,
             'choices' => BimbsecApplication::normalizeChoices([]),
             'created_by' => auth()->id(),
             'updated_by' => auth()->id(),

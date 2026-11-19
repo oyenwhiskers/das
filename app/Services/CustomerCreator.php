@@ -9,6 +9,7 @@ use App\Enums\CustomerType;
 use App\Enums\IdentificationType;
 use App\Models\Customer;
 use App\Models\CustomerContact;
+use App\Models\CustomerCorporateDetails;
 use App\Models\CustomerIdentification;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,7 @@ class CustomerCreator
     /**
      * @param  array{
      *     full_legal_name: string,
+     *     type?: string|null,
      *     identification_type?: string|null,
      *     identification_number?: string|null,
      *     issuing_jurisdiction?: string|null,
@@ -36,13 +38,17 @@ class CustomerCreator
     public function create(array $data, User $user): Customer
     {
         return DB::transaction(function () use ($data, $user): Customer {
+            $type = filled($data['type'] ?? null)
+                ? CustomerType::from($data['type'])
+                : CustomerType::Individual;
+
             $identificationType = filled($data['identification_type'] ?? null)
                 ? IdentificationType::from($data['identification_type'])
                 : null;
             $identificationNumber = filled($data['identification_number'] ?? null)
                 ? CustomerIdentification::formatNumber($data['identification_number'], $identificationType)
                 : null;
-            $issuingJurisdiction = $identificationType === IdentificationType::Nric
+            $issuingJurisdiction = in_array($identificationType, [IdentificationType::Nric, IdentificationType::BusinessRegistration], true)
                 ? 'MY'
                 : (filled($data['issuing_jurisdiction'] ?? null) ? strtoupper(trim($data['issuing_jurisdiction'])) : null);
 
@@ -62,12 +68,12 @@ class CustomerCreator
 
             $customer = Customer::query()->create([
                 'reference' => $this->referenceGenerator->generate(),
-                'type' => CustomerType::Individual,
+                'type' => $type,
                 'status' => CustomerStatus::Active,
                 'full_legal_name' => trim($data['full_legal_name']),
-                'date_of_birth' => filled($data['date_of_birth'] ?? null) ? $data['date_of_birth'] : null,
-                'gender' => filled($data['gender'] ?? null) ? trim($data['gender']) : null,
-                'nationality' => filled($data['nationality'] ?? null) ? trim($data['nationality']) : null,
+                'date_of_birth' => $type === CustomerType::Individual && filled($data['date_of_birth'] ?? null) ? $data['date_of_birth'] : null,
+                'gender' => $type === CustomerType::Individual && filled($data['gender'] ?? null) ? trim($data['gender']) : null,
+                'nationality' => $type === CustomerType::Individual && filled($data['nationality'] ?? null) ? trim($data['nationality']) : null,
                 'primary_identification_type' => $identificationType,
                 'primary_identification_number' => $identificationNumber,
                 'primary_mobile' => $mobile,
@@ -76,10 +82,16 @@ class CustomerCreator
                 'updated_by' => $user->id,
             ]);
 
+            if ($type === CustomerType::Corporate) {
+                CustomerCorporateDetails::query()->create([
+                    'customer_id' => $customer->id,
+                ]);
+            }
+
             if ($identificationType && $identificationNumber) {
                 CustomerIdentification::query()->create([
                     'customer_id' => $customer->id,
-                    'type' => $identificationType ?? IdentificationType::Other,
+                    'type' => $identificationType,
                     'number' => $identificationNumber,
                     'normalized_number' => CustomerIdentification::normalizeNumber($identificationNumber),
                     'issuing_jurisdiction' => $issuingJurisdiction,
@@ -109,7 +121,7 @@ class CustomerCreator
 
             $this->activityLogger->log($customer, CustomerActivityAction::Created, $user);
 
-            return $customer->fresh(['identifications', 'contacts']);
+            return $customer->fresh(['identifications', 'contacts', 'corporateDetails']);
         });
     }
 }

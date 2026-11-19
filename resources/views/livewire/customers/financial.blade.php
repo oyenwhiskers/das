@@ -5,29 +5,70 @@
     </div>
     @if ($editing)
         <form wire:submit="save" class="space-y-4 p-4 sm:p-5">
-            <div class="grid gap-4 sm:grid-cols-2">
-                <div><x-input-label for="monthly-income" value="Monthly Income (exact RM)" /><x-text-input id="monthly-income" type="number" min="0" step="0.01" wire:model.live.debounce.400ms="financial.monthly_income_rm" class="mt-1 block w-full" /><x-input-error :messages="$errors->get('financial.monthly_income_rm')" class="mt-1" /></div>
-                @foreach (['personal_annual_income_bracket' => ['Personal Gross Annual Income', \App\Livewire\Customers\Financial::PERSONAL_INCOME], 'joint_annual_income_bracket' => ['Joint Annual Income with Spouse', \App\Livewire\Customers\Financial::JOINT_INCOME], 'net_asset_bracket' => ['Net Assets', \App\Livewire\Customers\Financial::NET_ASSETS], 'portfolio_bracket' => ['Net Investment Portfolio', \App\Livewire\Customers\Financial::PORTFOLIO]] as $field => [$label, $options])
-                    <div><x-input-label :for="$field" :value="$label" /><select id="{{ $field }}" wire:model="financial.{{ $field }}" class="mt-1 block w-full rounded-md border-slate-300 text-sm"><option value="">Not Declared</option>@foreach ($options as $value => $option)<option value="{{ $value }}">{{ $option }}</option>@endforeach</select><x-input-error :messages="$errors->get('financial.'.$field)" class="mt-1" /></div>
+            <div class="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+                <div class="grid gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
+                    <x-input-label for="monthly-income" class="sm:pt-2" value="Monthly Income (RM)" />
+                    <div>
+                        <x-text-input id="monthly-income" type="number" min="0" step="0.01" wire:model.live.debounce.400ms="financial.monthly_income_rm" class="block w-full" />
+                        <x-input-error :messages="$errors->get('financial.monthly_income_rm')" class="mt-1" />
+                    </div>
+                </div>
+                @foreach (['personal_annual_income_bracket' => ['Personal Annual Income', \App\Livewire\Customers\Financial::PERSONAL_INCOME], 'joint_annual_income_bracket' => ['Joint Annual Income', \App\Livewire\Customers\Financial::JOINT_INCOME], 'net_asset_bracket' => ['Net Assets', \App\Livewire\Customers\Financial::NET_ASSETS], 'portfolio_bracket' => ['Net Investment Portfolio', \App\Livewire\Customers\Financial::PORTFOLIO]] as $field => [$label, $options])
+                    <div class="grid gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
+                        <x-input-label :for="$field" class="sm:pt-2" :value="$label" />
+                        <div>
+                            <select id="{{ $field }}" wire:model="financial.{{ $field }}" class="block w-full rounded-md border-slate-300 text-sm"><option value="">Not Declared</option>@foreach ($options as $value => $option)<option value="{{ $value }}">{{ $option }}</option>@endforeach</select>
+                            <x-input-error :messages="$errors->get('financial.'.$field)" class="mt-1" />
+                        </div>
+                    </div>
                 @endforeach
-                <div><x-input-label for="portfolio-ownership" value="Portfolio Ownership" /><select id="portfolio-ownership" wire:model="financial.portfolio_ownership" class="mt-1 block w-full rounded-md border-slate-300 text-sm"><option value="">Not Declared</option><option value="personal">Personal</option><option value="joint_with_spouse">Joint with Spouse</option></select><x-input-error :messages="$errors->get('financial.portfolio_ownership')" class="mt-1" /></div>
+                <div class="grid gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
+                    <x-input-label for="portfolio-ownership" class="sm:pt-2" value="Portfolio Ownership" />
+                    <div>
+                        <select id="portfolio-ownership" wire:model="financial.portfolio_ownership" class="block w-full rounded-md border-slate-300 text-sm"><option value="">Not Declared</option><option value="personal">Personal</option><option value="joint_with_spouse">Joint with Spouse</option></select>
+                        <x-input-error :messages="$errors->get('financial.portfolio_ownership')" class="mt-1" />
+                    </div>
+                </div>
             </div>
             <p class="text-xs text-amber-800">The fifth portfolio range is preserved as printed. Its upper bound appears to contain a typo; confirm the intended value with the form owner.</p>
             <fieldset><legend class="mb-2 text-sm font-medium text-slate-800">Source of Wealth / Funds (select all that apply)</legend><div class="grid gap-2 sm:grid-cols-3">@foreach (\App\Livewire\Customers\Financial::WEALTH_SOURCES as $value => $label)<label class="flex items-center gap-2 text-sm"><input type="checkbox" value="{{ $value }}" wire:model.live="financial.wealth_sources" class="rounded border-slate-300 text-navy-700">{{ $label }}</label>@endforeach</div><x-input-error :messages="$errors->get('financial.wealth_sources')" class="mt-1" /></fieldset>
-            @if (in_array('other', $financial['wealth_sources'] ?? [], true))<div><x-input-label for="wealth-other" value="Other source (specify)" /><x-text-input id="wealth-other" wire:model="financial.other_wealth_source" class="mt-1 block w-full" /><x-input-error :messages="$errors->get('financial.other_wealth_source')" class="mt-1" /></div>@endif
-            <div class="grid gap-4 sm:grid-cols-2"><div><x-input-label for="financial-date" value="Declaration Date" /><x-text-input id="financial-date" type="date" wire:model="financial.declared_on" class="mt-1 block w-full" /><x-input-error :messages="$errors->get('financial.declared_on')" class="mt-1" /></div><div><x-input-label for="financial-source" value="Source" /><select id="financial-source" wire:model="financial.source" class="mt-1 block w-full rounded-md border-slate-300 text-sm"><option value="staff_entry">Staff data entry</option><option value="customer_attestation">Customer attestation</option></select><x-input-error :messages="$errors->get('financial.source')" class="mt-1" /></div></div>
-            <div class="flex justify-end gap-3"><button type="button" wire:click="cancel" class="text-sm text-slate-600">Cancel</button><x-primary-button>Save Declaration</x-primary-button></div>
+            @if (in_array('other', $financial['wealth_sources'] ?? [], true))
+                <div class="grid gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
+                    <x-input-label for="wealth-other" class="sm:pt-2" value="Other source" />
+                    <div>
+                        <x-text-input id="wealth-other" wire:model="financial.other_wealth_source" class="block w-full" />
+                        <x-input-error :messages="$errors->get('financial.other_wealth_source')" class="mt-1" />
+                    </div>
+                </div>
+            @endif
+            <div class="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+                <div class="grid gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
+                    <x-input-label for="financial-date" class="sm:pt-2" value="Declaration Date" />
+                    <div>
+                        <x-text-input id="financial-date" type="date" wire:model="financial.declared_on" class="block w-full" />
+                        <x-input-error :messages="$errors->get('financial.declared_on')" class="mt-1" />
+                    </div>
+                </div>
+                <div class="grid gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
+                    <x-input-label for="financial-source" class="sm:pt-2" value="Source" />
+                    <div>
+                        <select id="financial-source" wire:model="financial.source" class="block w-full rounded-md border-slate-300 text-sm"><option value="staff_entry">Staff data entry</option><option value="customer_attestation">Customer attestation</option></select>
+                        <x-input-error :messages="$errors->get('financial.source')" class="mt-1" />
+                    </div>
+                </div>
+            </div>
+            <div class="flex gap-3"><x-secondary-button type="button" wire:click="cancel" class="flex-1 justify-center">Cancel</x-secondary-button><x-primary-button class="flex-1 justify-center">Save</x-primary-button></div>
         </form>
     @else
         @if ($current)
-            <dl class="grid gap-3 p-4 text-sm sm:grid-cols-2 sm:p-5">
-                <div><dt class="text-slate-500">Monthly Income</dt><dd>{{ $current->monthly_income_rm !== null ? 'RM '.number_format((float) $current->monthly_income_rm, 2) : 'Not declared' }}</dd></div>
-                <div><dt class="text-slate-500">Personal Annual Income</dt><dd>{{ \App\Livewire\Customers\Financial::PERSONAL_INCOME[$current->personal_annual_income_bracket] ?? 'Not declared' }}</dd></div>
-                <div><dt class="text-slate-500">Joint Annual Income</dt><dd>{{ \App\Livewire\Customers\Financial::JOINT_INCOME[$current->joint_annual_income_bracket] ?? 'Not declared' }}</dd></div>
-                <div><dt class="text-slate-500">Net Assets</dt><dd>{{ \App\Livewire\Customers\Financial::NET_ASSETS[$current->net_asset_bracket] ?? 'Not declared' }}</dd></div>
-                <div><dt class="text-slate-500">Net Investment Portfolio</dt><dd>{{ \App\Livewire\Customers\Financial::PORTFOLIO[$current->portfolio_bracket] ?? 'Not declared' }}</dd></div>
-                <div><dt class="text-slate-500">Portfolio Ownership</dt><dd>{{ $current->portfolio_ownership ? ucwords(str_replace('_', ' ', $current->portfolio_ownership)) : 'Not declared' }}</dd></div>
-                <div class="sm:col-span-2"><dt class="text-slate-500">Source of Wealth / Funds</dt><dd>{{ collect($current->wealth_sources)->map(fn ($value) => $value === 'other' ? 'Other: '.$current->other_wealth_source : (\App\Livewire\Customers\Financial::WEALTH_SOURCES[$value] ?? $value))->implode(', ') ?: 'Not declared' }}</dd></div>
+            <dl class="grid gap-x-6 gap-y-3 p-4 text-sm sm:grid-cols-2 sm:p-5">
+                <div class="grid gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start"><dt class="text-slate-500">Monthly Income</dt><dd class="font-medium text-slate-900">{{ $current->monthly_income_rm !== null ? 'RM '.number_format((float) $current->monthly_income_rm, 2) : 'Not declared' }}</dd></div>
+                <div class="grid gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start"><dt class="text-slate-500">Personal Annual Income</dt><dd class="font-medium text-slate-900">{{ \App\Livewire\Customers\Financial::PERSONAL_INCOME[$current->personal_annual_income_bracket] ?? 'Not declared' }}</dd></div>
+                <div class="grid gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start"><dt class="text-slate-500">Joint Annual Income</dt><dd class="font-medium text-slate-900">{{ \App\Livewire\Customers\Financial::JOINT_INCOME[$current->joint_annual_income_bracket] ?? 'Not declared' }}</dd></div>
+                <div class="grid gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start"><dt class="text-slate-500">Net Assets</dt><dd class="font-medium text-slate-900">{{ \App\Livewire\Customers\Financial::NET_ASSETS[$current->net_asset_bracket] ?? 'Not declared' }}</dd></div>
+                <div class="grid gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start"><dt class="text-slate-500">Net Investment Portfolio</dt><dd class="font-medium text-slate-900">{{ \App\Livewire\Customers\Financial::PORTFOLIO[$current->portfolio_bracket] ?? 'Not declared' }}</dd></div>
+                <div class="grid gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start"><dt class="text-slate-500">Portfolio Ownership</dt><dd class="font-medium text-slate-900">{{ $current->portfolio_ownership ? ucwords(str_replace('_', ' ', $current->portfolio_ownership)) : 'Not declared' }}</dd></div>
+                <div class="grid gap-x-3 gap-y-1 sm:col-span-2 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start"><dt class="text-slate-500">Source of Wealth</dt><dd class="font-medium text-slate-900">{{ collect($current->wealth_sources)->map(fn ($value) => $value === 'other' ? 'Other: '.$current->other_wealth_source : (\App\Livewire\Customers\Financial::WEALTH_SOURCES[$value] ?? $value))->implode(', ') ?: 'Not declared' }}</dd></div>
                 <div class="sm:col-span-2 text-slate-500">Declared {{ $current->declared_on->format('d M Y') }} · {{ $current->source === 'customer_attestation' ? 'Customer attestation' : 'Staff data entry' }}</div>
             </dl>
         @else

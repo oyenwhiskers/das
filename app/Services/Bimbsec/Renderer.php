@@ -23,13 +23,27 @@ class Renderer
             'personal.legal_name', 'identification.current_nric_or_passport', 'identification.old_nric',
             'addresses.residential', 'addresses.mailing', 'relationships.spouse_or_next_of_kin',
             'employment.business_address', 'banking.references', 'tax.malaysian_tin', 'tax.foreign_residencies',
-            'compliance.pep_people',
+            'compliance.pep_people', 'company.registered_name', 'company.business_registration_no',
+            'company.registered_address', 'company.mailing_address',
+            'corporate.registered_name', 'corporate.registration_number',
+            'corporate.registered_address', 'corporate.mailing_address',
+            'corporate.primary_contact.identity_number',
+            'corporate.authorized_signatory_1.identity_number',
+            'corporate.authorized_signatory_2.identity_number',
+            'representatives.primary_contact.identification', 'representatives.signatory_1.identification',
+            'representatives.signatory_2.identification',
         ];
         if (! in_array($key, $criticalKeys, true)) {
             return false;
         }
         if ($key === 'banking.references') {
-            return $item === 'account_number';
+            return in_array($item, ['account_number', 'Account No.'], true);
+        }
+        if (str_ends_with($key, '.identification') || str_ends_with($key, '.identity_number')) {
+            return true;
+        }
+        if (in_array($key, ['company.registered_address', 'company.mailing_address', 'corporate.registered_address', 'corporate.mailing_address'], true)) {
+            return true;
         }
         if ($key === 'tax.foreign_residencies') {
             return $item === 'tin';
@@ -87,7 +101,7 @@ class Renderer
             $size = $pdf->getTemplateSize($template);
             $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
             $pdf->useTemplate($template, 0, 0, $size['width'], $size['height']);
-            if ($page > 8) {
+            if ($page > $this->catalog->fillThroughPage()) {
                 continue;
             }
             foreach ($byPage[$page] ?? [] as $draw) {

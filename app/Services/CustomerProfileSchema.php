@@ -18,6 +18,14 @@ class CustomerProfileSchema
 
     public const NET_ASSETS = ['up_to_50000' => 'Up to RM50,000', '50001_200000' => 'RM50,001–RM200,000', '200001_500000' => 'RM200,001–RM500,000', '500001_1000000' => 'RM500,001–RM1,000,000', '1000001_3000000' => 'RM1,000,001–RM3,000,000', 'over_3000000' => 'Over RM3,000,000'];
 
+    public const AUM_BRACKETS = [
+        'up_to_1000000' => '< RM1,000,000',
+        '1000001_10000000' => 'RM1,000,001 – RM10,000,000',
+        '10000001_50000000' => 'RM10,000,001 – RM50,000,000',
+        '50000001_100000000' => 'RM50,000,001 – RM100,000,000',
+        'over_100000000' => '> RM100,000,001',
+    ];
+
     public const PORTFOLIO = ['up_to_50000' => 'Up to RM50,000', '50001_100000' => 'RM50,001–RM100,000', '100001_300000' => 'RM100,001–RM300,000', '300001_500000' => 'RM300,001–RM500,000', 'source_fifth_range' => 'RM500,001–RM1,000,00 (as printed)', 'over_1000000' => 'Over RM1,000,000'];
 
     public const WEALTH_SOURCES = ['savings' => 'Savings', 'salary' => 'Salary', 'business_investment_income' => 'Business/Investment Income', 'rental_income' => 'Rental Income', 'inherited_wealth' => 'Inherited Wealth', 'shareholdings' => 'Shareholdings', 'asset' => 'Asset', 'directorship' => 'Directorship', 'credit_facility' => 'Credit Facility', 'retained_earnings' => 'Retained Earnings', 'other' => 'Other'];
@@ -64,6 +72,7 @@ class CustomerProfileSchema
             'personal_income' => array_keys(self::PERSONAL_INCOME),
             'joint_income' => array_keys(self::JOINT_INCOME),
             'net_assets' => array_keys(self::NET_ASSETS),
+            'aum_bracket' => array_keys(self::AUM_BRACKETS),
             'portfolio' => array_keys(self::PORTFOLIO),
             'portfolio_ownership' => ['personal', 'joint_with_spouse'],
             'wealth_sources' => array_keys(self::WEALTH_SOURCES),

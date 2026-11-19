@@ -11,6 +11,9 @@ use App\Livewire\Attachments\Show as AttachmentsShow;
 use App\Livewire\Bimbsec\BatchShow as BimbsecBatchShow;
 use App\Livewire\Bimbsec\Index as BimbsecIndex;
 use App\Livewire\Bimbsec\Show as BimbsecShow;
+use App\Livewire\BimbsecCorporate\BatchShow as BimbsecCorporateBatchShow;
+use App\Livewire\BimbsecCorporate\Index as BimbsecCorporateIndex;
+use App\Livewire\BimbsecCorporate\Show as BimbsecCorporateShow;
 use App\Livewire\Wakalah\Index as WakalahIndex;
 use App\Livewire\Wakalah\Show as WakalahShow;
 use App\Livewire\Customers\Create as CustomersCreate;
@@ -29,6 +32,9 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/customers/create', CustomersCreate::class)->name('customers.create');
     Route::get('/customers/{customer}', CustomersShow::class)->name('customers.show');
 
+    Route::get('/corporate-customers', CustomersIndex::class)->name('corporate-customers.index');
+    Route::get('/corporate-customers/create', CustomersCreate::class)->name('corporate-customers.create');
+
     Route::get('/bimbsec', BimbsecIndex::class)->name('bimbsec.index');
     Route::get('/bimbsec/batches/{batch}', BimbsecBatchShow::class)->name('bimbsec.batches.show');
     Route::get('/bimbsec/batches/{batch}/file', [BimbsecFileController::class, 'batch'])->name('bimbsec.batches.file');
@@ -36,6 +42,14 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/bimbsec/{customer}/applications/{application}', BimbsecShow::class)->name('bimbsec.show');
     Route::get('/bimbsec/{customer}/applications/{application}/file', [BimbsecFileController::class, 'document'])->name('bimbsec.file');
     Route::get('/bimbsec/{customer}/applications/{application}/print', [BimbsecFileController::class, 'print'])->name('bimbsec.print');
+
+    Route::get('/bimbsec-corporate', BimbsecCorporateIndex::class)->name('bimbsec-corporate.index');
+    Route::get('/bimbsec-corporate/batches/{batch}', BimbsecCorporateBatchShow::class)->name('bimbsec-corporate.batches.show');
+    Route::get('/bimbsec-corporate/batches/{batch}/file', [BimbsecFileController::class, 'corporateBatch'])->name('bimbsec-corporate.batches.file');
+    Route::get('/bimbsec-corporate/batches/{batch}/print', [BimbsecFileController::class, 'corporatePrintBatch'])->name('bimbsec-corporate.batches.print');
+    Route::get('/bimbsec-corporate/{customer}/applications/{application}', BimbsecCorporateShow::class)->name('bimbsec-corporate.show');
+    Route::get('/bimbsec-corporate/{customer}/applications/{application}/file', [BimbsecFileController::class, 'corporateDocument'])->name('bimbsec-corporate.file');
+    Route::get('/bimbsec-corporate/{customer}/applications/{application}/print', [BimbsecFileController::class, 'corporatePrint'])->name('bimbsec-corporate.print');
 
     Route::get('/wakalah', WakalahIndex::class)->name('wakalah.index');
     Route::get('/wakalah/{customer}', WakalahShow::class)->name('wakalah.show');

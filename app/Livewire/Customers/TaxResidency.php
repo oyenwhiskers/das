@@ -27,6 +27,8 @@ class TaxResidency extends Component
 
     public string $malaysianTin = '';
 
+    public string $sst = '';
+
     /** @var array<string, string> */
     public array $residency = [];
 
@@ -38,7 +40,7 @@ class TaxResidency extends Component
     public function mount(Customer $customer): void
     {
         $this->authorize('view', $customer);
-        $this->customer = $customer;
+        $this->customer = $customer->loadMissing('corporateDetails');
         $this->resetForms();
     }
 
@@ -46,17 +48,25 @@ class TaxResidency extends Component
     {
         $this->authorize('update', $this->customer);
         $this->cancel();
+        if ($this->customer->isCorporate()) {
+            $this->sst = $this->customer->corporateDetails?->sst ?? '';
+        }
         $this->editing = 'tin';
     }
 
     public function saveTin(CustomerActivityLogger $logger): void
     {
         $this->authorize('update', $this->customer);
-        app(CustomerProfileWrites::class)->saveTin($this->customer, $this->malaysianTin, auth()->user());
+        $writes = app(CustomerProfileWrites::class);
+        $writes->saveTin($this->customer, $this->malaysianTin, auth()->user());
+        if ($this->customer->isCorporate()) {
+            $writes->saveCorporateSst($this->customer, $this->sst, auth()->user());
+            $this->customer->load('corporateDetails');
+        }
 
         $this->cancel();
         $this->dispatch('tax-updated');
-        $this->notifySuccess('Malaysian TIN saved.');
+        $this->notifySuccess($this->customer->isCorporate() ? 'Tax identification saved.' : 'Malaysian TIN saved.');
     }
 
     public function addResidency(): void
@@ -148,6 +158,7 @@ class TaxResidency extends Component
     private function resetForms(): void
     {
         $this->malaysianTin = '';
+        $this->sst = '';
         $this->residency = ['jurisdiction' => '', 'foreign_tin' => '', 'missing_tin_reason' => '', 'missing_tin_explanation' => '', 'effective_date' => today()->toDateString()];
         $this->fatca = ['us_person_for_tax' => 'no', 'us_green_card_holder' => 'no', 'us_resident' => 'no', 'selected_classification' => 'non_us_person', 'declared_on' => today()->toDateString(), 'source' => 'staff_entry'];
         $this->endDate = today()->toDateString();
@@ -167,6 +178,7 @@ class TaxResidency extends Component
     {
         return view('livewire.customers.tax-residency', [
             'taxIdentification' => $this->customer->taxIdentification()->first(),
+            'corporateSst' => $this->customer->isCorporate() ? ($this->customer->corporateDetails?->sst ?? null) : null,
             'residencies' => $this->customer->taxResidencies()->orderByRaw('ended_on IS NOT NULL')->latest('effective_date')->get(),
             'currentFatca' => $this->customer->fatcaDeclarations()->with('recorder')->where('current_customer_key', $this->customer->id)->first(),
         ]);

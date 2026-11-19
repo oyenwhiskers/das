@@ -1,4 +1,14 @@
 @php
+    $isCorporate = $customer->isCorporate();
+    $indexRoute = $isCorporate ? 'corporate-customers.index' : 'customers.index';
+    $tabLabels = $isCorporate
+        ? ['company' => 'Company', 'representatives' => 'Representatives', 'financial' => 'Financial Information', 'investment' => 'Investment', 'tax' => 'Tax & Residency', 'compliance' => 'Compliance', 'attachments' => 'Attachments', 'data-source' => 'Data Source']
+        : ['personal' => 'Personal', 'relationships' => 'Relationships', 'work' => 'Work Information', 'financial' => 'Financial Information', 'investment' => 'Investment', 'tax' => 'Tax & Residency', 'compliance' => 'Compliance', 'attachments' => 'Attachments', 'data-source' => 'Data Source'];
+    $tabOrder = array_keys($tabLabels);
+    $defaultTab = $tabOrder[0];
+    $tabAliases = $isCorporate
+        ? array_merge(array_combine($tabOrder, $tabOrder), ['personal' => 'company', 'relationships' => 'representatives'])
+        : array_merge(array_combine($tabOrder, $tabOrder), ['work-finance' => 'work']);
     $initials = collect(explode(' ', $customer->full_legal_name))
         ->filter()
         ->take(2)
@@ -8,8 +18,8 @@
 @endphp
 
 <div class="bg-[#F8FAFC] py-4 sm:py-5" x-data="{
-    activeTab: (() => { const tabs = { personal: 'personal', relationships: 'relationships', work: 'work', financial: 'financial', investment: 'investment', tax: 'tax', compliance: 'compliance', attachments: 'attachments', 'data-source': 'data-source', 'work-finance': 'work' }; const selected = tabs[new URLSearchParams(window.location.search).get('tab')]; return selected ? selected : 'personal'; })(),
-    tabOrder: ['personal', 'relationships', 'work', 'financial', 'investment', 'tax', 'compliance', 'attachments', 'data-source'],
+    activeTab: (() => { const tabs = @js($tabAliases); const selected = tabs[new URLSearchParams(window.location.search).get('tab')]; return selected ? selected : @js($defaultTab); })(),
+    tabOrder: @js($tabOrder),
     activityOpen: false,
     moreOpen: false,
     dirty: false,
@@ -28,10 +38,18 @@
         this.moreOpen = false;
         await $wire.openBimbsec();
     },
+    async openBimbsecCorporate() {
+        if (this.dirty && ! await confirmAction({ title: 'Discard unsaved changes?', text: 'Your changes have not been saved.', confirmButtonText: 'Discard changes' })) return;
+        this.dirty = false;
+        this.moreOpen = false;
+        await $wire.openBimbsecCorporate();
+    },
     async switchTab(tab) {
         if (tab === this.activeTab) return;
         if (this.dirty && ! await confirmAction({ title: 'Discard unsaved changes?', text: 'Your changes in the current section have not been saved.', confirmButtonText: 'Discard changes' })) return;
         if ($wire.editingSection) await $wire.cancelEdit();
+        if (this.activeTab === 'company') this.$dispatch('discard-company-edit');
+        if (this.activeTab === 'representatives') this.$dispatch('discard-representatives-edit');
         if (this.activeTab === 'relationships') this.$dispatch('discard-relationship-edit');
         if (this.activeTab === 'work') this.$dispatch('discard-employment-edit');
         if (this.activeTab === 'financial') { this.$dispatch('discard-bank-account-edit'); this.$dispatch('discard-financial-edit'); }
@@ -49,10 +67,10 @@
         const nextIndex = (this.tabOrder.indexOf(this.activeTab) + direction + this.tabOrder.length) % this.tabOrder.length;
         this.switchTab(this.tabOrder[nextIndex]);
     }
-}" x-init="$watch('$wire.editingSection', value => { if (value === null) dirty = false })" x-on:input.capture="if ($event.target.closest('form')) dirty = true" x-on:change.capture="if ($event.target.closest('form')) dirty = true" x-on:relationship-updated.window="dirty = false" x-on:employment-updated.window="dirty = false" x-on:bank-account-updated.window="dirty = false" x-on:financial-updated.window="dirty = false" x-on:investment-updated.window="dirty = false" x-on:tax-updated.window="dirty = false" x-on:compliance-updated.window="dirty = false" x-on:beforeunload.window="if (dirty) { $event.preventDefault(); $event.returnValue = '' }" x-on:livewire:navigate.window="if (dirty && ! window.confirm('Discard unsaved changes?')) $event.preventDefault(); else dirty = false">
+}" x-init="$watch('$wire.editingSection', value => { if (value === null) dirty = false })" x-on:input.capture="if ($event.target.closest('form')) dirty = true" x-on:change.capture="if ($event.target.closest('form')) dirty = true" x-on:relationship-updated.window="dirty = false" x-on:company-updated.window="dirty = false" x-on:employment-updated.window="dirty = false" x-on:bank-account-updated.window="dirty = false" x-on:financial-updated.window="dirty = false" x-on:investment-updated.window="dirty = false" x-on:tax-updated.window="dirty = false" x-on:compliance-updated.window="dirty = false" x-on:beforeunload.window="if (dirty) { $event.preventDefault(); $event.returnValue = '' }" x-on:livewire:navigate.window="if (dirty && ! window.confirm('Discard unsaved changes?')) $event.preventDefault(); else dirty = false">
     <div class="w-full space-y-4 px-4 sm:px-6 lg:px-8 xl:px-10">
             <div>
-                <a href="{{ route('customers.index') }}" x-on:click.prevent="if (!dirty || await confirmAction({ title: 'Discard unsaved changes?', text: 'Your changes have not been saved.', confirmButtonText: 'Discard changes' })) { dirty = false; window.location.href = $el.href }" class="text-sm text-navy-700 hover:text-navy-900">&larr; Back to Customers</a>
+                <a href="{{ route($indexRoute) }}" x-on:click.prevent="if (!dirty || await confirmAction({ title: 'Discard unsaved changes?', text: 'Your changes have not been saved.', confirmButtonText: 'Discard changes' })) { dirty = false; window.location.href = $el.href }" class="text-sm text-navy-700 hover:text-navy-900">&larr; Back to {{ $isCorporate ? 'Corporate' : 'Customers' }}</a>
             </div>
 
             <div class="rounded-lg border border-slate-200 bg-white p-4 sm:px-5 sm:py-3">
@@ -118,7 +136,11 @@
                             </button>
                             <div id="customer-more-menu" role="menu" x-cloak x-show="moreOpen" x-transition class="absolute end-0 z-50 mt-2 w-44 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5">
                                 <button type="button" role="menuitem" x-on:click="openActivity()" :aria-expanded="activityOpen.toString()" aria-controls="customer-activity-modal" class="block w-full px-4 py-2 text-start text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none">View Activity</button>
-                                <button type="button" role="menuitem" x-on:click="openBimbsec()" class="block w-full px-4 py-2 text-start text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none">BIMBSEC</button>
+                                @unless ($isCorporate)
+                                    <button type="button" role="menuitem" x-on:click="openBimbsec()" class="block w-full px-4 py-2 text-start text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none">BIMBSEC</button>
+                                @else
+                                    <button type="button" role="menuitem" x-on:click="openBimbsecCorporate()" class="block w-full px-4 py-2 text-start text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none">BIMBSEC Corporate</button>
+                                @endunless
                             </div>
                         </div>
                         @if ($customer->isArchived())
@@ -148,7 +170,7 @@
             @endphp
             <div class="border-b border-slate-200" role="tablist" aria-label="Customer profile sections" x-on:keydown.arrow-right.prevent="moveTab(1)" x-on:keydown.arrow-left.prevent="moveTab(-1)">
                 <div class="-mb-px flex flex-nowrap gap-1 overflow-x-auto">
-                    @foreach (['personal' => 'Personal', 'relationships' => 'Relationships', 'work' => 'Work Information', 'financial' => 'Financial Information', 'investment' => 'Investment', 'tax' => 'Tax & Residency', 'compliance' => 'Compliance', 'attachments' => 'Attachments', 'data-source' => 'Data Source'] as $tab => $label)
+                    @foreach ($tabLabels as $tab => $label)
                         @php
                             $sectionPercent = $sectionCompletion[$tab] ?? null;
                         @endphp
@@ -178,6 +200,14 @@
             </div>
 
 
+            @if ($isCorporate)
+            <div id="panel-company" role="tabpanel" aria-labelledby="tab-company" x-show="activeTab === 'company'" x-cloak class="space-y-4">
+                <livewire:customers.company-profile :customer="$customer" :key="'company-'.$customer->id" />
+            </div>
+            <div id="panel-representatives" role="tabpanel" aria-labelledby="tab-representatives" x-show="activeTab === 'representatives'" x-cloak class="space-y-4">
+                <livewire:customers.representatives :customer="$customer" :key="'representatives-'.$customer->id" />
+            </div>
+            @else
             <div id="panel-personal" role="tabpanel" aria-labelledby="tab-personal" x-show="activeTab === 'personal'" x-cloak class="space-y-4">
                     @php
                         $bimbsecFit = in_array($editingSection, ['personal', 'contact', 'address'], true)
@@ -282,9 +312,9 @@
                                             <option value="Widowed">Widowed</option>
                                         </select>
                                     </div>
-                                    <div class="sm:col-span-2 flex justify-end gap-3">
-                                        <button type="button" @click="if (!dirty || await confirmAction({ title: 'Discard unsaved changes?', text: 'Your changes have not been saved.', confirmButtonText: 'Discard changes' })) { dirty = false; $wire.cancelEdit() }" class="text-sm text-slate-600">Cancel</button>
-                                        <x-primary-button wire:loading.attr="disabled">Save</x-primary-button><span wire:loading role="status" class="self-center text-xs text-slate-500">Saving...</span>
+                                    <div class="flex gap-3 sm:col-span-2">
+                                        <x-secondary-button type="button" @click="if (!dirty || await confirmAction({ title: 'Discard unsaved changes?', text: 'Your changes have not been saved.', confirmButtonText: 'Discard changes' })) { dirty = false; $wire.cancelEdit() }" class="flex-1 justify-center">Cancel</x-secondary-button>
+                                        <x-primary-button class="flex-1 justify-center" wire:loading.attr="disabled">Save</x-primary-button>
                                     </div>
                                 </form>
                             @else
@@ -362,9 +392,9 @@
                                         @foreach (['facebook' => 'Facebook', 'instagram' => 'Instagram', 'twitter' => 'Twitter / X'] as $platform => $label)
                                             <div><x-input-label :for="'social-'.$platform" :value="$label.' account'" /><x-text-input :id="'social-'.$platform" :wire:model="'socialAccounts.'.$platform" class="mt-1 block w-full" /><x-input-error :messages="$errors->get('socialAccounts.'.$platform)" class="mt-1" /></div>
                                         @endforeach
-                                        <div class="sm:col-span-2 flex justify-end gap-3">
-                                            <button type="button" @click="if (!dirty || await confirmAction({ title: 'Discard unsaved changes?', text: 'Your changes have not been saved.', confirmButtonText: 'Discard changes' })) { dirty = false; $wire.cancelEdit() }" class="text-sm text-slate-600">Cancel</button>
-                                            <x-primary-button wire:loading.attr="disabled">Save</x-primary-button><span wire:loading role="status" class="self-center text-xs text-slate-500">Saving...</span>
+                                        <div class="flex gap-3 sm:col-span-2">
+                                            <x-secondary-button type="button" @click="if (!dirty || await confirmAction({ title: 'Discard unsaved changes?', text: 'Your changes have not been saved.', confirmButtonText: 'Discard changes' })) { dirty = false; $wire.cancelEdit() }" class="flex-1 justify-center">Cancel</x-secondary-button>
+                                            <x-primary-button class="flex-1 justify-center" wire:loading.attr="disabled">Save</x-primary-button>
                                         </div>
                                     </form>
                                 </div>
@@ -489,9 +519,9 @@
                                         </div>
                                     @endif
 
-                                    <div class="flex justify-end gap-3">
-                                        <button type="button" @click="if (!dirty || await confirmAction({ title: 'Discard unsaved changes?', text: 'Your changes have not been saved.', confirmButtonText: 'Discard changes' })) { dirty = false; $wire.cancelEdit() }" class="text-sm text-slate-600">Cancel</button>
-                                        <x-primary-button wire:loading.attr="disabled">Save</x-primary-button><span wire:loading role="status" class="self-center text-xs text-slate-500">Saving...</span>
+                                    <div class="flex gap-3">
+                                        <x-secondary-button type="button" @click="if (!dirty || await confirmAction({ title: 'Discard unsaved changes?', text: 'Your changes have not been saved.', confirmButtonText: 'Discard changes' })) { dirty = false; $wire.cancelEdit() }" class="flex-1 justify-center">Cancel</x-secondary-button>
+                                        <x-primary-button class="flex-1 justify-center" wire:loading.attr="disabled">Save</x-primary-button>
                                     </div>
                                 </form>
                             @else
@@ -527,8 +557,13 @@
             <div id="panel-work" role="tabpanel" aria-labelledby="tab-work" x-show="activeTab === 'work'" x-cloak class="space-y-4">
                 <livewire:customers.work-finance :customer="$customer" :key="'work-'.$customer->id" />
             </div>
+            @endif
             <div id="panel-financial" role="tabpanel" aria-labelledby="tab-financial" x-show="activeTab === 'financial'" x-cloak class="space-y-4">
-                <livewire:customers.financial :customer="$customer" :key="'financial-'.$customer->id" />
+                @if ($isCorporate)
+                    <livewire:customers.corporate-aum :customer="$customer" :key="'aum-'.$customer->id" />
+                @else
+                    <livewire:customers.financial :customer="$customer" :key="'financial-'.$customer->id" />
+                @endif
                 <livewire:customers.bank-accounts :customer="$customer" :key="'bank-'.$customer->id" />
             </div>
             <div id="panel-investment" role="tabpanel" aria-labelledby="tab-investment" x-show="activeTab === 'investment'" x-cloak class="space-y-4">

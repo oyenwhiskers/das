@@ -1,34 +1,36 @@
-<div class="py-6">
-    <div class="w-full px-4 sm:px-6 lg:px-8 xl:px-10 space-y-4">
+<div class="flex min-h-0 flex-1 flex-col py-6">
+    <div class="flex min-h-0 flex-1 flex-col gap-4 px-4 sm:px-6 lg:px-8 xl:px-10">
         {{-- Page header --}}
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div class="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-                <h1 class="text-xl sm:text-2xl font-semibold text-navy-900">Customers</h1>
-                <p class="mt-1 text-sm text-slate-500">Manage and maintain customer records.</p>
+                <h1 class="text-xl sm:text-2xl font-semibold text-navy-900">{{ $isCorporate ? 'Corporate Customers' : 'Customers' }}</h1>
+                <p class="mt-1 text-sm text-slate-500">{{ $isCorporate ? 'Manage and maintain corporate customer records.' : 'Manage and maintain customer records.' }}</p>
             </div>
             <div class="flex flex-wrap items-center gap-2 self-start">
-                <div class="relative" x-data="{ open: false }" x-on:click.outside="open = false" x-on:keydown.escape.window="if (open) open = false">
-                    <button type="button" x-on:click="open = ! open" :aria-expanded="open.toString()" aria-haspopup="menu" aria-controls="customers-bulk-menu" class="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-500">
-                        Bulk Action
-                        <svg class="h-3.5 w-3.5 text-slate-400 transition-transform" :class="{ 'rotate-180': open }" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                        </svg>
-                    </button>
-                    <div id="customers-bulk-menu" role="menu" x-cloak x-show="open" x-transition class="absolute end-0 z-50 mt-2 w-64 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5">
-                        <button type="button" role="menuitem" @disabled($selected === []) x-on:click.prevent="open = false; prepareIndustrySuggest($wire)" class="block w-full px-4 py-2 text-start text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50">
-                            Suggest industry / sub-industry
+                @unless ($isCorporate)
+                    <div class="relative" x-data="{ open: false }" x-on:click.outside="open = false" x-on:keydown.escape.window="if (open) open = false">
+                        <button type="button" x-on:click="open = ! open" :aria-expanded="open.toString()" aria-haspopup="menu" aria-controls="customers-bulk-menu" class="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-500">
+                            Bulk Action
+                            <svg class="h-3.5 w-3.5 text-slate-400 transition-transform" :class="{ 'rotate-180': open }" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                            </svg>
                         </button>
+                        <div id="customers-bulk-menu" role="menu" x-cloak x-show="open" x-transition class="absolute end-0 z-50 mt-2 w-64 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5">
+                            <button type="button" role="menuitem" @disabled($selected === []) x-on:click.prevent="open = false; prepareIndustrySuggest($wire)" class="block w-full px-4 py-2 text-start text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50">
+                                Suggest industry / sub-industry
+                            </button>
+                        </div>
                     </div>
-                </div>
-                <a href="{{ route('customers.create') }}" wire:navigate
+                @endunless
+                <a href="{{ route($createRoute) }}" wire:navigate
                    class="inline-flex items-center justify-center rounded-md bg-navy-800 px-3.5 py-2 text-sm font-medium text-white hover:bg-navy-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-500 focus-visible:ring-offset-2">
-                    + Add Customer
+                    + {{ $isCorporate ? 'Add Corporate' : 'Add Individual' }}
                 </a>
             </div>
         </div>
 
         {{-- Search & filters --}}
-        <div class="flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div class="flex shrink-0 flex-col gap-3 lg:flex-row lg:items-center">
             <div class="relative flex-1 min-w-0">
                 <label for="search" class="sr-only">Search customers</label>
                 <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400" aria-hidden="true">
@@ -83,26 +85,66 @@
                         <option value="incomplete">Profile Not Complete</option>
                     </select>
                 </div>
-                <div class="sm:w-52">
-                    <label for="sort" class="sr-only">Sort</label>
-                    <select
-                        wire:model.live="sort"
-                        id="sort"
-                        class="w-full rounded-md border-slate-300 py-2 text-sm shadow-sm focus:border-navy-500 focus:ring-navy-500"
+                <div class="relative sm:w-48" x-data="{ open: false }" x-on:click.outside="open = false" x-on:keydown.escape.window="if (open) open = false">
+                    <button
+                        type="button"
+                        x-on:click="open = ! open"
+                        :aria-expanded="open.toString()"
+                        aria-haspopup="dialog"
+                        aria-controls="attachments-filter-popover"
+                        class="inline-flex w-full items-center justify-between gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-500"
                     >
-                        <option value="name_asc">Customer Name A–Z</option>
-                        <option value="name_desc">Customer Name Z–A</option>
-                        <option value="updated">Recently Updated</option>
-                        <option value="added">Recently Added</option>
-                    </select>
+                        <span class="inline-flex min-w-0 items-center gap-2">
+                            <svg class="h-4 w-4 shrink-0 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
+                            </svg>
+                            <span class="truncate">{{ $attachments === [] ? 'Attachments' : 'Attachments ('.count($attachments).')' }}</span>
+                        </span>
+                        <svg class="h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform" :class="{ 'rotate-180': open }" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                        </svg>
+                    </button>
+                    <div
+                        id="attachments-filter-popover"
+                        role="dialog"
+                        aria-label="Filter by attachments"
+                        x-cloak
+                        x-show="open"
+                        x-transition
+                        class="absolute end-0 z-50 mt-2 w-64 origin-top-right rounded-md bg-white p-3 shadow-lg ring-1 ring-black ring-opacity-5"
+                    >
+                        <p class="px-1 text-xs font-medium uppercase tracking-wide text-slate-500">Has attachment</p>
+                        <div class="mt-2 space-y-1">
+                            @foreach ($attachmentFilters as $value => $label)
+                                <label class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
+                                    <input
+                                        type="checkbox"
+                                        value="{{ $value }}"
+                                        wire:model.live="attachments"
+                                        class="rounded border-slate-300 text-navy-800 focus:ring-navy-500"
+                                    >
+                                    <span>{{ $label }}</span>
+                                </label>
+                            @endforeach
+                        </div>
+                        @if ($attachments !== [])
+                            <button
+                                type="button"
+                                wire:click="clearAttachments"
+                                class="mt-2 w-full rounded-md px-2 py-1.5 text-start text-sm font-medium text-navy-800 hover:bg-navy-50"
+                            >
+                                Clear attachment filters
+                            </button>
+                        @endif
+                    </div>
                 </div>
             </div>
         </div>
 
-        <p class="sr-only" wire:loading.delay wire:target="search,status,profile,sort" aria-live="polite">Updating…</p>
+        <p class="sr-only" wire:loading.delay wire:target="search,status,profile,attachments,clearAttachments,sortByName" aria-live="polite">Updating…</p>
 
         @if ($selected !== [])
-            <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3">
+            <div class="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3">
                 <p class="text-sm text-slate-700">{{ count($selected) }} {{ count($selected) === 1 ? 'customer' : 'customers' }} selected</p>
                 <div class="flex flex-wrap gap-2">
                     <button type="button" wire:click="clearSelection" class="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Clear</button>
@@ -113,10 +155,10 @@
         @endif
 
         {{-- Results --}}
-        <div class="relative rounded-lg border border-slate-200 bg-white shadow-sm" wire:loading.class="opacity-70" wire:target="search,status,profile,sort">
+        <div class="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm" wire:loading.class="opacity-70" wire:target="search,status,profile,attachments,clearAttachments,sortByName">
             @if ($customers->isEmpty())
-                <div class="px-6 py-10 text-center">
-                    <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                <div class="flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-10 text-center">
+                    <div class="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
                         <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
                         </svg>
@@ -130,10 +172,11 @@
                     @endif
                 </div>
             @else
+                <div class="min-h-0 flex-1 overflow-auto">
                 {{-- Desktop table --}}
-                <div class="hidden md:block overflow-x-auto">
+                <div class="hidden md:block">
                     <table class="min-w-full divide-y divide-slate-200 text-sm font-normal">
-                        <thead class="bg-slate-50">
+                        <thead class="sticky top-0 z-10 bg-slate-50">
                             <tr>
                                 <th scope="col" class="px-4 py-2.5 text-left">
                                     <input type="checkbox" wire:key="select-all-desktop-{{ $allSelected ? '1' : '0' }}" @checked($allSelected) wire:click.prevent="toggleAll" aria-label="Select all customers" class="h-4 w-4 rounded border-slate-300 text-navy-800 checked:border-navy-800 checked:bg-navy-800 focus:ring-offset-0 focus-visible:ring-2 focus-visible:ring-navy-500" />
@@ -246,8 +289,10 @@
                     @endforeach
                 </ul>
 
+                </div>
+
                 @if ($customers->hasPages())
-                    <div class="border-t border-slate-200 px-4 py-3">
+                    <div class="shrink-0 border-t border-slate-200 px-4 py-3">
                         {{ $customers->links() }}
                     </div>
                 @endif

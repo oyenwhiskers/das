@@ -41,4 +41,15 @@ class CustomerFactory extends Factory
             'status' => CustomerStatus::Archived,
         ]);
     }
+
+    public function corporate(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'type' => CustomerType::Corporate,
+            'date_of_birth' => null,
+            'gender' => null,
+            'marital_status' => null,
+            'salutation' => null,
+        ]);
+    }
 }

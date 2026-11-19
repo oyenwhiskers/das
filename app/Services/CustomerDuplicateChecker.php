@@ -29,7 +29,9 @@ class CustomerDuplicateChecker
         if ($identificationType && filled($identificationNumber)) {
             $normalized = CustomerIdentification::normalizeNumber($identificationNumber);
 
-            $jurisdiction = $identificationType === IdentificationType::Nric ? 'MY' : strtoupper(trim((string) $issuingJurisdiction));
+            $jurisdiction = in_array($identificationType, [IdentificationType::Nric, IdentificationType::BusinessRegistration], true)
+                ? 'MY'
+                : strtoupper(trim((string) $issuingJurisdiction));
             $matches = Customer::query()
                 ->whereHas('identifications', function ($query) use ($identificationType, $normalized, $jurisdiction): void {
                     $query->where('type', $identificationType)

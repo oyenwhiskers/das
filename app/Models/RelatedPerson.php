@@ -17,7 +17,7 @@ class RelatedPerson extends Model
     protected $fillable = [
         'full_legal_name', 'identification_type', 'identification_number',
         'normalized_identification_number', 'date_of_birth', 'gender',
-        'nationality', 'mobile', 'home_telephone', 'email', 'occupation',
+        'nationality', 'mobile', 'home_telephone', 'office_extension', 'email', 'occupation',
         'employer_name', 'employer_address', 'employer_address_line_1',
         'employer_address_line_2', 'employer_city', 'employer_state',
         'employer_postcode', 'employer_country',
@@ -39,5 +39,19 @@ class RelatedPerson extends Model
     public function relationships(): HasMany
     {
         return $this->hasMany(CustomerRelationship::class);
+    }
+
+    public function maskedIdentificationNumber(): ?string
+    {
+        $number = $this->identification_number;
+        if (blank($number)) {
+            return null;
+        }
+
+        $number = (string) $number;
+
+        return strlen($number) <= 4
+            ? str_repeat('*', strlen($number))
+            : str_repeat('*', strlen($number) - 4).substr($number, -4);
     }
 }
