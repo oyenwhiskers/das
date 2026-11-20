@@ -78,7 +78,8 @@ class CorporateResolver
         return ! ($field['should_autofill'] ?? false)
             || in_array($policy, ['manual', 'preserve'], true)
             || in_array($scope, ['authorized_office', 'manual_review'], true)
-            || str_starts_with((string) ($field['source']['reference_key'] ?? ''), 'application.execution.')
+            // Witness must be a DR / commissioner / notary / BSSB officer — not a company rep.
+            || str_starts_with((string) ($field['source']['reference_key'] ?? ''), 'application.execution.witness.')
             || in_array($field['source']['reference_key'] ?? '', [
                 'application.bisonline_login_id', 'application.principal_parties',
                 'application.authorized_signatory_name', 'application.authorized_signatory_id',
@@ -256,6 +257,12 @@ class CorporateResolver
             'corporate.authorized_signatory_2.extension' => $this->rep($context['signatory2'], 'office_extension', 'Signatory 2 extension'),
             'corporate.authorized_signatory_2.designation' => $this->rep($context['signatory2'], 'occupation', 'Signatory 2 designation'),
             'corporate.authorized_signatory_2.email' => $this->rep($context['signatory2'], 'email', 'Signatory 2 email'),
+            'application.execution.authorized_signatory_1.name' => $this->rep($context['signatory1'], 'name', 'Execution signatory 1 name'),
+            'application.execution.authorized_signatory_1.identity_number' => $this->rep($context['signatory1'], 'identification', 'Execution signatory 1 ID'),
+            'application.execution.authorized_signatory_1.designation' => $this->rep($context['signatory1'], 'occupation', 'Execution signatory 1 designation'),
+            'application.execution.authorized_signatory_2.name' => $this->rep($context['signatory2'], 'name', 'Execution signatory 2 name'),
+            'application.execution.authorized_signatory_2.identity_number' => $this->rep($context['signatory2'], 'identification', 'Execution signatory 2 ID'),
+            'application.execution.authorized_signatory_2.designation' => $this->rep($context['signatory2'], 'occupation', 'Execution signatory 2 designation'),
             'corporate.estimated_net_asset_or_aum_band' => $this->one($details?->aum_bracket, [
                 'up_to_1000000' => '≤RM1,000,000',
                 '1000001_10000000' => 'RM1,000,001 – RM10,000,000',

@@ -55,18 +55,27 @@
 
             <div class="p-4 sm:p-5">
                 @if ($slot['editing'])
+                    @php
+                        $bimbsecFit = app(\App\Services\Bimbsec\CorporateCatalog::class);
+                        $fitPrefix = match (true) {
+                            $slot['role'] === 'primary_contact' => 'corporate.primary_contact',
+                            $slot['order'] === '2' => 'corporate.authorized_signatory_2',
+                            default => 'corporate.authorized_signatory_1',
+                        };
+                    @endphp
                     <form wire:submit="save" class="grid gap-x-6 gap-y-4 sm:grid-cols-2">
                         <div class="grid gap-x-3 gap-y-1 sm:col-span-2 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
-                            <x-input-label class="sm:pt-2" value="Full Name *" />
+                            <x-input-label for="fullLegalName" class="sm:pt-2" value="Full Name *" />
                             <div>
-                                <x-text-input wire:model="fullLegalName" class="block w-full" />
+                                <x-text-input wire:model="fullLegalName" id="fullLegalName" class="block w-full" />
                                 <x-input-error :messages="$errors->get('fullLegalName')" class="mt-1" />
+                                <x-bimbsec-fit-hint :max="$bimbsecFit->cellCapacity($fitPrefix.'.name', 'Name')" for="fullLegalName" :initial="mb_strlen(trim($fullLegalName))" live-count />
                             </div>
                         </div>
                         <div class="grid gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
-                            <x-input-label class="sm:pt-2" value="Identification Type" />
+                            <x-input-label for="identificationType" class="sm:pt-2" value="Identification Type" />
                             <div>
-                                <select wire:model="identificationType" class="block w-full rounded-md border-slate-300 text-sm">
+                                <select id="identificationType" wire:model="identificationType" class="block w-full rounded-md border-slate-300 text-sm">
                                     <option value="">— Select —</option>
                                     @foreach ([\App\Enums\IdentificationType::Nric, \App\Enums\IdentificationType::Passport, \App\Enums\IdentificationType::Other] as $type)
                                         <option value="{{ $type->value }}">{{ $type->label() }}</option>
@@ -76,45 +85,51 @@
                             </div>
                         </div>
                         <div class="grid gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
-                            <x-input-label class="sm:pt-2" value="NRIC / Passport / Other ID" />
+                            <x-input-label for="identificationNumber" class="sm:pt-2" value="NRIC / Passport / Other ID" />
                             <div>
-                                <x-text-input wire:model="identificationNumber" class="block w-full" />
+                                <x-text-input wire:model="identificationNumber" id="identificationNumber" class="block w-full" />
                                 <x-input-error :messages="$errors->get('identificationNumber')" class="mt-1" />
+                                <x-bimbsec-fit-hint :max="$bimbsecFit->cellCapacity($fitPrefix.'.identity_number', 'New NRIC/Passport/Other ID')" for="identificationNumber" :initial="mb_strlen(trim($identificationNumber))" live-count />
                             </div>
                         </div>
                         <div class="grid gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
-                            <x-input-label class="sm:pt-2" value="Mobile No." />
+                            <x-input-label for="mobile" class="sm:pt-2" value="Mobile No." />
                             <div>
-                                <x-text-input wire:model="mobile" class="block w-full" />
+                                <x-text-input wire:model="mobile" id="mobile" class="block w-full" />
                                 <x-input-error :messages="$errors->get('mobile')" class="mt-1" />
+                                <x-bimbsec-fit-hint :max="$bimbsecFit->cellCapacity($fitPrefix.'.mobile', 'Mobile No.')" for="mobile" :initial="mb_strlen(trim($mobile))" live-count />
                             </div>
                         </div>
                         <div class="grid gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
-                            <x-input-label class="sm:pt-2" value="Office Telephone" />
+                            <x-input-label for="homeTelephone" class="sm:pt-2" value="Office Telephone" />
                             <div>
-                                <x-text-input wire:model="homeTelephone" class="block w-full" />
+                                <x-text-input wire:model="homeTelephone" id="homeTelephone" class="block w-full" />
                                 <x-input-error :messages="$errors->get('homeTelephone')" class="mt-1" />
+                                <x-bimbsec-fit-hint :max="$bimbsecFit->cellCapacity($fitPrefix.'.office_phone', 'Office Telephone No.')" for="homeTelephone" :initial="mb_strlen(trim($homeTelephone))" live-count />
                             </div>
                         </div>
                         <div class="grid gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
-                            <x-input-label class="sm:pt-2" value="Extension No." />
+                            <x-input-label for="officeExtension" class="sm:pt-2" value="Extension No." />
                             <div>
-                                <x-text-input wire:model="officeExtension" class="block w-full" />
+                                <x-text-input wire:model="officeExtension" id="officeExtension" class="block w-full" />
                                 <x-input-error :messages="$errors->get('officeExtension')" class="mt-1" />
+                                <x-bimbsec-fit-hint :max="$bimbsecFit->cellCapacity($fitPrefix.'.extension', 'Extension No.')" for="officeExtension" :initial="mb_strlen(trim($officeExtension))" live-count />
                             </div>
                         </div>
                         <div class="grid gap-x-3 gap-y-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
-                            <x-input-label class="sm:pt-2" value="Email Address" />
+                            <x-input-label for="email" class="sm:pt-2" value="Email Address" />
                             <div>
-                                <x-text-input wire:model="email" type="email" class="block w-full" />
+                                <x-text-input wire:model="email" id="email" type="email" class="block w-full" />
                                 <x-input-error :messages="$errors->get('email')" class="mt-1" />
+                                <x-bimbsec-fit-hint :max="$bimbsecFit->cellCapacity($fitPrefix.'.email', 'E-mail Address')" for="email" :initial="mb_strlen(trim($email))" live-count />
                             </div>
                         </div>
                         <div class="grid gap-x-3 gap-y-1 sm:col-span-2 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
-                            <x-input-label class="sm:pt-2" value="Occupation / Designation" />
+                            <x-input-label for="occupation" class="sm:pt-2" value="Occupation / Designation" />
                             <div>
-                                <x-text-input wire:model="occupation" class="block w-full" />
+                                <x-text-input wire:model="occupation" id="occupation" class="block w-full" />
                                 <x-input-error :messages="$errors->get('occupation')" class="mt-1" />
+                                <x-bimbsec-fit-hint :max="$bimbsecFit->cellCapacity($fitPrefix.'.designation', 'Occupation/Designation')" for="occupation" :initial="mb_strlen(trim($occupation))" live-count />
                             </div>
                         </div>
                         <div class="flex gap-3 sm:col-span-2">

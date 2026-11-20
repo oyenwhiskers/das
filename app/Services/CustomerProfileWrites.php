@@ -1181,7 +1181,7 @@ class CustomerProfileWrites
             'email' => ['nullable', 'email', 'max:255'],
             'fax' => ['nullable', 'string', 'max:30', 'regex:/^[+0-9\s\-()]{6,30}$/'],
             'registered_at' => ['nullable', 'date'],
-            'registration_country' => ['nullable', 'string', 'regex:/^[A-Za-z]{2}$/'],
+            'registration_country' => ['nullable', 'string', 'max:32'],
             'entity_type' => ['nullable', 'string', 'max:100'],
             'entity_sub_type' => ['nullable', 'string', 'max:100'],
             'industry' => ['nullable', 'string', 'max:255'],

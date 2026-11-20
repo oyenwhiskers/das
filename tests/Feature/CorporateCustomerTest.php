@@ -6,8 +6,10 @@ use App\Enums\AddressType;
 use App\Enums\CustomerType;
 use App\Enums\IdentificationType;
 use App\Enums\RepresentativeRole;
+use App\Livewire\Customers\CompanyProfile;
 use App\Livewire\Customers\Create;
 use App\Livewire\Customers\Index;
+use App\Livewire\Customers\Representatives;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
 use App\Models\CustomerIdentification;
@@ -185,6 +187,93 @@ class CorporateCustomerTest extends TestCase
         ], $user);
 
         $this->assertSame(100, $customer->fresh()->profileSectionCompletion()['company']);
+    }
+
+    public function test_corporate_company_edit_shows_live_bimbsec_fit_hints(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($user, 'creator')->create([
+            'type' => CustomerType::Corporate,
+            'full_legal_name' => 'Fit Corp Sdn Bhd',
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(CompanyProfile::class, ['customer' => $customer])
+            ->call('editSection', 'company')
+            ->assertSee('/32 characters')
+            ->assertSee('/11 characters')
+            ->assertSee('/33 characters')
+            ->assertSee('/14 characters');
+    }
+
+    public function test_corporate_representative_edit_shows_live_bimbsec_fit_hints(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($user, 'creator')->create([
+            'type' => CustomerType::Corporate,
+            'full_legal_name' => 'Rep Fit Corp',
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(Representatives::class, ['customer' => $customer])
+            ->call('add', 'primary_contact')
+            ->assertSee('/32 characters')
+            ->assertSee('/14 characters')
+            ->assertSee('/11 characters');
+    }
+
+    public function test_corporate_registration_country_accepts_full_country_name(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($user, 'creator')->create([
+            'type' => CustomerType::Corporate,
+            'full_legal_name' => 'Country Name Corp',
+        ]);
+
+        app(CustomerProfileWrites::class)->saveCorporateCompany($customer, [
+            'full_legal_name' => 'Country Name Corp',
+            'identification_number' => '199901234567',
+            'mobile' => '0312345678',
+            'email' => '',
+            'fax' => '',
+            'registered_at' => '',
+            'registration_country' => 'Malaysia',
+            'entity_type' => '',
+            'entity_sub_type' => '',
+            'industry' => '',
+            'business_activity' => '',
+            'authorized_capital_rm' => '',
+            'paid_up_capital_rm' => '',
+        ], $user, true);
+
+        $this->assertSame('MALAYSIA', $customer->fresh()->corporateDetails?->registration_country);
+    }
+
+    public function test_corporate_address_edit_shows_bimbsec_fit_hint_and_still_saves_when_over_limit(): void
+    {
+        $user = User::factory()->staff()->create();
+        $customer = Customer::factory()->for($user, 'creator')->create([
+            'type' => CustomerType::Corporate,
+            'full_legal_name' => 'Fit Hint Corp',
+        ]);
+        $long = str_repeat('A', 100);
+
+        Livewire::actingAs($user)
+            ->test(CompanyProfile::class, ['customer' => $customer])
+            ->call('editSection', 'address')
+            ->assertSee('/96')
+            ->set('registered_line_1', $long)
+            ->set('registered_city', 'Kuala Lumpur')
+            ->set('registered_country', 'Malaysia')
+            ->set('same_as_registered', 'same')
+            ->call('saveAddress')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('customer_addresses', [
+            'customer_id' => $customer->id,
+            'type' => AddressType::Registered->value,
+            'line_1' => $long,
+        ]);
     }
 
     public function test_saving_primary_contact_completes_representatives_section(): void

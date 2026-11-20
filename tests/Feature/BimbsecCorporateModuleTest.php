@@ -91,6 +91,32 @@ class BimbsecCorporateModuleTest extends TestCase
             'representative_role' => RepresentativeRole::PrimaryContact,
             'relationship' => 'other',
         ]);
+        $signatory1 = RelatedPerson::query()->create([
+            'full_legal_name' => 'Daniel Tan',
+            'identification_type' => IdentificationType::Nric,
+            'identification_number' => '780215085432',
+            'occupation' => 'Managing Director',
+        ]);
+        CustomerRelationship::query()->create([
+            'customer_id' => $customer->id,
+            'related_person_id' => $signatory1->id,
+            'representative_role' => RepresentativeRole::AuthorizedSignatory,
+            'signatory_order' => 1,
+            'relationship' => 'other',
+        ]);
+        $signatory2 = RelatedPerson::query()->create([
+            'full_legal_name' => 'Mei Ling Ong',
+            'identification_type' => IdentificationType::Nric,
+            'identification_number' => '900330145123',
+            'occupation' => 'Finance Director',
+        ]);
+        CustomerRelationship::query()->create([
+            'customer_id' => $customer->id,
+            'related_person_id' => $signatory2->id,
+            'representative_role' => RepresentativeRole::AuthorizedSignatory,
+            'signatory_order' => 2,
+            'relationship' => 'other',
+        ]);
 
         $application = $customer->bimbsecApplications()->create([
             'form_kind' => BimbsecApplication::KIND_CORPORATE,
@@ -115,6 +141,12 @@ class BimbsecCorporateModuleTest extends TestCase
         $this->assertStringContainsString('20200111223', $texts);
         $this->assertStringContainsString('Ali Contact', $texts);
         $this->assertStringContainsString('W10-1234', $texts);
+        $this->assertTrue(collect($resolved['draws'])->contains(fn (array $draw): bool => ($draw['field']['source']['reference_key'] ?? '') === 'application.execution.authorized_signatory_1.name' && $draw['text'] === 'Daniel Tan'));
+        $this->assertTrue(collect($resolved['draws'])->contains(fn (array $draw): bool => ($draw['field']['source']['reference_key'] ?? '') === 'application.execution.authorized_signatory_1.identity_number' && $draw['text'] === '780215085432'));
+        $this->assertTrue(collect($resolved['draws'])->contains(fn (array $draw): bool => ($draw['field']['source']['reference_key'] ?? '') === 'application.execution.authorized_signatory_1.designation' && $draw['text'] === 'Managing Director'));
+        $this->assertTrue(collect($resolved['draws'])->contains(fn (array $draw): bool => ($draw['field']['source']['reference_key'] ?? '') === 'application.execution.authorized_signatory_2.name' && $draw['text'] === 'Mei Ling Ong'));
+        $this->assertTrue(collect($resolved['draws'])->contains(fn (array $draw): bool => ($draw['field']['source']['reference_key'] ?? '') === 'application.execution.authorized_signatory_2.designation' && $draw['text'] === 'Finance Director'));
+        $this->assertFalse(collect($resolved['draws'])->contains(fn (array $draw): bool => str_starts_with((string) ($draw['field']['source']['reference_key'] ?? ''), 'application.execution.witness.')));
         $this->assertTrue(collect($resolved['draws'])->contains(fn (array $draw): bool => ($draw['field']['printed_item'] ?? '') === 'Margin Account' && $draw['on'] === true));
         $this->assertTrue(collect($resolved['draws'])->contains(fn (array $draw): bool => ($draw['field']['source']['reference_key'] ?? '') === 'application.online_trading_requested' && $draw['choice'] === 'yes'));
         $this->assertTrue(collect($resolved['draws'])->contains(fn (array $draw): bool => ($draw['field']['printed_item'] ?? '') === 'To issue cheque payable to us' && $draw['on'] === true));
@@ -185,6 +217,14 @@ class BimbsecCorporateModuleTest extends TestCase
         $this->assertSame('Short Name Sdn Bhd', $customer->fresh()->full_legal_name);
         $this->assertSame('margin', $application->fresh()->choices['account_type']);
         $this->assertSame('yes', $application->fresh()->choices['online_trading']);
+    }
+
+    public function test_corporate_address_cell_capacity_matches_measured_form_boxes(): void
+    {
+        $catalog = new CorporateCatalog;
+
+        $this->assertSame(96, $catalog->cellCapacity('corporate.registered_address', 'Registered Address'));
+        $this->assertSame(96, $catalog->cellCapacity('corporate.mailing_address', 'Mailing Address (if differs from above)'));
     }
 
     /** @param  array<string, mixed>  $overrides */

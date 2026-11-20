@@ -12,7 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('customer_id')->unique()->constrained()->cascadeOnDelete();
             $table->date('registered_at')->nullable();
-            $table->string('registration_country', 2)->nullable();
+            $table->string('registration_country', 32)->nullable();
             $table->string('entity_type')->nullable();
             $table->string('entity_sub_type')->nullable();
             $table->string('industry')->nullable();
